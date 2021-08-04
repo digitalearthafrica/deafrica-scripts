@@ -1,0 +1,64 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: x3-c2-wofs-add-to-alchemist
+  namespace: processing
+  labels:
+    app: x3-c2-wofs-add-to-alchemist
+spec:
+  containers:
+  - name: x3-c2-wofs-add-to-alchemist
+    image: opendatacube/datacube-alchemist
+    args: [ "datacube-alchemist", "addtoqueue", "time in 2019 lon in [30, 40] lat in [-4, 0]"]
+    #args: ["datacube-alchemist", "addtoqueue", "time in 2019"]
+    resources:
+      requests:
+        cpu: 1
+        memory: 8192Mi
+      limits:
+        memory: 8192Mi
+    tty: true
+    stdin: true
+    env:
+    - name: ALCHEMIST_ADDTOQUEUE_LIMIT
+      value: "5"
+    - name: ALCHEMIST_ADDTOQUEUE_MESSAGE_QUEUE
+      value: "alchemist-standard"
+    - name: ALCHEMIST_ADDTOQUEUE_CONFIG_FILE
+      value: "https://raw.githubusercontent.com/digitalearthafrica/DEAfrica_scripts/master/alchemist_config/DEAfrica_wofs_c2_with_dsm_test.yaml"
+    - name: AWS_DEFAULT_REGION
+      valueFrom:
+        secretKeyRef:
+          name: processing-aws-creds-dev
+          key: AWS_DEFAULT_REGION
+    - name: AWS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: processing-aws-creds-dev
+          key: AWS_ACCESS_KEY_ID
+    - name: AWS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: processing-aws-creds-dev
+          key: AWS_SECRET_ACCESS_KEY    
+    - name: DB_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: collection2-db
+          key: postgres-username
+    - name: DB_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: collection2-db
+          key: postgres-password
+    - name: DB_DATABASE
+      value: "collection2"
+    - name: DB_HOSTNAME
+      value: "database.local"
+    - name: DB_PORT
+      value: "5432"
+    - name: LOG_LEVEL
+      value: "DEBUG"
+  nodeSelector:
+    beta.kubernetes.io/os: linux
+  restartPolicy: Never

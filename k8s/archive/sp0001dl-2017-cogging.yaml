@@ -1,0 +1,57 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: x-sp0001dl-2017-cogging
+  labels:
+    app: x-sp0001dl-2017-cogging
+spec:
+  parallelism: 4
+  template:
+    metadata:
+      labels:
+        app: x-sp0001dl-2017-cogging
+    spec:
+      nodeSelector:
+        beta.kubernetes.io/os: linux
+#      affinity:
+#        nodeAffinity:
+#          requiredDuringSchedulingIgnoredDuringExecution:
+#            nodeSelectorTerms:
+#              - matchExpressions:
+#                  - key: nodetype
+#                    operator: In
+#                    values:
+#                      - spot
+      restartPolicy: OnFailure
+      containers:
+      - name: eo-datasets-container
+        image: opendatacube/eo-datasets:latest
+        #args: ["aws","sqs","receive-message","--queue-url","https://us-west-2.queue.amazonaws.com/565417506782/collection-2-nigeria"]
+        #args: ["aws","sqs","list-queues"]
+        #args: ["/usr/bin/env", "sleep", "1200"]
+        args: ["/usr/bin/env","python3","/opt/app/sqs-consume.py","--queue-url","$(QUEUE_URL)","--message-timeout","300","--","eo3-prepare","usgs-col2","--output-base","$(OUTPUT_BASE)"]
+        resources:
+          requests:
+            cpu: 1
+            memory: 1208Mi
+          limits:
+            memory: 1548Mi
+        tty: true
+        stdin: true
+        env:
+        - name: QUEUE_URL
+          value: "https://us-west-2.queue.amazonaws.com/565417506782/collection-2-nigeria"
+        - name: OUTPUT_BASE
+          value: "s3://deafrica-usgs-c2-data/"
+        - name: AWS_DEFAULT_REGION
+          value: us-west-2
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-service-process-data
+              key: aws-data-access-key
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-service-process-data
+              key: aws-process-data-secret-key

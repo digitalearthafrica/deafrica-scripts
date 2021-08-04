@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: xd4-alchemist-pull-dep
+  labels:
+    app: xd4-alchemist-pull-dep
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: xd4-alchemist-pull-dep
+  template:
+    metadata:
+      annotations:
+        iam.amazonaws.com/role: deafrica-ec2-s3_access
+        #iam.amazonaws.com/role: deafrica-eks-c2-indexing
+      labels:
+        app: xd4-alchemist-pull-dep
+    spec:
+      nodeSelector:
+        beta.kubernetes.io/os: linux
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: nodetype
+                    operator: In
+                    values:
+                      - spot
+      containers:
+      - name: alchemist-processor-container
+        image: opendatacube/datacube-alchemist
+        #command: ["/bin/sh", "-ec", "docker-entrypoint.sh && while :; do echo '.'; sleep 5 ; done"]
+        command: [ "datacube-alchemist", "processqueue" ]
+        resources:
+          requests:
+            cpu: 2.0
+            memory: 8192Mi
+          limits:
+            cpu: 3
+            memory: 8192Mi
+        tty: true
+        stdin: true
+        env:
+        - name: ALCHEMIST_PROCESSQUEUE_MESSAGE_QUEUE
+          value: "alchemist-standard"
+          #value: "fc-alchemist"
+        - name: AWS_DEFAULT_REGION
+          value: us-west-2
+        - name: DATACUBE_CONFIG_PATH
+          value: "/opt/custom-config.conf"
+        - name: DB_DATABASE
+          value: "collection2"
+        - name: DB_HOSTNAME
+          value: "database.local"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: collection2-datacube
+              key: postgres-username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: collection2-datacube
+              key: postgres-password
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-service-process-data
+              key: aws-data-access-key
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-service-process-data
+              key: aws-process-data-secret-key
+      

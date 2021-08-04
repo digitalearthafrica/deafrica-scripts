@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: x-ls8-fc-add-to-alchemist
+  namespace: alchemist-processor
+  labels:
+    app: alchemist-add-processor
+  annotations:
+    iam.amazonaws.com/role: deafrica-ec2-s3_access
+spec:
+  containers:
+    - name: alchemist-processor-container
+      image: opendatacube/datacube-alchemist
+      #args: ["/usr/bin/env", "sleep", "600"]
+      args: [ "datacube-alchemist", "addtoqueue", "time in 2019" ]
+      resources:
+        requests:
+          cpu: 1
+          memory: 8192Mi
+        limits:
+          memory: 8192Mi
+      tty: true
+      stdin: true
+      env:
+        - name: AWS_DEFAULT_REGION
+          value: us-west-2
+        - name: ALCHEMIST_ADDTOQUEUE_MESSAGE_QUEUE
+          value: "alchemist-standard-test"
+          #value: "fc-alchemist"
+        - name: ALCHEMIST_ADDTOQUEUE_ENVIRONMENT
+          value: "datacube"
+        - name: ALCHEMIST_ADDTOQUEUE_LIMIT
+          value: "40"
+        - name: ALCHEMIST_ADDTOQUEUE_CONFIG_FILE
+          value: "s3://test-results-deafrica-staging-west/test_configs/DEAfrica_ls8_fc_scale_config.yaml"
+#          value: "https://raw.githubusercontent.com/digitalearthafrica/DEAfrica_scripts/master/alchemist_config/DEAfrica_ls8_fc_scale_config.yaml"
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: collection2-datacube
+              key: postgres-username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: collection2-datacube
+              key: postgres-password
+        - name: DATACUBE_CONFIG_PATH
+          value: "/opt/custom-config.conf"
+        - name: DB_DATABASE
+          value: "collection2"
+        - name: DB_HOSTNAME
+          value: "database.local"
+        - name: DB_PORT
+          value: "5432"
+        - name: LOG_LEVEL
+          value: "INFO"
+  nodeSelector:
+    beta.kubernetes.io/os: linux
+  restartPolicy: Never

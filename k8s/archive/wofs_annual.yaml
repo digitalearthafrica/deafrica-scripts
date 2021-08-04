@@ -1,0 +1,19 @@
+plugin: wofs-summary
+product:
+  name: wofs_ls_summary
+  short_name: wofs_ls_summary
+  version: 1.6.0
+  product_family: wo_summary
+
+  max_processing_time: 1200
+  job_queue_max_lease: 300
+  renew_safety_margin: 60
+  future_poll_interval: 2
+  s3_acl: public-read
+  # Generic product attributes
+  cog_opts:
+    zlevel: 9
+    overrides:
+      rgba:
+        compress: JPEG
+        jpeg_quality: 90
