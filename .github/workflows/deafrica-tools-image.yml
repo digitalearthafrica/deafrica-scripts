@@ -1,18 +1,18 @@
 name : Deafrica Tools Test and Push
 
 env:
-  IMAGE_NAME: ??
+  IMAGE_NAME: digitalearthafrica/scripts
 
 on:
   pull_request:
     branches:
-      - master
+      - main
     paths:
       - 'deafrica_automation_tools/**'
       - '.github/workflows/deafrica-tools-*'
   push:
     branches:
-      - master
+      - main
     paths:
       - 'deafrica_automation_tools/_version.py'
       - '.github/workflows/deafrica-tools-*'
@@ -25,7 +25,7 @@ jobs:
       uses: actions/checkout@v2
 
   push:
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/main'
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -33,6 +33,7 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Get tag for this build if it exists
+#      TODO FIX this
       run: |
         echo "VERSION=$(cat deafrica_automation_tools/_version.py)" >> $GITHUB_ENV
     - name: Build and Push unstable Docker Image from PR / Push to Master
@@ -40,15 +41,15 @@ jobs:
       with:
         context: deafrica_automation_tools
         image_name: ${{ env.IMAGE_NAME }}
-        username: ${{ secrets.DOCKER_USER }}
-        password: ${{ secrets.DOCKER_PASS }}
+        username: gadockersvc
+        password: ${{ secrets.GADOCKERSVC_PASSWORD }}
         image_tag: latest,${{ env.VERSION }}
 
-    - name: Update Docker Hub Description
-      uses: peter-evans/dockerhub-description@v2
-      with:
-        username: ${{ secrets.DOCKER_USER }}
-        password: ${{ secrets.DOCKER_PASS }}
-        repository: ${{ env.IMAGE_NAME }}
-        readme-filepath: ./index/readme.md
-        short-description: Open Data Cube Indexing Image
+#    - name: Update Docker Hub Description
+#      uses: peter-evans/dockerhub-description@v2
+#      with:
+#        username: gadockersvc
+#        password: ${{ secrets.GADOCKERSVC_PASSWORD }}
+#        repository: ${{ env.IMAGE_NAME }}
+#        readme-filepath: ./index/readme.md
+#        short-description: Open Data Cube Indexing Image
