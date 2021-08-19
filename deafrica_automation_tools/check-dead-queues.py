@@ -1,6 +1,7 @@
 from textwrap import dedent
 
 import boto3
+import click as click
 
 
 def check_deadletter_queues():
@@ -32,6 +33,14 @@ def check_deadletter_queues():
 
     if len(bad_queues) > 0:
         raise Exception(message)
+
+
+@click.command("check-dead-queue")
+def cli():
+    """
+    Check all dead queues which the user is allowed to
+    """
+    check_deadletter_queues()
 
 
 if __name__ == "__main__":
