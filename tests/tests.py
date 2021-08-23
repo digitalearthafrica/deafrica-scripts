@@ -13,10 +13,10 @@ def setup_env(monkeypatch):
 @mock_sqs
 def test_get_dead_queues(monkeypatch):
     sns_client = boto3.client("sqs", region_name=REGION)
-    queue1 = sns_client.create_queue(QueueName="deafrica-test-queue-deadletter")
-    queue2 = sns_client.create_queue(QueueName="deafrica-test-queue2-deadletter")
-    queue3 = sns_client.create_queue(QueueName="deafrica-test-queue3-deadletter")
-    queue4 = sns_client.create_queue(QueueName="deafrica-test-queue")
+    sns_client.create_queue(QueueName="deafrica-test-queue-deadletter")
+    sns_client.create_queue(QueueName="deafrica-test-queue2-deadletter")
+    sns_client.create_queue(QueueName="deafrica-test-queue3-deadletter")
+    sns_client.create_queue(QueueName="deafrica-test-queue")
 
     from deafrica_automation_tools.check_dead_queues import get_dead_queues
 
@@ -26,7 +26,7 @@ def test_get_dead_queues(monkeypatch):
 
 
 @mock_sqs
-def test_get_dead_queues(monkeypatch):
+def test_get_find_msg_dead_queues(monkeypatch):
     sqs_client = boto3.client('sqs', region_name=REGION)
     queue1 = sqs_client.create_queue(QueueName="deafrica-test-queue-deadletter")
     queue2 = sqs_client.create_queue(QueueName="deafrica-test-queue2-deadletter")
@@ -46,4 +46,27 @@ def test_get_dead_queues(monkeypatch):
     from deafrica_automation_tools.check_dead_queues import get_dead_queues, check_deadletter_queues
 
     dead_queues = get_dead_queues(REGION)
-    check_deadletter_queues(dead_queues=dead_queues, region=REGION)
+
+    with pytest.raises(SystemExit) as pytest_wrapped_e:
+        check_deadletter_queues(dead_queues=dead_queues, region=REGION)
+    assert pytest_wrapped_e.type == SystemExit
+    assert pytest_wrapped_e.value.code == 1
+
+
+@mock_sqs
+def test_get_no_msg_dead_queues(monkeypatch):
+    sqs_client = boto3.client('sqs', region_name=REGION)
+    sqs_client.create_queue(QueueName="deafrica-test-queue-deadletter")
+    sqs_client.create_queue(QueueName="deafrica-test-queue2-deadletter")
+    sqs_client.create_queue(QueueName="deafrica-test-queue3-deadletter")
+    sqs_client.create_queue(QueueName="deafrica-test-queue")
+
+    from deafrica_automation_tools.check_dead_queues import get_dead_queues, check_deadletter_queues
+
+    dead_queues = get_dead_queues(REGION)
+
+    with pytest.raises(SystemExit) as pytest_wrapped_e:
+        check_deadletter_queues(dead_queues=dead_queues, region=REGION)
+    assert pytest_wrapped_e.type == SystemExit
+    assert pytest_wrapped_e.value.code == 0
+
