@@ -4,7 +4,7 @@ import logging
 from odc.aws import s3_client, s3_ls_dir, s3_fetch
 
 
-def find_latest_report(report_folder_path:str) -> str:
+def find_latest_report(report_folder_path: str) -> str:
     """
     Function to find the latest gap report
     :return:(str) return the latest report file name
@@ -12,7 +12,7 @@ def find_latest_report(report_folder_path:str) -> str:
 
     s3 = s3_client(region_name='af-south-1')
 
-    report_files = s3_ls_dir(uri=report_folder_path, s3=s3)
+    report_files = list(s3_ls_dir(uri=report_folder_path, s3=s3))
 
     if not report_files:
         raise RuntimeError("Report not found!")

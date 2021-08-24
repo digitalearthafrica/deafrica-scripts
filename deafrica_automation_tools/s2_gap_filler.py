@@ -11,7 +11,7 @@ import click
 from odc.aws import s3_fetch, s3_head_object
 from odc.aws.queue import get_queue, publish_messages
 
-from deafrica_automation_tools.utils import read_report
+from deafrica_automation_tools.utils import read_report, find_latest_report
 
 PRODUCT_NAME = "s2_l2a"
 S3_BUKET_PATH = 's3://deafrica-sentinel-2/status-report/'
@@ -142,8 +142,8 @@ def cli():
     """
     """
     try:
-        files = read_report(report_path=S3_BUKET_PATH)
-
+        latest_report = find_latest_report(report_folder_path=S3_BUKET_PATH)
+        files = read_report(report_path=latest_report)
         publish_message(files=files)
 
     except Exception as error:

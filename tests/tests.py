@@ -1,11 +1,14 @@
 import boto3
 import pytest
-from moto import mock_sqs
-from odc.aws.queue import publish_messages, get_queue, publish_message
+from moto import mock_sqs, mock_s3
+from odc.aws.queue import publish_message
 
 from deafrica_automation_tools.check_dead_queues import get_dead_queues, check_deadletter_queues
+from deafrica_automation_tools.utils import find_latest_report, read_report
 
 REGION = "af-south-1"
+S2_BUCKET_NAME = 'deafrica-sentinel-2'
+REPORT_FOLDER_PATH = 'status-report/'
 
 
 @pytest.fixture(autouse=True)
@@ -67,3 +70,62 @@ def test_get_no_msg_dead_queues(monkeypatch):
     assert pytest_wrapped_e.type == SystemExit
     assert pytest_wrapped_e.value.code == 0
 
+
+@mock_s3
+def test_find_latest_report(monkeypatch):
+    s3_client = boto3.client("s3", region_name=REGION)
+    s3_client.create_bucket(
+        Bucket=S2_BUCKET_NAME,
+        CreateBucketConfiguration={
+            'LocationConstraint': REGION,
+        }
+    )
+
+    file_name = '2021-08-17_update.txt.gz'
+    s3_client.upload_file(
+        f'../tests/data/{file_name}',
+        S2_BUCKET_NAME,
+        f"{REPORT_FOLDER_PATH}{file_name}"
+    )
+
+    last_report = find_latest_report(report_folder_path=f"s3://{S2_BUCKET_NAME}/{REPORT_FOLDER_PATH}")
+    assert last_report is not None and last_report != []
+
+
+@mock_s3
+def test_not_found_latest_report(monkeypatch):
+    s3_client = boto3.client("s3", region_name=REGION)
+    bucket = s3_client.create_bucket(
+        Bucket=S2_BUCKET_NAME,
+        CreateBucketConfiguration={
+            'LocationConstraint': REGION,
+        }
+    )
+
+    with pytest.raises(RuntimeError) as pytest_wrapped_e:
+        find_latest_report(report_folder_path=f"s3://{S2_BUCKET_NAME}/{REPORT_FOLDER_PATH}")
+
+
+@mock_s3
+def test_read_report(monkeypatch):
+    s3_client = boto3.client("s3", region_name=REGION)
+    bucket = s3_client.create_bucket(
+        Bucket=S2_BUCKET_NAME,
+        CreateBucketConfiguration={
+            'LocationConstraint': REGION,
+        }
+    )
+
+    file_name = '2021-08-17_update.txt.gz'
+    s3_client.upload_file(
+        f'../tests/data/{file_name}',
+        S2_BUCKET_NAME,
+        f"{REPORT_FOLDER_PATH}{file_name}"
+    )
+
+    values = read_report(report_path=f"s3://{S2_BUCKET_NAME}/{REPORT_FOLDER_PATH}{file_name}")
+    assert len(values) == 8
+
+    # Test with limit
+    values = read_report(report_path=f"s3://{S2_BUCKET_NAME}/{REPORT_FOLDER_PATH}{file_name}", limit=2)
+    assert len(values) == 2
