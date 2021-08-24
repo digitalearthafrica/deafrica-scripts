@@ -3,6 +3,7 @@ import sys
 from textwrap import dedent
 
 import boto3
+from odc.aws.queue import get_messages, get_queue
 import click as click
 
 
@@ -48,12 +49,17 @@ def check_deadletter_queues(dead_queues, region):
 
 
 @click.command("check-dead-queue")
-def cli():
+@click.argument("region", type=str, nargs=1)
+def cli(region: str):
     """
     Check all dead queues which the user is allowed to
     """
-    dead_queue_set = get_dead_queues()
-    check_deadletter_queues(dead_queue_set)
+
+    if not region:
+        raise ValueError('Region parameter is required')
+
+    dead_queue_set = get_dead_queues(region=region)
+    check_deadletter_queues(dead_queues=dead_queue_set, region=region)
 
 
 if __name__ == "__main__":
