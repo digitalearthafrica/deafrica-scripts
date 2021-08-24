@@ -3,31 +3,22 @@ import sys
 from textwrap import dedent
 
 import boto3
-from odc.aws.queue import get_messages, get_queue
 import click as click
+from odc.aws.queue import get_queue
 
 
-def get_dead_queues(region) -> set:
-    client = boto3.client('sqs', region_name=region)
-    queues = client.list_queues()
+def get_dead_queues() -> set:
+    sqs = boto3.resource("sqs")
+    queues = sqs.queues.all()
 
-    if queues.get('QueueUrls') is None:
-        logging.info("No queues were found for your user")
-        sys.exit(1)
-
-    return set(queue for queue in queues['QueueUrls'] if 'deadletter' in queue)
+    return set(queue for queue in queues if 'deadletter' in queue)
 
 
-def check_deadletter_queues(dead_queues, region):
-    client = boto3.client('sqs', region_name=region)
-
+def check_deadletter_queues(dead_queues):
     bad_queues = []
-    for queue in dead_queues:
-        attributes_dict = client.get_queue_attributes(
-            QueueUrl=queue,
-            AttributeNames=['ApproximateNumberOfMessages']
-        )
-        queue_size = int(attributes_dict['Attributes'].get("ApproximateNumberOfMessages"))
+    for dead_queue in dead_queues:
+        queue = get_queue(queue_name=dead_queue)
+        queue_size = int(queue.attributes.get('ApproximateNumberOfMessages', 0))
         if queue_size > 0:
             bad_queues.append(f"SQS deadletter queue {queue} has {queue_size} items on it.")
 
@@ -49,17 +40,13 @@ def check_deadletter_queues(dead_queues, region):
 
 
 @click.command("check-dead-queue")
-@click.argument("region", type=str, nargs=1)
-def cli(region: str):
+def cli():
     """
     Check all dead queues which the user is allowed to
     """
 
-    if not region:
-        raise ValueError('Region parameter is required')
-
-    dead_queue_set = get_dead_queues(region=region)
-    check_deadletter_queues(dead_queues=dead_queue_set, region=region)
+    dead_queue_set = get_dead_queues()
+    check_deadletter_queues(dead_queues=dead_queue_set)
 
 
 if __name__ == "__main__":
