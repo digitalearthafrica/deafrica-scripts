@@ -10,15 +10,17 @@ def get_dead_queues() -> set:
     sqs = boto3.resource("sqs")
     queues = sqs.queues.all()
 
-    return set(queue for queue in queues if 'deadletter' in queue.url)
+    return set(queue for queue in queues if "deadletter" in queue.url)
 
 
 def check_deadletter_queues(dead_queues):
     bad_queues = []
     for dead_queue in dead_queues:
-        queue_size = int(dead_queue.attributes.get('ApproximateNumberOfMessages', 0))
+        queue_size = int(dead_queue.attributes.get("ApproximateNumberOfMessages", 0))
         if queue_size > 0:
-            bad_queues.append(f"SQS deadletter queue {dead_queue.url} has {queue_size} items on it.")
+            bad_queues.append(
+                f"SQS deadletter queue {dead_queue.url} has {queue_size} items on it."
+            )
 
     bad_queues_str = "\n".join(f" * {q}" for q in bad_queues)
     message = dedent(

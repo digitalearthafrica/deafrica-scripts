@@ -14,7 +14,7 @@ from odc.aws.queue import get_queue, publish_messages
 from tools.monitoring.tools.utils import read_report, find_latest_report
 
 PRODUCT_NAME = "s2_l2a"
-S3_BUKET_PATH = 's3://deafrica-sentinel-2/status-report/'
+S3_BUKET_PATH = "s3://deafrica-sentinel-2/status-report/"
 SENTINEL_2_SYNC_SQS_NAME = "deafrica-pds-sentinel-2-sync-scene"
 
 
@@ -89,18 +89,14 @@ def prepare_message(s3_path):
 
     message = {
         "MessageBody": json.dumps(
-            {
-                "Message": json.dumps(contents_dict),
-                "MessageAttributes": attributes
-            }
+            {"Message": json.dumps(contents_dict), "MessageAttributes": attributes}
         ),
     }
     return message
 
 
 def publish_message(files):
-    """
-    """
+    """ """
     max_workers = 300
     # counter for files that no longer exist
     failed = 0
@@ -109,10 +105,7 @@ def publish_message(files):
     batch = []
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [
-            executor.submit(prepare_message, s3_path)
-            for s3_path in files
-        ]
+        futures = [executor.submit(prepare_message, s3_path) for s3_path in files]
 
         message_id = 0
         queue = get_queue(queue_name=SENTINEL_2_SYNC_SQS_NAME)
@@ -133,14 +126,15 @@ def publish_message(files):
         publish_messages(queue=queue, messages=batch)
         sent += len(batch)
     if failed > 0:
-        raise ValueError(f"Total of {failed} files failed, Total of sent messages {sent}")
+        raise ValueError(
+            f"Total of {failed} files failed, Total of sent messages {sent}"
+        )
     logging.info(f"Total of sent messages {sent}")
 
 
 @click.command("s2-gap-filler")
 def cli():
-    """
-    """
+    """ """
     try:
         latest_report = find_latest_report(report_folder_path=S3_BUKET_PATH)
         files = read_report(report_path=latest_report)
