@@ -32,7 +32,6 @@ def double_slash_report():
         n_threads=200,
     )
 
-    double_slash_list = []
     for namespace in inventory_list:
         if hasattr(namespace, 'Key') and '//' in namespace.Key:
             yield namespace.Key
@@ -101,4 +100,3 @@ if __name__ == "__main__":
     # Just use if you are sure of what you are doing!!!
     # f = open(f"misc/to_remove.txt", "r+")
     # remove_object('deafrica-landsat', [line.replace('\n', '') for line in f.readlines()])
-

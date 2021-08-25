@@ -95,21 +95,21 @@ def test_find_latest_report(monkeypatch):
 @mock_s3
 def test_not_found_latest_report(monkeypatch):
     s3_client = boto3.client("s3", region_name=REGION)
-    bucket = s3_client.create_bucket(
+    s3_client.create_bucket(
         Bucket=S2_BUCKET_NAME,
         CreateBucketConfiguration={
             'LocationConstraint': REGION,
         }
     )
 
-    with pytest.raises(RuntimeError) as pytest_wrapped_e:
+    with pytest.raises(RuntimeError):
         find_latest_report(report_folder_path=f"s3://{S2_BUCKET_NAME}/{REPORT_FOLDER_PATH}")
 
 
 @mock_s3
 def test_read_report(monkeypatch):
     s3_client = boto3.client("s3", region_name=REGION)
-    bucket = s3_client.create_bucket(
+    s3_client.create_bucket(
         Bucket=S2_BUCKET_NAME,
         CreateBucketConfiguration={
             'LocationConstraint': REGION,

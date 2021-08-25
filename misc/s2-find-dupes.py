@@ -13,14 +13,12 @@
 #     name: odc
 # ---
 
-# %%
-import numpy as np
-from tqdm.auto import tqdm
-from affine import Affine
 import toolz
 from datacube import Datacube
-from datacube.utils.geometry import GeoBox
 from odc.index import ordered_dss, dataset_count
+# %%
+from tqdm.auto import tqdm
+
 
 def compute_overlaps(dss):
     geom, *geom_rest = [ds.extent for ds in dss]
@@ -30,11 +28,13 @@ def compute_overlaps(dss):
         g_or = g_or | g
     return g_or, g_and
 
+
 def overlap_info(dss):
     g_or, g_and = compute_overlaps(dss)
     return (g_or.area, g_and.area)
 
-def find_dupes_to_archive(dc, time, keep_threshold = 0.05, freq='m'):
+
+def find_dupes_to_archive(dc, time, keep_threshold=0.05, freq='m'):
     ds_s2_order = lambda ds: (ds.center_time,
                               ds.metadata.region_code,
                               ds.metadata_doc['label'])
@@ -45,7 +45,7 @@ def find_dupes_to_archive(dc, time, keep_threshold = 0.05, freq='m'):
 
     dss = tqdm(dss, total=n_total)
     groups = (group for group in toolz.partitionby(lambda ds: (ds.center_time, ds.metadata.region_code), dss)
-              if len(group)>1)
+              if len(group) > 1)
 
     keep_groups = []
     to_archive = []
@@ -55,7 +55,7 @@ def find_dupes_to_archive(dc, time, keep_threshold = 0.05, freq='m'):
         # aa is in range [0, 1] with
         #  0 -- 100% overlap across dupes
         #  1 -- 0% overlap across dupes (disjoint footprints)
-        aa = (a_or - a_and)/a_or
+        aa = (a_or - a_and) / a_or
         if aa > keep_threshold:
             keep_groups.append(dss_group)
         else:
@@ -63,12 +63,13 @@ def find_dupes_to_archive(dc, time, keep_threshold = 0.05, freq='m'):
 
     return to_archive, keep_groups, n_total
 
+
 # %%
 dc = Datacube()
 to_archive, keepers, n_total = find_dupes_to_archive(dc,
                                                      time=('2017', '2020'))
 print(f"""Processed {n_total:,d} datasets.
-  {len(to_archive):,d}/{n_total:,d} ~ {len(to_archive)*100/n_total:.2f}% to archive
+  {len(to_archive):,d}/{n_total:,d} ~ {len(to_archive) * 100 / n_total:.2f}% to archive
   {len(keepers):,d} groups of datasets were retained
 """)
 
@@ -76,5 +77,5 @@ with open('to_archive.txt', 'wt') as f:
     f.write('\n'.join(str(uuid) for uuid in to_archive))
 
 # %%
-#can be archived like this:
-#dc.index.datasets.archive(to_archive)
+# can be archived like this:
+# dc.index.datasets.archive(to_archive)

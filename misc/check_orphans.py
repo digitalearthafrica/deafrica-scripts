@@ -40,7 +40,7 @@ def get_orphans():
     ][-1]
 
     list_orphan_paths = []
-    for orphan in [orphan_landsat7, orphan_landsat5]:
+    for orphan in [orphan_landsat7, orphan_landsat5, orphan_landsat8]:
         print(f'Finding {orphan}')
         orphans_gzip_file = s3_fetch(
             url=orphan,

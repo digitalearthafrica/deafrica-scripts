@@ -4,7 +4,6 @@ from textwrap import dedent
 
 import boto3
 import click as click
-from odc.aws.queue import get_queue
 
 
 def get_dead_queues() -> set:

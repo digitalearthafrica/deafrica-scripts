@@ -37,7 +37,7 @@ _COPYABLE_MTL_FIELDS = [
     ),
     (
         "product_contents",
-        ( "collection_category"),
+        ("collection_category"),
     ),
     (
         "image_attributes",
@@ -197,8 +197,8 @@ def read_mtl(fp: Iterable[Union[str, bytes]], root_element="l1_metadata_file") -
         return s
 
     def _parse_group(
-        lines: Iterable[Union[str, bytes]],
-        key_transform: Callable[[str], str] = lambda s: s.lower(),
+            lines: Iterable[Union[str, bytes]],
+            key_transform: Callable[[str], str] = lambda s: s.lower(),
     ) -> dict:
 
         tree = {}
@@ -217,6 +217,7 @@ def read_mtl(fp: Iterable[Union[str, bytes]], root_element="l1_metadata_file") -
                 else:
                     tree[key_transform(key)] = _parse_value(value)
         return tree
+
     tree = _parse_group(fp)
     return tree[root_element]
 
@@ -229,15 +230,15 @@ def _iter_bands_paths(mtl_doc: Dict) -> Generator[Tuple[str, str], None, None]:
             continue
         if not filepath.endswith(suffix):
             continue
-        usgs_band_id = name[len(prefix) :]
+        usgs_band_id = name[len(prefix):]
         yield usgs_band_id, filepath
 
 
 def prepare_and_write(
-    ds_path: Path,
-    collection_location: Path,
-    # TODO: Can we infer producer automatically? This is bound to cause mistakes othewise
-    producer="usgs.gov",
+        ds_path: Path,
+        collection_location: Path,
+        # TODO: Can we infer producer automatically? This is bound to cause mistakes othewise
+        producer="usgs.gov",
 ) -> Tuple[uuid.UUID, Path]:
     """
     Prepare an eo3 metadata file for a Level2 dataset.
@@ -261,8 +262,8 @@ def prepare_and_write(
 
     # Assumed below.
     if (
-        mtl_doc["projection_attributes"]["grid_cell_size_reflective"]
-        != mtl_doc["projection_attributes"]["grid_cell_size_thermal"]
+            mtl_doc["projection_attributes"]["grid_cell_size_reflective"]
+            != mtl_doc["projection_attributes"]["grid_cell_size_thermal"]
     ):
         raise NotImplementedError("reflective and thermal have different cell sizes")
     ground_sample_distance = min(
@@ -272,13 +273,13 @@ def prepare_and_write(
     )
 
     with DatasetAssembler(
-        collection_location=collection_location,
-        # Detministic ID based on USGS's product id (which changes when the scene is reprocessed by them)
-        dataset_id=uuid.uuid5(
-            USGS_UUID_NAMESPACE, mtl_doc["product_contents"]["landsat_product_id"]
-        ),
-        naming_conventions="dea",
-        if_exists=IfExists.Overwrite,
+            collection_location=collection_location,
+            # Detministic ID based on USGS's product id (which changes when the scene is reprocessed by them)
+            dataset_id=uuid.uuid5(
+                USGS_UUID_NAMESPACE, mtl_doc["product_contents"]["landsat_product_id"]
+            ),
+            naming_conventions="dea",
+            if_exists=IfExists.Overwrite,
     ) as p:
         p.platform = mtl_doc["image_attributes"]["spacecraft_id"]
         p.instrument = mtl_doc["image_attributes"]["sensor_id"]
@@ -320,8 +321,10 @@ def prepare_and_write(
             #     relative_to_dataset_location=True,
             # )
             path_file = os.path.join(ds_path, file_location)
-            p.write_measurement(band_aliases[usgs_band_id],
-                path_file)
+            p.write_measurement(
+                band_aliases[usgs_band_id],
+                path_file
+            )
 
         p.add_accessory_file("metadata:landsat_mtl", Path(mtl_filename))
 
@@ -351,10 +354,10 @@ def prepare_and_write(
     help="Only prepare files newer than this date",
 )
 def main(
-    output_base: Optional[Path],
-    datasets: List[Path],
-    producer: str,
-    newer_than: datetime,
+        output_base: Optional[Path],
+        datasets: List[Path],
+        producer: str,
+        newer_than: datetime,
 ):
     logging.basicConfig(
         format="%(asctime)s %(levelname)s %(message)s", level=logging.INFO
