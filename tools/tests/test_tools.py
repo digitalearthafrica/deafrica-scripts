@@ -125,7 +125,9 @@ def test_read_report(monkeypatch, update_report_file: Path, s3_report_file: URL)
         },
     )
 
-    s3_client.upload_file(str(update_report_file), TEST_BUCKET_NAME, str(s3_report_file))
+    s3_client.upload_file(
+        str(update_report_file), TEST_BUCKET_NAME, str(s3_report_file)
+    )
     s3_path = f"s3://{TEST_BUCKET_NAME}/{s3_report_file.path}"
 
     values = read_report(report_path=s3_path)
