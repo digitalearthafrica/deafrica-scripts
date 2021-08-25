@@ -1,17 +1,18 @@
+from pathlib import Path
+
 import boto3
 import pytest
-from moto import mock_sqs, mock_s3
+from moto import mock_s3, mock_sqs
 from odc.aws.queue import publish_message
-
 from tools.monitoring.tools.check_dead_queues import (
-    get_dead_queues,
     check_deadletter_queues,
+    get_dead_queues,
 )
 from tools.monitoring.tools.utils import find_latest_report, read_report
 
 REGION = "af-south-1"
-S2_BUCKET_NAME = "deafrica-sentinel-2"
-REPORT_FOLDER_PATH = "status-report/"
+TEST_BUCKET_NAME = "test-bucket"
+TEST_DATA_DIR = Path(__file__).absolute().parent / "data"
 
 
 @pytest.fixture(autouse=True)
@@ -78,7 +79,7 @@ def test_get_no_msg_dead_queues(monkeypatch):
 def test_find_latest_report(monkeypatch):
     s3_client = boto3.client("s3", region_name=REGION)
     s3_client.create_bucket(
-        Bucket=S2_BUCKET_NAME,
+        Bucket=TEST_BUCKET_NAME,
         CreateBucketConfiguration={
             "LocationConstraint": REGION,
         },
@@ -86,11 +87,13 @@ def test_find_latest_report(monkeypatch):
 
     file_name = "2021-08-17_update.txt.gz"
     s3_client.upload_file(
-        f"../tests/data/{file_name}", S2_BUCKET_NAME, f"{REPORT_FOLDER_PATH}{file_name}"
+        f"../tests/data/{file_name}",
+        TEST_BUCKET_NAME,
+        f"{REPORT_FOLDER_PATH}{file_name}",
     )
 
     last_report = find_latest_report(
-        report_folder_path=f"s3://{S2_BUCKET_NAME}/{REPORT_FOLDER_PATH}"
+        report_folder_path=f"s3://{TEST_BUCKET_NAME}/{REPORT_FOLDER_PATH}"
     )
     assert last_report is not None and last_report != []
 
@@ -99,7 +102,7 @@ def test_find_latest_report(monkeypatch):
 def test_not_found_latest_report(monkeypatch):
     s3_client = boto3.client("s3", region_name=REGION)
     s3_client.create_bucket(
-        Bucket=S2_BUCKET_NAME,
+        Bucket=TEST_BUCKET_NAME,
         CreateBucketConfiguration={
             "LocationConstraint": REGION,
         },
@@ -107,32 +110,31 @@ def test_not_found_latest_report(monkeypatch):
 
     with pytest.raises(RuntimeError):
         find_latest_report(
-            report_folder_path=f"s3://{S2_BUCKET_NAME}/{REPORT_FOLDER_PATH}"
+            report_folder_path=f"s3://{TEST_BUCKET_NAME}/{REPORT_FOLDER_PATH}"
         )
 
 
 @mock_s3
-def test_read_report(monkeypatch):
+def test_read_report(monkeypatch, update_report_file: Path):
     s3_client = boto3.client("s3", region_name=REGION)
     s3_client.create_bucket(
-        Bucket=S2_BUCKET_NAME,
+        Bucket=TEST_BUCKET_NAME,
         CreateBucketConfiguration={
             "LocationConstraint": REGION,
         },
     )
 
-    file_name = "2021-08-17_update.txt.gz"
-    s3_client.upload_file(
-        f"../tests/data/{file_name}", S2_BUCKET_NAME, f"{REPORT_FOLDER_PATH}{file_name}"
-    )
+    s3_client.upload_file(update_report_file, TEST_BUCKET_NAME, update_report_file.name)
+    s3_path = f"s3://{TEST_BUCKET_NAME}/{update_report_file.name}"
 
-    values = read_report(
-        report_path=f"s3://{S2_BUCKET_NAME}/{REPORT_FOLDER_PATH}{file_name}"
-    )
+    values = read_report(report_path=s3_path)
     assert len(values) == 8
 
     # Test with limit
-    values = read_report(
-        report_path=f"s3://{S2_BUCKET_NAME}/{REPORT_FOLDER_PATH}{file_name}", limit=2
-    )
+    values = read_report(report_path=s3_path, limit=2)
     assert len(values) == 2
+
+
+@pytest.fixture
+def update_report_file():
+    return TEST_DATA_DIR / "2021-08-17_update.txt.gz"
