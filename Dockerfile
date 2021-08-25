@@ -1,10 +1,7 @@
 FROM osgeo/gdal:ubuntu-small-3.3.1
 
-RUN apt-get update && \
-    apt-get install -y \
-      build-essential \
-      git \
-      python3-pip \
+RUN apt-get update \
+    && apt-get install -y build-essential git python3-pip \
     && apt-get autoclean \
     && apt-get autoremove
 
