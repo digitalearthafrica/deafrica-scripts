@@ -1,4 +1,4 @@
-name : Deafrica Tools Test and Push
+name : Tools Test and Push
 
 env:
   IMAGE_NAME: digitalearthafrica/scripts
@@ -8,14 +8,14 @@ on:
     branches:
       - main
     paths:
-      - 'deafrica_automation_tools/**'
-      - '.github/workflows/deafrica-tools-*'
+      - 'tools/**'
+      - '.github/workflows/*'
   push:
     branches:
       - main
     paths:
-      - 'deafrica_automation_tools/_version.py'
-      - '.github/workflows/deafrica-tools-*'
+      - 'tools/monitoring/tools/version.txt'
+      - '.github/workflows/build-test-*'
 
 jobs:
   test:
