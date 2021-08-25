@@ -31,7 +31,6 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
-
     - name: Get tag for this build if it exists
       run: |
         echo "VERSION=$(cat tools/monitoring/tools/version.txt)" >> $GITHUB_ENV
@@ -40,15 +39,14 @@ jobs:
       with:
         context: monitoring_tools
         image_name: ${{ env.IMAGE_NAME }}
-        username: gadockersvc
+        username: ${{ secrets.GADOCKERSVC_USERNAME }}
         password: ${{ secrets.GADOCKERSVC_PASSWORD }}
         image_tag: latest,${{ env.VERSION }}
-
-#    - name: Update Docker Hub Description
-#      uses: peter-evans/dockerhub-description@v2
-#      with:
-#        username: gadockersvc
-#        password: ${{ secrets.GADOCKERSVC_PASSWORD }}
-#        repository: ${{ env.IMAGE_NAME }}
-#        readme-filepath: ./index/readme.md
-#        short-description: Open Data Cube Indexing Image
+    - name: Update Docker Hub Description
+      uses: peter-evans/dockerhub-description@v2
+      with:
+        username: ${{ secrets.GADOCKERSVC_USERNAME }}
+        password: ${{ secrets.GADOCKERSVC_PASSWORD }}
+        repository: ${{ env.IMAGE_NAME }}
+        readme-filepath: ./tools/monitoring/tools/readme.md
+        short-description: Deafrica tools image

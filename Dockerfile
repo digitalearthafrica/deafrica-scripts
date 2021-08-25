@@ -1,14 +1,17 @@
 FROM osgeo/gdal:ubuntu-small-3.3.1
 
-RUN apt-get update
-RUN apt-get install -y build-essential git libpq-dev python-dev python3-pip wget
-RUN apt-get autoclean
-RUN apt-get autoremove
-RUN rm -rf /var/lib/{apt,dpkg,cache,log}
-RUN mkdir -p /code
-COPY requirements.txt /tmp
-RUN pip install -r /requirements.txt
+RUN apt-get update && \
+    apt-get install -y \
+      build-essential \
+      git \
+      python3-pip \
+    && apt-get autoclean && \
+    apt-get autoremove
 
+RUN python -m pip install --upgrade pip
+RUN mkdir -p /code
+COPY requirements.txt /code
+RUN pip install -r /code/requirements.txt
 WORKDIR /code
 
 CMD ["python --version"]
