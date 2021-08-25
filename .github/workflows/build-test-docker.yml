@@ -23,11 +23,11 @@ jobs:
 
     - name: Build image
       run: |
-        docker compose build
+        docker-compose build
 
     - name: Run tests in image
       run: |
-        docker compose exec tools \
+        docker-compose exec tools \
           bash -c "pip install -e /code; pytest /code"
 
   push:
