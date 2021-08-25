@@ -1,4 +1,9 @@
+--extra-index-url="https://packages.dea.ga.gov.au"
+
 boto3
 click
---extra-index-url="https://packages.dea.ga.gov.au"
 odc_aws
+
+# For tests. Todo, only install these in the image when we're testin
+pytest
+moto

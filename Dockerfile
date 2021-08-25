@@ -5,13 +5,18 @@ RUN apt-get update && \
       build-essential \
       git \
       python3-pip \
-    && apt-get autoclean && \
-    apt-get autoremove
+    && apt-get autoclean \
+    && apt-get autoremove
 
-RUN python -m pip install --upgrade pip
+COPY requirements.txt /tmp/
+RUN python -m pip install --upgrade pip \
+    && pip install -r /tmp/requirements.txt
+
 RUN mkdir -p /code
-COPY requirements.txt /code
-RUN pip install -r /code/requirements.txt
 WORKDIR /code
+
+ADD . /code/
+
+RUN pip install /code
 
 CMD ["python --version"]
