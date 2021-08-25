@@ -5,17 +5,7 @@ env:
 
 on:
   pull_request:
-    branches:
-      - main
-    paths:
-      - 'tools/**'
-      - '.github/workflows/*'
   push:
-    branches:
-      - main
-    paths:
-      - 'tools/monitoring/tools/version.txt'
-      - '.github/workflows/build-test-*'
 
 jobs:
   test:
