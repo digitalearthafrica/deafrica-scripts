@@ -14,6 +14,7 @@ jobs:
 
     - name: Checkout code
       uses: actions/checkout@v2
+
     - name: Check formatting
       uses: rickstaa/action-black@v1
       id: action_black
@@ -35,7 +36,7 @@ jobs:
     - name: Build Test Docker
       uses: docker/build-push-action@v2
       with:
-        file: docker/Dockerfile
+        file: Dockerfile
         context: .
         tags: ${{ env.IMAGE_NAME }}
         outputs: type=docker
