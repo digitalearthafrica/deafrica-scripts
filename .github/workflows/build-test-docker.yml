@@ -36,7 +36,7 @@ jobs:
       uses: docker/build-push-action@v2
       with:
         file: docker/Dockerfile
-        context: docker
+        context: .
         tags: ${{ env.IMAGE_NAME }}
         outputs: type=docker
         cache-from: |
