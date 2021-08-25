@@ -36,7 +36,6 @@ jobs:
     - name: Build Test Docker
       uses: docker/build-push-action@v2
       with:
-        file: Dockerfile
         context: .
         tags: ${{ env.IMAGE_NAME }}
         outputs: type=docker
@@ -64,27 +63,24 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v2
 
-    - name: Get tag for this build if it exists
-      run: |
-        echo "VERSION=$(cat tools/monitoring/tools/version.txt)" >> $GITHUB_ENV
-  
-    - name: Build and Push Docker Image from PR / Push to Master
-      uses: whoan/docker-build-with-cache-action@v4
-      with:
-        context: monitoring_tools
-        image_name: ${{ env.IMAGE_NAME }}
-        username: ${{ secrets.GADOCKERSVC_USERNAME }}
-        password: ${{ secrets.GADOCKERSVC_PASSWORD }}
-        image_tag: latest,${{ env.VERSION }}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
 
-    - name: Update Docker Hub Description
-      uses: peter-evans/dockerhub-description@v2
-      with:
-        username: ${{ secrets.GADOCKERSVC_USERNAME }}
-        password: ${{ secrets.GADOCKERSVC_PASSWORD }}
-        repository: ${{ env.IMAGE_NAME }}
-        readme-filepath: ./tools/monitoring/tools/readme.md
-        short-description: Deafrica tools image
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.GADOCKERSVC_USERNAME }}
+          password: ${{ secrets.GADOCKERSVC_PASSWORD }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          tags: ${{ env.IMAGE_NAME }}
