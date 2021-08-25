@@ -33,13 +33,12 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Get tag for this build if it exists
-#      TODO FIX this
       run: |
-        echo "VERSION=$(cat deafrica_automation_tools/_version.py)" >> $GITHUB_ENV
-    - name: Build and Push unstable Docker Image from PR / Push to Master
+        echo "VERSION=$(cat tools/monitoring/tools/version.txt)" >> $GITHUB_ENV
+    - name: Build and Push Docker Image from PR / Push to Master
       uses: whoan/docker-build-with-cache-action@v4
       with:
-        context: deafrica_automation_tools
+        context: monitoring_tools
         image_name: ${{ env.IMAGE_NAME }}
         username: gadockersvc
         password: ${{ secrets.GADOCKERSVC_PASSWORD }}
