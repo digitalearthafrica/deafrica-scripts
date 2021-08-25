@@ -3,8 +3,8 @@ import pytest
 from moto import mock_sqs, mock_s3
 from odc.aws.queue import publish_message
 
-from monitoring.tools.check_dead_queues import get_dead_queues, check_deadletter_queues
-from monitoring.tools.utils import find_latest_report, read_report
+from tools.check_dead_queues import get_dead_queues, check_deadletter_queues
+from tools.utils import find_latest_report, read_report
 
 REGION = "af-south-1"
 S2_BUCKET_NAME = 'deafrica-sentinel-2'
