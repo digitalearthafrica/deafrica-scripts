@@ -35,7 +35,7 @@ jobs:
         continue-on-error: true
       - name: Test with pytest
         run: |
-          pytest tests/tests.py --doctest-modules --junitxml=junit/test-results.xml --cov=com --cov-report=xml --cov-report=html
+          pytest ./tools/tests/tests.py --doctest-modules --junitxml=junit/test-results.xml --cov=com --cov-report=xml --cov-report=html
       - name: Check files using the black formatter
         uses: rickstaa/action-black@v1
         id: action_black
