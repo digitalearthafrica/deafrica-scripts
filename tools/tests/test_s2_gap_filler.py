@@ -6,7 +6,7 @@ import boto3
 from moto import mock_s3, mock_sqs
 from odc.aws.queue import get_queue
 
-from tests.conftest import FAKE_STAC_FILE, REGION, SQS_QUEUE_NAME, TEST_BUCKET_NAME
+from tools.tests.conftest import FAKE_STAC_FILE, REGION, SQS_QUEUE_NAME, TEST_BUCKET_NAME
 from tools.monitoring.tools import s2_gap_filler
 
 
