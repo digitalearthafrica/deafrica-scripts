@@ -79,7 +79,7 @@ def prepare_message(s3_path):
     Prepare a single message for each stac file
     """
 
-    if s3_head_object(url=s3_path) is not None:
+    if s3_head_object(url=s3_path) is None:
         raise ValueError(f"{s3_path} does not exist")
 
     contents = s3_fetch(url=s3_path, s3=None)
@@ -99,20 +99,18 @@ def publish_message(files):
     """ """
     max_workers = 300
     # counter for files that no longer exist
-    failed = 0
-    sent = 0
-
-    batch = []
-
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(prepare_message, s3_path) for s3_path in files]
-
+        failed = 0
+        sent = 0
+        batch = []
         message_id = 0
         queue = get_queue(queue_name=SENTINEL_2_SYNC_SQS_NAME)
         for future in as_completed(futures):
             try:
                 message_dict = future.result()
                 message_dict["Id"] = str(message_id)
+                message_id += 1
                 batch.append(message_dict)
                 if len(batch) == 10:
                     publish_messages(queue=queue, messages=batch)

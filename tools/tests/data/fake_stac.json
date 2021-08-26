@@ -1,0 +1,29 @@
+{
+  "type": "Feature",
+  "stac_version": "1.0.0-beta.2",
+  "bbox": [
+    -23.82313547199443,
+    17.076994192392323,
+    -22.787666823833955,
+    17.363390699247176
+  ],
+  "properties": {
+    "datetime": "2018-10-19T12:16:48Z",
+    "platform": "sentinel-2a",
+    "constellation": "sentinel-2",
+    "instruments": [
+      "msi"
+    ],
+    "gsd": 10,
+    "view:off_nadir": 0,
+    "proj:epsg": 32627,
+    "sentinel:utm_zone": 27,
+    "sentinel:latitude_band": "Q",
+    "sentinel:grid_square": "TV",
+    "sentinel:sequence": "0",
+    "sentinel:product_id": "S2A_MSIL2A_20181019T121651_N0001_R066_T27QTV_20200308T131556",
+    "sentinel:data_coverage": 15.78,
+    "eo:cloud_cover": 6.09,
+    "sentinel:valid_cloud_cover": true
+  }
+}
