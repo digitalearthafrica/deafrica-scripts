@@ -2,13 +2,12 @@ import logging
 import sys
 from textwrap import dedent
 
-import boto3
 import click as click
+from odc.aws.queue import get_queues
 
 
 def get_dead_queues() -> set:
-    sqs = boto3.resource("sqs")
-    queues = sqs.queues.all()
+    queues = get_queues()
 
     return set(queue for queue in queues if "deadletter" in queue.url)
 
