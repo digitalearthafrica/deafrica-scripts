@@ -4,9 +4,6 @@ services:
   tools:
     build:
       context: .
-    # environment:
-      # - AWS_DEFAULT_REGION=af-south-1
-      # - AWS_S3_ENDPOINT=s3.af-south-1.amazonaws.com
     volumes:
       - .:/code
     command: ["python --version"]

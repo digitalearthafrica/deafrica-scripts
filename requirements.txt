@@ -4,6 +4,3 @@ boto3
 click
 odc_aws
 urlpath
-# For tests. Todo, only install these in the image when we're testin
-pytest
-moto

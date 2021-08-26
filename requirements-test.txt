@@ -1,7 +1,3 @@
-boto3
-click
 moto
 pytest
 pytest-cov
---extra-index-url="https://packages.dea.ga.gov.au"
-odc_aws
