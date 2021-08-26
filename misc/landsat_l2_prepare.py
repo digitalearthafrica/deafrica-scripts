@@ -37,7 +37,7 @@ _COPYABLE_MTL_FIELDS = [
     ),
     (
         "product_contents",
-        ( "collection_category"),
+        ("collection_category"),
     ),
     (
         "image_attributes",
@@ -132,7 +132,9 @@ def get_band_alias_mappings(sat: str, instrument: str) -> Dict[str, str]:
     )
 
 
-def get_mtl_content(acquisition_path: Path, root_element="l1_metadata_file") -> Tuple[Dict, str]:
+def get_mtl_content(
+    acquisition_path: Path, root_element="l1_metadata_file"
+) -> Tuple[Dict, str]:
     """
     Find MTL file for the given path. It could be a directory or a tar file.
 
@@ -217,6 +219,7 @@ def read_mtl(fp: Iterable[Union[str, bytes]], root_element="l1_metadata_file") -
                 else:
                     tree[key_transform(key)] = _parse_value(value)
         return tree
+
     tree = _parse_group(fp)
     return tree[root_element]
 
@@ -244,7 +247,9 @@ def prepare_and_write(
 
     Input dataset path can be a folder or a tar file.
     """
-    mtl_doc, mtl_filename = get_mtl_content(ds_path, root_element="landsat_metadata_file")
+    mtl_doc, mtl_filename = get_mtl_content(
+        ds_path, root_element="landsat_metadata_file"
+    )
     if not mtl_doc:
         raise ValueError(f"No MTL file found for {ds_path}")
 
@@ -289,7 +294,7 @@ def prepare_and_write(
             mtl_doc["image_attributes"]["scene_center_time"],
         )
         # p.processed = mtl_doc["metadata_file_info"]["file_date"]
-        p.processed = mtl_doc['level2_processing_record']['date_product_generated']
+        p.processed = mtl_doc["level2_processing_record"]["date_product_generated"]
         p.properties["odc:file_format"] = file_format
         p.properties["eo:gsd"] = ground_sample_distance
         p.properties["eo:cloud_cover"] = mtl_doc["image_attributes"]["cloud_cover"]
@@ -320,8 +325,7 @@ def prepare_and_write(
             #     relative_to_dataset_location=True,
             # )
             path_file = os.path.join(ds_path, file_location)
-            p.write_measurement(band_aliases[usgs_band_id],
-                path_file)
+            p.write_measurement(band_aliases[usgs_band_id], path_file)
 
         p.add_accessory_file("metadata:landsat_mtl", Path(mtl_filename))
 

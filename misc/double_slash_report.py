@@ -11,20 +11,19 @@ os.environ["AWS_DEFAULT_REGION"] = "af-south-1"
 
 
 def double_slash_report():
-    """
-    """
+    """ """
     s3 = inventory.s3_client(
         profile=None,
         creds=None,
-        region_name='af-south-1',
+        region_name="af-south-1",
         session=None,
         aws_unsigned=True,
         use_ssl=True,
         cache=False,
     )
     manifest = inventory.find_latest_manifest(
-        prefix='s3://deafrica-landsat-inventory/deafrica-landsat/deafrica-landsat-inventory/',
-        s3=s3
+        prefix="s3://deafrica-landsat-inventory/deafrica-landsat/deafrica-landsat-inventory/",
+        s3=s3,
     )
     inventory_list = inventory.list_inventory(
         manifest=manifest,
@@ -32,9 +31,8 @@ def double_slash_report():
         n_threads=200,
     )
 
-    double_slash_list = []
     for namespace in inventory_list:
-        if hasattr(namespace, 'Key') and '//' in namespace.Key:
+        if hasattr(namespace, "Key") and "//" in namespace.Key:
             yield namespace.Key
 
 
@@ -48,7 +46,7 @@ def check_keys(path_list):
     s3 = inventory.s3_client(
         profile=None,
         creds=None,
-        region_name='af-south-1',
+        region_name="af-south-1",
         session=None,
         aws_unsigned=True,
         use_ssl=True,
@@ -60,19 +58,23 @@ def check_keys(path_list):
         tasks = [
             executor.submit(
                 s3_head_object,
-                f's3://deafrica-landsat/{path}',
+                f"s3://deafrica-landsat/{path}",
                 s3,
             )
             for path in path_list
         ]
 
-        [to_remove_paths.append(future.result()) for future in as_completed(tasks) if future.result()]
+        [
+            to_remove_paths.append(future.result())
+            for future in as_completed(tasks)
+            if future.result()
+        ]
 
-        create_txt(to_remove_paths, 'to_remove')
+        create_txt(to_remove_paths, "to_remove")
 
 
 def get_all_versions(bucket, filename):
-    s3 = boto3.client('s3')
+    s3 = boto3.client("s3")
     keys = ["Versions", "DeleteMarkers"]
     results = []
     for k in keys:
@@ -86,7 +88,7 @@ def get_all_versions(bucket, filename):
 
 
 def remove_object(bucket, path_list):
-    s3 = boto3.client('s3')
+    s3 = boto3.client("s3")
 
     for file_path in path_list:
         [
@@ -101,4 +103,3 @@ if __name__ == "__main__":
     # Just use if you are sure of what you are doing!!!
     # f = open(f"misc/to_remove.txt", "r+")
     # remove_object('deafrica-landsat', [line.replace('\n', '') for line in f.readlines()])
-

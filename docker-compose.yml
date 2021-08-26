@@ -1,0 +1,9 @@
+version: "3.7"
+
+services:
+  tools:
+    build:
+      context: .
+    volumes:
+      - .:/code
+    command: ["python --version"]

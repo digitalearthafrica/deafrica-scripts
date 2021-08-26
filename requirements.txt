@@ -1,2 +1,6 @@
+--extra-index-url="https://packages.dea.ga.gov.au"
+
 boto3
 click
+odc_aws==0.2.1.dev2448
+urlpath

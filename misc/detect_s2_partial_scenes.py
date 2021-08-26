@@ -5,16 +5,13 @@ E.g command: python generate_report.py "s3://deafrica-sentinel-2-inventory/deafr
 
 """
 
-from datetime import datetime
-from pathlib import Path
-import boto3
-import csv
-import gzip
-import click
 import json
+from pathlib import Path
+
+import boto3
+import click
 import pandas as pd
 from tqdm import tqdm
-
 
 MANIFEST_SUFFIX = "manifest.json"
 SRC_BUCKET_NAME = "deafrica-sentinel-2"
@@ -39,7 +36,7 @@ def generate_report(manifest_file, output_filepath):
 
     manifest = read_manifest()
     df = pd.Series()
-    counter = 0
+
     for obj in tqdm(manifest["files"]):
         bucket = "deafrica-sentinel-2-inventory"
         gzip_obj = s3.get_object(Bucket=bucket, Key=obj["key"])
