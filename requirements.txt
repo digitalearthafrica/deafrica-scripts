@@ -2,5 +2,5 @@
 
 boto3
 click
-odc_aws
+odc_aws==0.2.1.dev2448
 urlpath
