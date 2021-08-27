@@ -6,10 +6,8 @@ import click as click
 from odc.aws.queue import get_queues
 
 
-def get_dead_queues() -> set:
-    queues = get_queues()
-
-    return set(queue for queue in queues if "deadletter" in queue.url)
+def get_dead_queues():
+    return get_queues(contains="deadletter")
 
 
 def check_deadletter_queues(dead_queues):

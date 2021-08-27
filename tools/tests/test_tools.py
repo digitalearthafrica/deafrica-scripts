@@ -17,14 +17,17 @@ from tools.monitoring.tools.utils import find_latest_report, read_report
 @mock_sqs
 def test_get_dead_queues(monkeypatch):
     resource = boto3.resource("sqs")
-    resource.create_queue(QueueName="deafrica-test-queue-deadletter")
-    resource.create_queue(QueueName="deafrica-test-queue2-deadletter")
-    resource.create_queue(QueueName="deafrica-test-queue3-deadletter")
+    dead_queue_list = [
+        resource.create_queue(QueueName=f"deafrica-test-queue{i}-deadletter")
+        for i in range(3)
+    ]
+
     resource.create_queue(QueueName="deafrica-test-queue")
 
     dead_queues = get_dead_queues()
 
-    assert len(dead_queues) == 3
+    difference = set(queue.url for queue in dead_queue_list).difference(set(queue.url for queue in dead_queues))
+    assert len(difference) == 0
 
 
 @mock_sqs
