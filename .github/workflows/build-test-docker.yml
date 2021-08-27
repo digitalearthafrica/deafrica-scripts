@@ -78,9 +78,13 @@ jobs:
           username: ${{ secrets.GADOCKERSVC_USERNAME }}
           password: ${{ secrets.GADOCKERSVC_PASSWORD }}
 
+      - name: Get tag for this build if it exists
+        run: |
+          echo "VERSION=$(cat toos/monitoring/_version.py | cut -d'"' -f 2)" >> $GITHUB_ENV
+
       - name: Build and push
         uses: docker/build-push-action@v2
         with:
           context: .
           push: true
-          tags: ${{ env.IMAGE_NAME }}
+          tags: ${{ env.IMAGE_NAME }}:latest,${{ env.IMAGE_NAME }}:${{ env.VERSION }}
