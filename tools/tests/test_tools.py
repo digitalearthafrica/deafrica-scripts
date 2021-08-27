@@ -26,7 +26,9 @@ def test_get_dead_queues(monkeypatch):
 
     dead_queues = get_dead_queues()
 
-    difference = set(queue.url for queue in dead_queue_list).difference(set(queue.url for queue in dead_queues))
+    difference = set(queue.url for queue in dead_queue_list).difference(
+        set(queue.url for queue in dead_queues)
+    )
     assert len(difference) == 0
 
 
