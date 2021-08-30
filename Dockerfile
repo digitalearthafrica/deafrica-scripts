@@ -16,4 +16,4 @@ COPY . /code/
 
 RUN pip install /code
 
-CMD ["/usr/bin/python", "--version"]
+CMD ["python", "--version"]
