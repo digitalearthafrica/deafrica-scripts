@@ -5,10 +5,7 @@ from textwrap import dedent
 import click as click
 from odc.aws.queue import get_queues
 
-# Get the top-level logger object
 log = logging.getLogger()
-
-# make it print to the console.
 console = logging.StreamHandler()
 log.addHandler(console)
 

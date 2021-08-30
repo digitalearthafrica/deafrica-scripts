@@ -1,7 +1,12 @@
 import gzip
 import logging
+import math
 
 from odc.aws import s3_client, s3_ls_dir, s3_fetch
+
+log = logging.getLogger()
+console = logging.StreamHandler()
+log.addHandler(console)
 
 
 def find_latest_report(report_folder_path: str) -> str:
@@ -19,7 +24,7 @@ def find_latest_report(report_folder_path: str) -> str:
 
     report_files.sort()
 
-    logging.info(f"Last report {report_files[-1]}")
+    log.info(f"Last report {report_files[-1]}")
 
     return report_files[-1]
 
@@ -28,10 +33,10 @@ def read_report(report_path: str, limit=None):
     """
     read the gap report
     """
-    logging.info(f"limit - {limit}")
+    log.info(f"limit - {limit}")
 
     if "update" in report_path:
-        logging.info("FORCED UPDATE FLAGGED!")
+        log.info("FORCED UPDATE FLAGGED!")
 
     s3 = s3_client(region_name="af-south-1")
     missing_scene_file_gzip = s3_fetch(url=report_path, s3=s3)
@@ -39,17 +44,28 @@ def read_report(report_path: str, limit=None):
     missing_scene_paths = [
         scene_path.strip()
         for scene_path in gzip.decompress(missing_scene_file_gzip)
-        .decode("utf-8")
-        .split("\n")
+            .decode("utf-8")
+            .split("\n")
         if scene_path
     ]
 
-    logging.info(f"Limited: {int(limit) if limit else 'No limit'}")
+    log.info(f"Limited: {int(limit) if limit else 'No limit'}")
 
     if limit:
         missing_scene_paths = missing_scene_paths[: int(limit)]
 
-    logging.info(f"Number of scenes found {len(missing_scene_paths)}")
-    logging.info(f"Example scenes: {missing_scene_paths[0:10]}")
+    log.info(f"Number of scenes found {len(missing_scene_paths)}")
+    log.info(f"Example scenes: {missing_scene_paths[0:10]}")
 
     return missing_scene_paths
+
+
+def split_list_equally(list_to_split: list, num_inter_lists: int):
+    """
+
+    """
+    if num_inter_lists < 1:
+        raise Exception("max_items_per_line needs to be greater than 0")
+
+    max_list_items = math.ceil(len(list_to_split) / num_inter_lists)
+    return [list_to_split[i:i + max_list_items] for i in range(0, len(list_to_split), max_list_items)]
