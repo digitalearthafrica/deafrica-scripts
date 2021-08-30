@@ -62,10 +62,13 @@ def read_report(report_path: str, limit=None):
 
 def split_list_equally(list_to_split: list, num_inter_lists: int):
     """
-
+        Split a big list in smaller lists in a big strings that separate items with a space
     """
     if num_inter_lists < 1:
         raise Exception("max_items_per_line needs to be greater than 0")
 
     max_list_items = math.ceil(len(list_to_split) / num_inter_lists)
-    return [list_to_split[i:i + max_list_items] for i in range(0, len(list_to_split), max_list_items)]
+    return [
+        " ".join([str(value) for value in list_to_split[i:i + max_list_items]])
+        for i in range(0, len(list_to_split), max_list_items)
+    ]
