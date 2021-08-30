@@ -140,7 +140,8 @@ def cli(scenes: str):
     Publish missing scenes
     """
     try:
-        publish_message(files=scenes.split())
+        list_scenes = json.loads(scenes)
+        publish_message(files=list_scenes)
     except Exception as error:
         log.exception(error)
         traceback.print_exc()
