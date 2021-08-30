@@ -31,7 +31,8 @@ def check_deadletter_queues(dead_queues):
     )
 
     if len(bad_queues) > 0:
-        logging.info(message)
+        logging.error(message)
+        print(message)  # TEST remove after
         sys.exit(1)
     else:
         logging.info("No messages fond in any dead queue")
