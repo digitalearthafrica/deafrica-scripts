@@ -7,7 +7,7 @@ import boto3
 from moto import mock_s3, mock_sqs
 from odc.aws.queue import get_queue
 
-from monitoring.tools.utils import split_list_equally
+from tools.monitoring.tools.utils import split_list_equally
 from tools.tests.conftest import (
     FAKE_STAC_FILE,
     REGION,
