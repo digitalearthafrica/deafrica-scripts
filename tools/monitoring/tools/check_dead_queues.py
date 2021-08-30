@@ -13,14 +13,9 @@ console = logging.StreamHandler()
 log.addHandler(console)
 
 
-def get_dead_queues() -> set:
-    queues = get_queues()
-
-    return set(queue for queue in queues if "deadletter" in queue.url)
-
-
-def check_deadletter_queues(dead_queues):
+def check_deadletter_queues():
     bad_queues = []
+    dead_queues = get_queues(contains="deadletter")
     for dead_queue in dead_queues:
         queue_size = int(dead_queue.attributes.get("ApproximateNumberOfMessages", 0))
         if queue_size > 0:
@@ -51,8 +46,7 @@ def cli():
     Check all dead queues which the user is allowed to
     """
 
-    dead_queue_set = get_dead_queues()
-    check_deadletter_queues(dead_queues=dead_queue_set)
+    check_deadletter_queues()
 
 
 if __name__ == "__main__":

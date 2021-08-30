@@ -12,8 +12,8 @@ RUN python -m pip install --upgrade pip \
 RUN mkdir -p /code
 WORKDIR /code
 
-ADD . /code/
+COPY . /code/
 
 RUN pip install /code
 
-CMD ["python --version"]
+CMD ["python", "--version"]

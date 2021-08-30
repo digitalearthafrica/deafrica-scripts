@@ -6,25 +6,9 @@ from moto import mock_s3, mock_sqs
 from odc.aws.queue import publish_message
 from urlpath import URL
 
-from tools.tests.conftest import REGION, TEST_BUCKET_NAME
-from tools.monitoring.tools.check_dead_queues import (
-    check_deadletter_queues,
-    get_dead_queues,
-)
+from tools.monitoring.tools.check_dead_queues import check_deadletter_queues
 from tools.monitoring.tools.utils import find_latest_report, read_report
-
-
-@mock_sqs
-def test_get_dead_queues(monkeypatch):
-    resource = boto3.resource("sqs")
-    resource.create_queue(QueueName="deafrica-test-queue-deadletter")
-    resource.create_queue(QueueName="deafrica-test-queue2-deadletter")
-    resource.create_queue(QueueName="deafrica-test-queue3-deadletter")
-    resource.create_queue(QueueName="deafrica-test-queue")
-
-    dead_queues = get_dead_queues()
-
-    assert len(dead_queues) == 3
+from tools.tests.conftest import REGION, TEST_BUCKET_NAME
 
 
 @mock_sqs
@@ -45,10 +29,8 @@ def test_get_find_msg_dead_queues(monkeypatch):
         message=message,
     )
 
-    dead_queues = get_dead_queues()
-
     with pytest.raises(SystemExit) as pytest_wrapped_e:
-        check_deadletter_queues(dead_queues=dead_queues)
+        check_deadletter_queues()
     assert pytest_wrapped_e.type == SystemExit
     assert pytest_wrapped_e.value.code == 1
 
@@ -61,10 +43,8 @@ def test_get_no_msg_dead_queues(monkeypatch):
     resource.create_queue(QueueName="deafrica-test-queue3-deadletter")
     resource.create_queue(QueueName="deafrica-test-queue")
 
-    dead_queues = get_dead_queues()
-
     with pytest.raises(SystemExit) as pytest_wrapped_e:
-        check_deadletter_queues(dead_queues=dead_queues)
+        check_deadletter_queues()
     assert pytest_wrapped_e.type == SystemExit
     assert pytest_wrapped_e.value.code == 0
 
