@@ -5,6 +5,13 @@ from textwrap import dedent
 import click as click
 from odc.aws.queue import get_queues
 
+# Get the top-level logger object
+log = logging.getLogger()
+
+# make it print to the console.
+console = logging.StreamHandler()
+log.addHandler(console)
+
 
 def get_dead_queues() -> set:
     queues = get_queues()
@@ -31,11 +38,10 @@ def check_deadletter_queues(dead_queues):
     )
 
     if len(bad_queues) > 0:
-        logging.error(message)
-        print(message)  # TEST remove after
+        log.error(message)
         sys.exit(1)
     else:
-        logging.info("No messages fond in any dead queue")
+        log.info("No messages fond in any dead queue")
         sys.exit(0)
 
 
