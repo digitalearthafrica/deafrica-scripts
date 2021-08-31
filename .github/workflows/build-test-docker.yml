@@ -56,7 +56,7 @@ jobs:
 
     - name: Run tests in image
       run: |
-          docker run --rm ${{ env.IMAGE_NAME }} bash -c "pip install -e /code; pip install -r /code/requirements-test.txt; pytest /code"
+          docker run --rm ${{ env.IMAGE_NAME }} bash -c "pip install -e /code/tools/monitoring; pip install -r /code/requirements-test.txt; pytest /code"
 
   push:
     if: github.ref == 'refs/heads/main'
