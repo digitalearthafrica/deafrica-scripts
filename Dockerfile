@@ -14,6 +14,6 @@ WORKDIR /code
 
 COPY . /code/
 
-RUN pip install /code
+RUN pip install /code/tools/monitoring
 
 CMD ["python", "--version"]
