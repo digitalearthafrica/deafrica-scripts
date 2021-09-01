@@ -29,11 +29,10 @@ def test_get_find_msg_dead_queues(monkeypatch):
         message=message,
     )
 
-    # with pytest.raises(SystemExit) as pytest_wrapped_e:
-    #     check_deadletter_queues()
-    # assert pytest_wrapped_e.type == SystemExit
-    # assert pytest_wrapped_e.value.code == 1
-    assert True
+    with pytest.raises(SystemExit) as pytest_wrapped_e:
+        check_deadletter_queues()
+    assert pytest_wrapped_e.type == SystemExit
+    assert pytest_wrapped_e.value.code == 1
 
 
 @mock_sqs
