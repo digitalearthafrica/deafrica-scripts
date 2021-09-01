@@ -34,7 +34,7 @@ def check_deadletter_queues():
 
     if len(bad_queues) > 0:
         log.error(message)
-        sys.exit(1)
+        return message
     else:
         log.info("No messages fond in any dead queue")
         sys.exit(0)
