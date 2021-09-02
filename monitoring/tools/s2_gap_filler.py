@@ -140,11 +140,23 @@ def publish_message(files: list):
     log.info(f"Total of sent messages {sent}")
 
 
-@click.argument("worker_id", type=int, nargs=1)
-@click.argument("max_workers", type=int, nargs=1)
-@click.argument("limit", type=int, nargs=1)
+@click.argument(
+    "idx",
+    type=int,
+    nargs=1,
+    required=True,
+    help="List index, which will be set for an specific worker",
+)
+@click.argument(
+    "max_workers",
+    type=int,
+    nargs=1,
+    required=True,
+    help="Describe the numbers of works/pods to be used",
+)
+@click.argument("limit", type=int, nargs=1, default=0, help="Limit number of messages")
 @click.command("s2-gap-filler")
-def cli(worker_id: int, max_workers: int, limit: int):
+def cli(idx: int, max_workers: int, limit: int = 0):
     """
     Publish missing scenes
     """
@@ -155,11 +167,11 @@ def cli(worker_id: int, max_workers: int, limit: int):
             list_to_split=files, num_inter_lists=int(max_workers)
         )
 
-        if len(split_list_scenes) <= worker_id:
+        if len(split_list_scenes) <= idx:
             log.warning("Worker Skipped!")
             sys.exit(0)
 
-        publish_message(files=split_list_scenes[worker_id])
+        publish_message(files=split_list_scenes[idx])
     except Exception as error:
         log.exception(error)
         traceback.print_exc()

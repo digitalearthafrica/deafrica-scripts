@@ -103,10 +103,10 @@ def test_publish_message_s2_gap_filler_cli(
             max_workers = randrange(1, 30)
             max_limit = randrange(10)
             for limit in range(max_limit):
-                for worker_id in range(max_workers):
+                for idx in range(max_workers):
                     runner.invoke(
                         s2_gap_filler.cli,
-                        [str(limit), str(max_workers), str(worker_id)],
+                        [str(limit), str(max_workers), str(idx)],
                     )
 
                 queue = get_queue(queue_name=SQS_QUEUE_NAME)
