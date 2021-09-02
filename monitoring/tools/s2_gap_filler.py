@@ -3,6 +3,7 @@
 
 import json
 import logging
+import sys
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict
@@ -11,7 +12,16 @@ import click
 from odc.aws import s3_fetch, s3_head_object
 from odc.aws.queue import get_queue, publish_messages
 
-from monitoring.tools.utils import read_report, find_latest_report
+from monitoring.tools.utils import (
+    find_latest_report,
+    read_report,
+    split_list_equally,
+)
+
+log = logging.getLogger()
+console = logging.StreamHandler()
+log.addHandler(console)
+
 
 PRODUCT_NAME = "s2_l2a"
 S3_BUKET_PATH = "s3://deafrica-sentinel-2/status-report/"
@@ -95,7 +105,7 @@ def prepare_message(s3_path):
     return message
 
 
-def publish_message(files):
+def publish_message(files: list):
     """ """
     max_workers = 300
     # counter for files that no longer exist
@@ -118,7 +128,7 @@ def publish_message(files):
                     sent += 10
             except Exception as exc:
                 failed += 1
-                logging.info(f"File no longer exists: {exc}")
+                log.info(f"File no longer exists: {exc}")
 
     if len(batch) > 0:
         publish_messages(queue=queue, messages=batch)
@@ -127,20 +137,41 @@ def publish_message(files):
         raise ValueError(
             f"Total of {failed} files failed, Total of sent messages {sent}"
         )
-    logging.info(f"Total of sent messages {sent}")
+    log.info(f"Total of sent messages {sent}")
 
 
+@click.argument("idx", type=int, nargs=1, required=True)
+@click.argument("max_workers", type=int, nargs=1, default=2)
+@click.argument("limit", type=int, nargs=1, default=0)
 @click.command("s2-gap-filler")
-def cli():
-    """ """
+def cli(idx: int, max_workers: int = 2, limit: int = 0):
+    """
+    Publish missing scenes
+    """
     try:
         latest_report = find_latest_report(report_folder_path=S3_BUKET_PATH)
-        files = read_report(report_path=latest_report)
-        publish_message(files=files)
 
+        if "update" in latest_report:
+            log.info("FORCED UPDATE FLAGGED!")
+
+        log.info(f"Limited: {int(limit) if limit else 'No limit'}")
+
+        files = read_report(report_path=latest_report, limit=limit)
+
+        log.info(f"Number of scenes found {len(files)}")
+        log.info(f"Example scenes: {files[0:10]}")
+
+        split_list_scenes = split_list_equally(
+            list_to_split=files, num_inter_lists=int(max_workers)
+        )
+
+        if len(split_list_scenes) <= idx:
+            log.warning("Worker Skipped!")
+            sys.exit(0)
+
+        publish_message(files=split_list_scenes[idx])
     except Exception as error:
-        logging.exception(error)
-        # print traceback but does not stop execution
+        log.exception(error)
         traceback.print_exc()
         raise error
 

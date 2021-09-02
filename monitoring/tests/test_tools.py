@@ -7,7 +7,11 @@ from odc.aws.queue import publish_message
 from urlpath import URL
 
 from monitoring.tools.check_dead_queues import check_deadletter_queues
-from monitoring.tools.utils import find_latest_report, read_report
+from monitoring.tools.utils import (
+    find_latest_report,
+    read_report,
+    split_list_equally,
+)
 from monitoring.tests.conftest import REGION, TEST_BUCKET_NAME
 
 
@@ -108,3 +112,24 @@ def test_read_report(monkeypatch, update_report_file: Path, s3_report_file: URL)
     # Test with limit
     values = read_report(report_path=s3_path, limit=2)
     assert len(values) == 2
+
+
+def test_split_list():
+    """ """
+
+    max_of_workers = 10
+
+    perfect_division = split_list_equally(
+        list_to_split=[i for i in range(30)], num_inter_lists=max_of_workers
+    )
+    smaller_division = split_list_equally(
+        list_to_split=[i for i in range(29)], num_inter_lists=max_of_workers
+    )
+    bigger_division = split_list_equally(
+        list_to_split=[i for i in range(31)], num_inter_lists=max_of_workers
+    )
+
+    # The result must be at most 10 items
+    assert len(perfect_division) <= max_of_workers
+    assert len(smaller_division) <= max_of_workers
+    assert len(bigger_division) <= max_of_workers

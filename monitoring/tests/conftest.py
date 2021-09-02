@@ -9,6 +9,7 @@ SQS_QUEUE_NAME = "test-queue"
 TEST_DATA_DIR = Path(__file__).absolute().parent / "data"
 REPORT_FILE = "2021-08-17_update.txt.gz"
 FAKE_STAC_FILE = "fake_stac.json"
+REPORT_FOLDER = "status-report"
 
 
 @pytest.fixture(autouse=True)
@@ -28,5 +29,5 @@ def fake_stac_file():
 
 @pytest.fixture
 def s3_report_file():
-    s3_report_path = URL(f"report/")
+    s3_report_path = URL(REPORT_FOLDER)
     return s3_report_path / REPORT_FILE
