@@ -9,8 +9,8 @@ from moto import mock_s3, mock_sqs
 from odc.aws.queue import get_queue
 from urlpath import URL
 
-from tools.monitoring.tools import s2_gap_filler
-from tools.tests.conftest import (
+from monitoring.tools import s2_gap_filler
+from tests.conftest import (
     FAKE_STAC_FILE,
     REGION,
     SQS_QUEUE_NAME,
