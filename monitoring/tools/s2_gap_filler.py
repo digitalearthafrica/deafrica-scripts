@@ -11,7 +11,7 @@ import click
 from odc.aws import s3_fetch, s3_head_object
 from odc.aws.queue import get_queue, publish_messages
 
-from tools.monitoring.tools.utils import read_report, find_latest_report
+from monitoring.tools.utils import read_report, find_latest_report
 
 PRODUCT_NAME = "s2_l2a"
 S3_BUKET_PATH = "s3://deafrica-sentinel-2/status-report/"
