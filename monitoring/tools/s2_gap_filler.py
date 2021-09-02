@@ -140,7 +140,7 @@ def publish_message(files: list):
     log.info(f"Total of sent messages {sent}")
 
 
-@click.argument("idx", type=int, nargs=1)
+@click.argument("idx", type=int, nargs=1, required=True)
 @click.argument("max_workers", type=int, nargs=1, default=2)
 @click.argument("limit", type=int, nargs=1, default=0)
 @click.command("s2-gap-filler")
@@ -149,11 +149,18 @@ def cli(idx: int, max_workers: int = 2, limit: int = 0):
     Publish missing scenes
     """
     try:
-        if idx is None or idx < 0:
-            raise ValueError("idx is a required argument")
-
         latest_report = find_latest_report(report_folder_path=S3_BUKET_PATH)
+
+        if "update" in latest_report:
+            log.info("FORCED UPDATE FLAGGED!")
+
+        log.info(f"Limited: {int(limit) if limit else 'No limit'}")
+
         files = read_report(report_path=latest_report, limit=limit)
+
+        log.info(f"Number of scenes found {len(files)}")
+        log.info(f"Example scenes: {files[0:10]}")
+
         split_list_scenes = split_list_equally(
             list_to_split=files, num_inter_lists=int(max_workers)
         )
