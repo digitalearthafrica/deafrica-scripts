@@ -1,10 +1,4 @@
 tools.egg-info
 .hypothesis
 __pycache__
-/.idea/.gitignore
-/.idea/deafrica-tools.iml
-/.idea/misc.xml
-/.idea/modules.xml
-/.idea/inspectionProfiles/profiles_settings.xml
-/.idea/inspectionProfiles/Project_Default.xml
-/.idea/vcs.xml
+/.idea/*
