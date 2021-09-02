@@ -13,7 +13,8 @@ from monitoring.tests.conftest import (
     FAKE_STAC_FILE,
     REGION,
     SQS_QUEUE_NAME,
-    TEST_BUCKET_NAME, REPORT_FOLDER,
+    TEST_BUCKET_NAME,
+    REPORT_FOLDER,
 )
 from monitoring.tools import s2_gap_filler
 
@@ -21,7 +22,7 @@ from monitoring.tools import s2_gap_filler
 @mock_s3
 @mock_sqs
 def test_publish_message_s2_gap_filler(
-        monkeypatch, update_report_file: Path, fake_stac_file: Path
+    monkeypatch, update_report_file: Path, fake_stac_file: Path
 ):
     sqs_client = boto3.client("sqs", region_name="af-south-1")
     sqs_client.create_queue(QueueName=SQS_QUEUE_NAME)
@@ -37,9 +38,9 @@ def test_publish_message_s2_gap_filler(
     files = [
         scene_path.strip()
         for scene_path in gzip.open(open(str(update_report_file), "rb"))
-            .read()
-            .decode("utf-8")
-            .split("\n")
+        .read()
+        .decode("utf-8")
+        .split("\n")
         if scene_path
     ]
 
@@ -58,7 +59,7 @@ def test_publish_message_s2_gap_filler(
 @mock_s3
 @mock_sqs
 def test_publish_message_s2_gap_filler_cli(
-        monkeypatch, update_report_file: Path, fake_stac_file: Path, s3_report_file: URL
+    monkeypatch, update_report_file: Path, fake_stac_file: Path, s3_report_file: URL
 ):
     """
     Test for random numbers of limits (between 1-10) for a random numbers of workers workers (between 1-30).
@@ -83,9 +84,9 @@ def test_publish_message_s2_gap_filler_cli(
     files = [
         scene_path.strip()
         for scene_path in gzip.open(open(str(update_report_file), "rb"))
-            .read()
-            .decode("utf-8")
-            .split("\n")
+        .read()
+        .decode("utf-8")
+        .split("\n")
         if scene_path
     ]
 
@@ -114,9 +115,11 @@ def test_publish_message_s2_gap_filler_cli(
                 # higher limits the process must send a max of 8 messages
                 assert (
                     # if limit bigger than 0 and smaller than the number max of messages
-                    int(number_of_msgs) == limit or
+                    int(number_of_msgs) == limit
+                    or
                     # if limit bigger than 8
-                    (max_limit > 8 and int(number_of_msgs) == 8) or
+                    (max_limit > 8 and int(number_of_msgs) == 8)
+                    or
                     # if limit is 0
                     (limit == 0 and int(number_of_msgs) == 8)
                 )
