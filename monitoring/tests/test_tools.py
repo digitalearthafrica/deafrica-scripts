@@ -6,8 +6,8 @@ from moto import mock_s3, mock_sqs
 from odc.aws.queue import publish_message
 from urlpath import URL
 
-from monitoring.tools import check_deadletter_queues
-from monitoring.tools import find_latest_report, read_report
+from monitoring.tools.check_dead_queues import check_deadletter_queues
+from monitoring.tools.utils import find_latest_report, read_report
 from monitoring.tests.conftest import REGION, TEST_BUCKET_NAME
 
 
