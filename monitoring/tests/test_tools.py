@@ -7,7 +7,11 @@ from odc.aws.queue import publish_message
 from urlpath import URL
 
 from monitoring.tools.check_dead_queues import check_deadletter_queues
-from monitoring.tools.utils import find_latest_report, read_report
+from monitoring.tools.utils import (
+    find_latest_report,
+    read_report,
+    split_list_equally,
+)
 from monitoring.tests.conftest import REGION, TEST_BUCKET_NAME
 
 
