@@ -34,7 +34,6 @@ def read_report(report_path: str, limit=None):
     """
     read the gap report
     """
-    log.info(f"limit - {limit}")
 
     if "update" in report_path:
         log.info("FORCED UPDATE FLAGGED!")
@@ -70,6 +69,6 @@ def split_list_equally(list_to_split: list, num_inter_lists: int):
 
     max_list_items = math.ceil(len(list_to_split) / num_inter_lists)
     return [
-        json.dumps(list_to_split[i : i + max_list_items])
+        list_to_split[i : i + max_list_items]
         for i in range(0, len(list_to_split), max_list_items)
     ]

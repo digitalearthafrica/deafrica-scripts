@@ -1,20 +1,22 @@
 import gzip
 from pathlib import Path
+from random import randrange
 from unittest.mock import patch
-from click.testing import CliRunner
 
 import boto3
+from click.testing import CliRunner
 from moto import mock_s3, mock_sqs
 from odc.aws.queue import get_queue
+from urlpath import URL
 
-from tools.monitoring.tools.utils import split_list_equally
+from tools.monitoring.tools import s2_gap_filler
 from tools.tests.conftest import (
     FAKE_STAC_FILE,
     REGION,
     SQS_QUEUE_NAME,
     TEST_BUCKET_NAME,
+    REPORT_FOLDER,
 )
-from tools.monitoring.tools import s2_gap_filler
 
 
 @mock_s3
@@ -57,8 +59,11 @@ def test_publish_message_s2_gap_filler(
 @mock_s3
 @mock_sqs
 def test_publish_message_s2_gap_filler_cli(
-    monkeypatch, update_report_file: Path, fake_stac_file: Path
+    monkeypatch, update_report_file: Path, fake_stac_file: Path, s3_report_file: URL
 ):
+    """
+    Test for random numbers of limits (between 1-10) for a random numbers of workers workers (between 1-30).
+    """
     sqs_client = boto3.client("sqs", region_name="af-south-1")
     sqs_client.create_queue(QueueName=SQS_QUEUE_NAME)
 
@@ -68,6 +73,12 @@ def test_publish_message_s2_gap_filler_cli(
         CreateBucketConfiguration={
             "LocationConstraint": REGION,
         },
+    )
+
+    s3_client.upload_file(
+        str(update_report_file),
+        TEST_BUCKET_NAME,
+        str(s3_report_file),
     )
 
     files = [
@@ -84,13 +95,32 @@ def test_publish_message_s2_gap_filler_cli(
             str(fake_stac_file), TEST_BUCKET_NAME, f"{i}/{FAKE_STAC_FILE}"
         )
 
+    s3_report_path = URL(f"s3://{TEST_BUCKET_NAME}") / URL(REPORT_FOLDER)
+
     with patch.object(s2_gap_filler, "SENTINEL_2_SYNC_SQS_NAME", SQS_QUEUE_NAME):
-        list_string = split_list_equally(list_to_split=files, num_inter_lists=2)
-
-        for files_str_list in list_string:
+        with patch.object(s2_gap_filler, "S3_BUKET_PATH", str(s3_report_path)):
             runner = CliRunner()
-            runner.invoke(s2_gap_filler.cli, [files_str_list])
+            max_workers = randrange(1, 30)
+            max_limit = randrange(10)
+            for limit in range(max_limit):
+                for worker_id in range(max_workers):
+                    runner.invoke(
+                        s2_gap_filler.cli,
+                        [str(limit), str(max_workers), str(worker_id)],
+                    )
 
-        queue = get_queue(queue_name=SQS_QUEUE_NAME)
-        number_of_msgs = queue.attributes.get("ApproximateNumberOfMessages")
-        assert int(number_of_msgs) == 8
+                queue = get_queue(queue_name=SQS_QUEUE_NAME)
+                number_of_msgs = queue.attributes.get("ApproximateNumberOfMessages")
+                # total of max messages sent won't be bigger than o so even with more workers and
+                # higher limits the process must send a max of 8 messages
+                assert (
+                    # if limit bigger than 0 and smaller than the number max of messages
+                    int(number_of_msgs) == limit
+                    or
+                    # if limit bigger than 8
+                    (max_limit > 8 and int(number_of_msgs) == 8)
+                    or
+                    # if limit is 0
+                    (limit == 0 and int(number_of_msgs) == 8)
+                )
+                sqs_client.purge_queue(QueueUrl=queue.url)

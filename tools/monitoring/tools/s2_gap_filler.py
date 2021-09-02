@@ -3,6 +3,7 @@
 
 import json
 import logging
+import sys
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict
@@ -10,6 +11,8 @@ from typing import Dict
 import click
 from odc.aws import s3_fetch, s3_head_object
 from odc.aws.queue import get_queue, publish_messages
+
+from monitoring.tools.utils import find_latest_report, read_report, split_list_equally
 
 log = logging.getLogger()
 console = logging.StreamHandler()
@@ -133,15 +136,26 @@ def publish_message(files: list):
     log.info(f"Total of sent messages {sent}")
 
 
-@click.argument("scenes", type=str, nargs=1)
+@click.argument("worker_id", type=int, nargs=1)
+@click.argument("max_workers", type=int, nargs=1)
+@click.argument("limit", type=int, nargs=1)
 @click.command("s2-gap-filler")
-def cli(scenes: str):
+def cli(worker_id: int, max_workers: int, limit: int):
     """
     Publish missing scenes
     """
     try:
-        list_scenes = json.loads(scenes)
-        publish_message(files=list_scenes)
+        latest_report = find_latest_report(report_folder_path=S3_BUKET_PATH)
+        files = read_report(report_path=latest_report, limit=limit)
+        split_list_scenes = split_list_equally(
+            list_to_split=files, num_inter_lists=int(max_workers)
+        )
+
+        if len(split_list_scenes) <= worker_id:
+            log.warning("Worker Skipped!")
+            sys.exit(0)
+
+        publish_message(files=split_list_scenes[worker_id])
     except Exception as error:
         log.exception(error)
         traceback.print_exc()
