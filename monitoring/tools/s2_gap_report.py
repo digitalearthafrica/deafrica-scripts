@@ -18,9 +18,13 @@ log.addHandler(console)
 
 AFRICA_TILES = "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/master/deafrica-mgrs-tiles.csv.gz"
 SENTINEL_2_STATUS_REPORT_PATH = URL("s3://deafrica-sentinel-2/status-report/")
-SENTINEL_2_INVENTORY_PATH = URL("s3://deafrica-sentinel-2-inventory/deafrica-sentinel-2/deafrica-sentinel-2-inventory/")
+SENTINEL_2_INVENTORY_PATH = URL(
+    "s3://deafrica-sentinel-2-inventory/deafrica-sentinel-2/deafrica-sentinel-2-inventory/"
+)
 SENTINEL_2_REGION = "af-south-1"
-SENTINEL_COGS_INVENTORY_PATH = URL("s3://sentinel-cogs-inventory/sentinel-cogs/sentinel-cogs/")
+SENTINEL_COGS_INVENTORY_PATH = URL(
+    "s3://sentinel-cogs-inventory/sentinel-cogs/sentinel-cogs/"
+)
 COGS_REGION = "us-west-2"
 COGS_FOLDER_NAME = "sentinel-s2-l2a-cogs"
 
@@ -37,7 +41,7 @@ def get_and_filter_cogs_keys():
         s3=s3,
         prefix=COGS_FOLDER_NAME,
         contains=".json",
-        n_threads=200
+        n_threads=200,
     )
 
     africa_tile_ids = set(
@@ -51,9 +55,9 @@ def get_and_filter_cogs_keys():
         key
         for key in source_keys
         if (
-                key.split("/")[-2].split("_")[1] in africa_tile_ids
-                # We need to ensure we're ignoring the old format data
-                and re.match(r"sentinel-s2-l2a-cogs/\d{4}/", key) is None
+            key.split("/")[-2].split("_")[1] in africa_tile_ids
+            # We need to ensure we're ignoring the old format data
+            and re.match(r"sentinel-s2-l2a-cogs/\d{4}/", key) is None
         )
     )
 
@@ -69,7 +73,7 @@ def get_and_filter_deafrica_keys():
             s3=s3,
             prefix=COGS_FOLDER_NAME,
             contains=".json",
-            n_threads=200
+            n_threads=200,
         )
     )
 
@@ -87,11 +91,8 @@ def generate_buckets_diff(update_stac: bool = False) -> None:
     source_keys = get_and_filter_cogs_keys()
 
     if update_stac:
-        log.info('FORCED UPDATE ACTIVE!')
-        missing_scenes = set(
-            f"s3://sentinel-cogs/{key}"
-            for key in source_keys
-        )
+        log.info("FORCED UPDATE ACTIVE!")
+        missing_scenes = set(f"s3://sentinel-cogs/{key}" for key in source_keys)
 
         orphaned_keys = set()
 
@@ -119,7 +120,7 @@ def generate_buckets_diff(update_stac: bool = False) -> None:
         data=gzip.compress(str.encode("\n".join(missing_scenes))),
         url=SENTINEL_2_STATUS_REPORT_PATH / output_filename,
         s3=None,
-        ContentType="application/gzip"
+        ContentType="application/gzip",
     )
 
     log.info(f"10 first missing_scenes {list(missing_scenes)[0:10]}")
@@ -131,12 +132,14 @@ def generate_buckets_diff(update_stac: bool = False) -> None:
             data=gzip.compress(str.encode("\n".join(orphaned_keys))),
             url=SENTINEL_2_STATUS_REPORT_PATH / output_filename,
             s3=None,
-            ContentType="application/gzip"
+            ContentType="application/gzip",
         )
 
         log.info(f"10 first orphaned_keys {orphaned_keys[0:10]}")
 
-        log.info(f"Wrote orphaned scenes to: {SENTINEL_2_INVENTORY_PATH}/{output_filename}")
+        log.info(
+            f"Wrote orphaned scenes to: {SENTINEL_2_INVENTORY_PATH}/{output_filename}"
+        )
 
     message = f"{len(missing_scenes)} scenes are missing from and {len(orphaned_keys)} scenes no longer exist in source"
     log.info(message)
@@ -145,7 +148,12 @@ def generate_buckets_diff(update_stac: bool = False) -> None:
         sys.exit(1)
 
 
-@click.option("--update_stac", type=bool, default=False, help="Defines if all stacs need to be updated")
+@click.option(
+    "--update_stac",
+    type=bool,
+    default=False,
+    help="Defines if all stacs need to be updated",
+)
 @click.command("s2-gap-report")
 def cli(update_stac: bool = False):
     """
