@@ -1,7 +1,7 @@
 name : Tools Test and Push
 
 env:
-  IMAGE_NAME: digitalearthafrica/scripts
+  IMAGE_NAME: digitalearthafrica/deafrica-tools
 
 on:
   pull_request:
@@ -87,5 +87,5 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ env.IMAGE_NAME }},${{ env.IMAGE_NAME }}
+          tags: ${{ env.IMAGE_NAME }}
           labels: latest,${{ env.VERSION }}
