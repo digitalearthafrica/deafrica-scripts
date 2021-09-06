@@ -10,8 +10,7 @@ from monitoring.tools.utils import send_slack_notification, setup_logging
 from typing import Optional
 
 
-def check_deadletter_queues(slack_url: Optional[str] = None):
-    log = setup_logging()
+def check_deadletter_queues(slack_url: Optional[str] = None, log: Optional[logging.Logger] = None):
     bad_queue_messages = []
     dead_queues = get_queues(contains="deadletter")
     for dead_queue in dead_queues:
@@ -26,7 +25,8 @@ def check_deadletter_queues(slack_url: Optional[str] = None):
     )
 
     if len(bad_queue_messages) > 0:
-        log.error(message)
+        if log is not None:
+            log.error(message)
         # Send a Slack message
         if slack_url is not None:
             send_slack_notification(slack_url, "Dead Letter Checker", message)
@@ -44,6 +44,7 @@ def cli(slack_url):
     """
     Check all dead queues which the user is allowed to
     """
+    log = setup_logging()
     check_deadletter_queues(slack_url=slack_url)
 
 
