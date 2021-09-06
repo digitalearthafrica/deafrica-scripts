@@ -87,5 +87,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ env.IMAGE_NAME }}
-          labels: latest,${{ env.VERSION }}
+          tags: ${{ env.IMAGE_NAME }}:latest,${{ env.IMAGE_NAME }}:${{ env.VERSION }}
