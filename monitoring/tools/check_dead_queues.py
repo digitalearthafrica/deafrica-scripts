@@ -47,7 +47,7 @@ def cli(slack_url):
     Check all dead queues which the user is allowed to
     """
     log = setup_logging()
-    check_deadletter_queues(slack_url=slack_url)
+    check_deadletter_queues(slack_url=slack_url, log=log)
 
 
 if __name__ == "__main__":
