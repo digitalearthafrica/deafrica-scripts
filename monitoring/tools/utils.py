@@ -1,7 +1,44 @@
 import gzip
+import logging
 import math
 
-from odc.aws import s3_client, s3_ls_dir, s3_fetch
+import requests
+from odc.aws import s3_client, s3_fetch, s3_ls_dir
+
+
+def setup_logging() -> logging.Logger:
+    """ Set up a simple logger"""
+    log = logging.getLogger()
+    console = logging.StreamHandler()
+    log.addHandler(console)
+    return log
+
+
+def send_slack_notification(url: str, title: str, message: str):
+    """
+    Sends a slack notification.
+    :param url: (str) Slack webhook url
+    :param title: (str) Slack notification title
+    :param message: (str) Slack notification message in markdown
+    """
+
+    content = {
+        "text": f"{title}",
+        "blocks": [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"{message}",
+                },
+            }
+        ],
+    }
+
+    response = requests.post(url, json=content)
+
+    # Raise exception if response is not 200
+    response.raise_for_status()
 
 
 def find_latest_report(report_folder_path: str) -> str:
