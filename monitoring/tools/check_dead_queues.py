@@ -10,7 +10,9 @@ from monitoring.tools.utils import send_slack_notification, setup_logging
 from typing import Optional
 
 
-def check_deadletter_queues(slack_url: Optional[str] = None, log: Optional[logging.Logger] = None):
+def check_deadletter_queues(
+    slack_url: Optional[str] = None, log: Optional[logging.Logger] = None
+):
     bad_queue_messages = []
     dead_queues = get_queues(contains="deadletter")
     for dead_queue in dead_queues:
