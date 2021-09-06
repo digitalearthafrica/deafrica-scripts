@@ -7,7 +7,7 @@ from odc.aws import s3_client, s3_fetch, s3_ls_dir
 
 
 def setup_logging() -> logging.Logger:
-    """ Set up a simple logger"""
+    """Set up a simple logger"""
     log = logging.getLogger()
     console = logging.StreamHandler()
     log.addHandler(console)
@@ -90,6 +90,6 @@ def split_list_equally(list_to_split: list, num_inter_lists: int):
 
     max_list_items = math.ceil(len(list_to_split) / num_inter_lists)
     return [
-        list_to_split[i: i + max_list_items]
+        list_to_split[i : i + max_list_items]
         for i in range(0, len(list_to_split), max_list_items)
     ]
