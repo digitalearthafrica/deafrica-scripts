@@ -13,30 +13,33 @@ from typing import Optional
 def check_deadletter_queues(
     slack_url: Optional[str] = None, log: Optional[logging.Logger] = None
 ):
-    bad_queues = []
+    bad_queue_messages = []
     dead_queues = get_queues(contains="deadletter")
     for dead_queue in dead_queues:
         queue_size = int(dead_queue.attributes.get("ApproximateNumberOfMessages", 0))
         if queue_size > 0:
-            bad_queues.append(f"Queue {dead_queue.url} has {queue_size} items")
+            queue_name = dead_queue.url.split("/")[-1]
+            bad_queue_messages.append(f"Queue {queue_name} has {queue_size} items")
 
-    bad_queues_str = "\n".join(f" * {q}" for q in bad_queues)
+    bad_queues_str = "\n".join(f" * {q}" for q in bad_queue_messages)
     message = dedent(
-        f"Found {len(bad_queues)} dead queues with messages:\n{bad_queues_str}"
+        f"Found {len(bad_queue_messages)} dead queues with messages:\n{bad_queues_str}"
     )
 
-    if len(bad_queues) > 0:
+    n_bad_queues = len(bad_queue_messages)
+
+    if log is not None:
+        log(f"Found {n_bad_queues} dead queues with messages on them.")
+
+    if n_bad_queues > 0:
         if log is not None:
             log.error(message)
         # Send a Slack message
         if slack_url is not None:
             send_slack_notification(slack_url, "Dead Letter Checker", message)
-        sys.exit(1)
-    else:
-        print(f"Found nothing, log is: {log}")
-        if log is not None:
-            log.info("No messages fond in any dead queue")
-        sys.exit(0)
+
+    # Exit with 0 if no errors
+    sys.exit(n_bad_queues)
 
 
 @click.command("check-dead-queue")
