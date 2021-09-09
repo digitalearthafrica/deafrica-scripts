@@ -22,12 +22,14 @@ def check_deadletter_queues(
             queue_name = dead_queue.url.split("/")[-1]
             if environment is None:
                 environment = queue_name.split("-")[1].upper()
-            bad_queue_messages.append(f"Queue {queue_name} has {queue_size} items")
+            bad_queue_messages.append(f"Queue `{queue_name}` has {queue_size} items")
 
     if len(bad_queue_messages) > 0:
-        bad_queues_str = "\n".join(f" * {q}" for q in bad_queue_messages)
+        bad_queues_str = "\n".join(f" • {q}" for q in bad_queue_messages)
         message = dedent(
-            f"Environment: {environment}\n Found {len(bad_queue_messages)} dead queues with messages:\n{bad_queues_str}"
+            f"*Environment*: {environment}\n "
+            f"Found {len(bad_queue_messages)} dead queues with messages:\n"
+            f"{bad_queues_str}"
         )
         if log is not None:
             log.error(message)
