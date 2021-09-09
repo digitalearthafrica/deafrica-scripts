@@ -15,18 +15,24 @@ def check_deadletter_queues(
 ):
     bad_queue_messages = []
     dead_queues = get_queues(contains="deadletter")
+    environment = "Unknown"
     for dead_queue in dead_queues:
         queue_size = int(dead_queue.attributes.get("ApproximateNumberOfMessages", 0))
         if queue_size > 0:
             queue_name = dead_queue.url.split("/")[-1]
-            bad_queue_messages.append(f"Queue {queue_name} has {queue_size} items")
-
-    bad_queues_str = "\n".join(f" * {q}" for q in bad_queue_messages)
-    message = dedent(
-        f"Found {len(bad_queue_messages)} dead queues with messages:\n{bad_queues_str}"
-    )
+            try:
+                environment = queue_name.split("-")[1].upper()
+            except Exception:
+                pass
+            bad_queue_messages.append(f"Queue `{queue_name}` has {queue_size} items")
 
     if len(bad_queue_messages) > 0:
+        bad_queues_str = "\n".join(f" - {q}" for q in bad_queue_messages)
+        message = dedent(
+            f"*Environment*: {environment}\n "
+            f"Found {len(bad_queue_messages)} dead queues with messages:\n"
+            f"{bad_queues_str}"
+        )
         if log is not None:
             log.error(message)
         # Send a Slack message
