@@ -23,8 +23,8 @@ def check_deadletter_queues(
             if environment is None:
                 try:
                     environment = queue_name.split("-")[1].upper()
-                except IndexError:
-                    raise Exception(f"Queue name {queue_name} is not follow standards")
+                except Exception:
+                    environment = "Unknown"
             bad_queue_messages.append(f"Queue `{queue_name}` has {queue_size} items")
 
     if len(bad_queue_messages) > 0:
