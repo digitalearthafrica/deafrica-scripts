@@ -104,9 +104,9 @@ def test_publish_message_s2_gap_filler_cli(
             max_limit = randrange(1, 10)
             for limit in range(max_limit):
                 for idx in range(max_workers):
-                    returned = runner.invoke(
+                    runner.invoke(
                         s2_gap_filler.cli,
-                        ["--limit", str(limit), str(max_workers), str(idx)],
+                        [str(idx), str(max_workers), "--limit", str(limit)],
                     )
 
                 queue = get_queue(queue_name=SQS_QUEUE_NAME)
@@ -120,7 +120,7 @@ def test_publish_message_s2_gap_filler_cli(
                     assert int(number_of_msgs) == 0
 
                 # if limit bigger than 0 and smaller than the number max of messages
-                if max_limit < len(files):
+                if max_limit <= len(files):
                     assert int(number_of_msgs) == limit
 
                 # if limit bigger than 8
