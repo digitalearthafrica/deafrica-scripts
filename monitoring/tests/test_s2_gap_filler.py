@@ -6,8 +6,13 @@ from unittest.mock import patch
 import boto3
 import pytest
 from click.testing import CliRunner
-from monitoring.tests.conftest import (FAKE_STAC_FILE, REGION, REPORT_FOLDER,
-                                       SQS_QUEUE_NAME, TEST_BUCKET_NAME)
+from monitoring.tests.conftest import (
+    FAKE_STAC_FILE,
+    REGION,
+    REPORT_FOLDER,
+    SQS_QUEUE_NAME,
+    TEST_BUCKET_NAME,
+)
 from monitoring.tools import s2_gap_filler
 from moto import mock_s3, mock_sqs
 from odc.aws.queue import get_queue
