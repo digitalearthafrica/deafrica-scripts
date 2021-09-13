@@ -100,27 +100,28 @@ def test_publish_message_s2_gap_filler_cli(
     with patch.object(s2_gap_filler, "SENTINEL_2_SYNC_SQS_NAME", SQS_QUEUE_NAME):
         with patch.object(s2_gap_filler, "S3_BUKET_PATH", str(s3_report_path)):
             runner = CliRunner()
-            max_workers = randrange(1, 30)
-            max_limit = randrange(10)
+            max_workers = randrange(1, 6)
+            max_limit = randrange(1, 10)
             for limit in range(max_limit):
                 for idx in range(max_workers):
-                    runner.invoke(
+                    returned = runner.invoke(
                         s2_gap_filler.cli,
-                        [str(limit), str(max_workers), str(idx)],
+                        ['--limit', str(limit), str(max_workers), str(idx)],
                     )
 
                 queue = get_queue(queue_name=SQS_QUEUE_NAME)
                 number_of_msgs = queue.attributes.get("ApproximateNumberOfMessages")
-                # total of max messages sent won't be bigger than o so even with more workers and
-                # higher limits the process must send a max of 8 messages
+
+                # total of messages sent won't be bigger than 8 so even with more workers and
+                # higher limits the process must send a max of 8 messages len(files) == 8
                 assert (
                     # if limit bigger than 0 and smaller than the number max of messages
-                    int(number_of_msgs) == limit
+                    (max_limit < len(files) and int(number_of_msgs) == limit)
                     or
                     # if limit bigger than 8
-                    (max_limit > 8 and int(number_of_msgs) == 8)
+                    (max_limit > len(files) and int(number_of_msgs) == 8)
                     or
-                    # if limit is 0
-                    (limit == 0 and int(number_of_msgs) == 8)
+                    # if limit is 0 it returns error
+                    (limit == 0 and returned.exit_code == 1 and int(number_of_msgs) == 0)
                 )
                 sqs_client.purge_queue(QueueUrl=queue.url)
