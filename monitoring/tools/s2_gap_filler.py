@@ -22,7 +22,6 @@ log = logging.getLogger()
 console = logging.StreamHandler()
 log.addHandler(console)
 
-
 PRODUCT_NAME = "s2_l2a"
 S3_BUKET_PATH = "s3://deafrica-sentinel-2/status-report/"
 SENTINEL_2_SYNC_SQS_NAME = "deafrica-pds-sentinel-2-sync-scene"
@@ -140,6 +139,7 @@ def publish_message(files: list):
     log.info(f"Total of sent messages {sent}")
 
 
+@click.command("s2-gap-filler")
 @click.argument("idx", type=int, nargs=1, required=True)
 @click.argument("max_workers", type=int, nargs=1, default=2)
 @click.option(
@@ -148,7 +148,6 @@ def publish_message(files: list):
     help="Limit the number of messages to transfer.",
     default=None,
 )
-@click.command("s2-gap-filler")
 def cli(idx: int, max_workers: int = 2, limit: int = None):
     """
     Publish missing scenes
