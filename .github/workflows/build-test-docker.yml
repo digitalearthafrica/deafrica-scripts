@@ -88,6 +88,7 @@ jobs:
 
       # Release
       - name: Get tag for this build if it exists
+        if: github.event_name == 'release'
         run: |
           echo "VERSION=${GITHUB_REF/refs\/tags\/}" >> $GITHUB_ENV
 
