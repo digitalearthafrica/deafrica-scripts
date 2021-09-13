@@ -81,18 +81,10 @@ jobs:
           username: ${{ secrets.GADOCKERSVC_USERNAME }}
           password: ${{ secrets.GADOCKERSVC_PASSWORD }}
 
-      # Main branch
-      - name: Get git commit hash for push from main
-        if: github.event_name != 'release'
+      - name: Get version number for tagging the image
         run: |
           git fetch --all --tags
           echo "VERSION=$(python3 setup.py --version)" >> $GITHUB_ENV
-
-      # Release
-      - name: Get tag for this build if it exists
-        if: github.event_name == 'release'
-        run: |
-          echo "VERSION=${GITHUB_REF/refs\/tags\/}" >> $GITHUB_ENV
 
       - name: Build and push
         uses: docker/build-push-action@v2
