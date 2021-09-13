@@ -49,7 +49,7 @@ def download_and_cog_chirps(
                 href=out_data,
                 title="CHIRPS-v2.0",
                 media_type=pystac.MediaType.COG,
-                roles=["data"]
+                roles=["data"],
             )
 
             logging.info("Dumping files to S3")
