@@ -6,7 +6,11 @@ env:
 on:
   pull_request:
   push:
+    branches:
+      - main
   release:
+    types:
+      - created
 
 jobs:
   test:
