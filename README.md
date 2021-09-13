@@ -1,3 +1,10 @@
-# A bunch of scripts
+# DE Africa Tools
 
-Miscelaneous debris, mostly.
+A repository of scripts and tools used by DE Africa.
+
+Currently there are two types:
+
+* Monitoring tools
+* Data tools
+
+TODO: document the tools!
