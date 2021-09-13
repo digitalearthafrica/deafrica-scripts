@@ -1,7 +1,7 @@
 --extra-index-url="https://packages.dea.ga.gov.au"
 
 boto3~=1.18.30
-click~=8.0.1
+click<8.0.0
 odc-cloud==0.2.0a0
 odc-stac==0.2.0a0
 urlpath~=1.1.7
