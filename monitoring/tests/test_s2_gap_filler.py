@@ -114,18 +114,17 @@ def test_publish_message_s2_gap_filler_cli(
 
                 # total of messages sent won't be bigger than 8 so even with more workers and
                 # higher limits the process must send a max of 8 messages len(files) == 8
-                assert (
-                    # if limit bigger than 0 and smaller than the number max of messages
-                    (max_limit < len(files) and int(number_of_msgs) == limit)
-                    or
-                    # if limit bigger than 8
-                    (max_limit > len(files) and int(number_of_msgs) == 8)
-                    or
-                    # if limit is 0 it returns error
-                    (
-                        limit == 0
-                        and returned.exit_code == 1
-                        and int(number_of_msgs) == 0
-                    )
-                )
+
+                # if limit is 0 it returns error
+                if limit == 0:
+                    assert int(number_of_msgs) == 0
+
+                # if limit bigger than 0 and smaller than the number max of messages
+                if max_limit < len(files):
+                    assert int(number_of_msgs) == limit
+
+                # if limit bigger than 8
+                if max_limit > len(files):
+                    assert int(number_of_msgs) == len(files)
+
                 sqs_client.purge_queue(QueueUrl=queue.url)
