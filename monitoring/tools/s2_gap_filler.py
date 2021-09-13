@@ -142,13 +142,28 @@ def publish_message(files: list):
 
 @click.argument("idx", type=int, nargs=1, required=True)
 @click.argument("max_workers", type=int, nargs=1, default=2)
-@click.argument("limit", type=int, nargs=1, default=0)
+@click.option(
+    "--limit",
+    "-l",
+    help="Limit the number of messages to transfer.",
+    default=None,
+)
 @click.command("s2-gap-filler")
-def cli(idx: int, max_workers: int = 2, limit: int = 0):
+def cli(idx: int, max_workers: int = 2, limit: int = None):
     """
     Publish missing scenes
     """
     try:
+
+        if limit is not None:
+            try:
+                limit = int(limit)
+            except ValueError:
+                raise ValueError(f"Limit {limit} is not valid")
+
+            if limit < 1:
+                raise ValueError(f"Limit {limit} lower than 1.")
+
         latest_report = find_latest_report(report_folder_path=S3_BUKET_PATH)
 
         if "update" in latest_report:
