@@ -80,7 +80,7 @@ jobs:
 
       - name: Get tag for this build if it exists
         run: |
-          echo "VERSION=${GITHUB_REF/refs\/tags\/}" >> $GITHUB_ENV
+          echo "VERSION=$(git describe --tags)" >> $GITHUB_ENV
 
       - name: Build and push
         uses: docker/build-push-action@v2
