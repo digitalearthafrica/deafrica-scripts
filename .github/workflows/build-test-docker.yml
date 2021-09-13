@@ -6,6 +6,7 @@ env:
 on:
   pull_request:
   push:
+  release:
 
 jobs:
   test:
@@ -59,7 +60,7 @@ jobs:
           docker run --rm ${{ env.IMAGE_NAME }} bash -c "pip install -e /code; pip install -r /code/requirements-test.txt; pytest /code"
 
   push:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'release'
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -78,9 +79,17 @@ jobs:
           username: ${{ secrets.GADOCKERSVC_USERNAME }}
           password: ${{ secrets.GADOCKERSVC_PASSWORD }}
 
+      # Main branch
+      - name: Get git commit hash for push from main
+        if: github.event_name != 'release'
+        run: |
+          git fetch --all --tags
+          echo "VERSION=$(git describe --tags)" >> $GITHUB_ENV
+
+      # Release
       - name: Get tag for this build if it exists
         run: |
-          echo "VERSION=$(git describe --tags)" >> $GITHUB_ENV
+          echo "VERSION=${GITHUB_REF/refs\/tags\/}" >> $GITHUB_ENV
 
       - name: Build and push
         uses: docker/build-push-action@v2
