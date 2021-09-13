@@ -150,7 +150,7 @@ def generate_buckets_diff(update_stac: bool = False) -> None:
 
 @click.option(
     "--update_stac",
-    type=bool,
+    is_flag=True,
     default=False,
     help="Defines if all stacs need to be updated",
 )
