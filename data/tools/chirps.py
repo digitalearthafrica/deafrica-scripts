@@ -3,14 +3,19 @@ import logging
 from datetime import datetime
 
 import click
+import pystac
 from odc.aws import s3_dump, s3_head_object
+from odc.index import odc_uuid
 from rasterio.io import MemoryFile
 from rio_cogeo import cog_translate
 from rio_cogeo.profiles import cog_profiles
 from rio_stac import create_stac_item
-import pystac
 
-from odc.index import odc_uuid
+# Set log level to info
+log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
+
+log.info("Starting CHIRPS downloader")
 
 
 def download_and_cog_chirps(
@@ -20,52 +25,67 @@ def download_and_cog_chirps(
     filename = f"chirps-v2.0.{year}.{month}.tif.gz"
     in_data = f"/vsigzip//vsicurl/https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_monthly/tifs/{filename}"
 
+    s3_dst = s3_dst.rstrip("/")
     out_data = f"{s3_dst}/chirps-v2.0_{year}.{month}.tif"
     out_stac = f"{s3_dst}/chirps-v2.0_{year}.{month}.stac-item.json"
 
     try:
         # Check if file already exists
         if not overwrite and s3_head_object(out_stac):
-            logging.info(f"{out_stac} already exists. Skipping.")
+            log.warning(f"File {out_stac} already exists. Skipping.")
             return
 
         # COG and STAC
         with MemoryFile() as mem_dst:
-            logging.info("Creating COG in memory...")
+            log.info("Creating COG in memory...")
             cog_translate(
-                in_data, mem_dst.name, cog_profiles.get("deflate"), in_memory=True
+                in_data,
+                mem_dst.name,
+                cog_profiles.get("deflate"),
+                in_memory=True,
+                nodata=-9999
             )
-            logging.info("Creating STAC...")
+            log.info("Creating STAC...")
             item = create_stac_item(
                 mem_dst,
                 id=str(odc_uuid("chirps", "2.0", [filename])),
                 with_proj=True,
                 input_datetime=datetime(int(year), int(month), 1),
+                properties={"odc:product": "rainfall_chirps"},
             )
             item.set_self_href(out_stac)
             # Manually redo the asset
             del item.assets["asset"]
-            item.assets["data"] = pystac.Asset(
+            item.assets["rainfall"] = pystac.Asset(
                 href=out_data,
                 title="CHIRPS-v2.0",
                 media_type=pystac.MediaType.COG,
                 roles=["data"],
             )
 
-            logging.info("Dumping files to S3")
+            log.info("Dumping files to S3")
             # Dump the data to S3
-            s3_dump(mem_dst, out_data)
+            mem_dst.seek(0)
+            s3_dump(mem_dst, out_data, ACL="bucket-owner-full-control")
             # Write STAC
-            s3_dump(json.dumps(item.to_dict(), indent=2), out_stac)
+            s3_dump(
+                json.dumps(item.to_dict(), indent=2),
+                out_stac,
+                ContentType="application/json",
+                ACL="bucket-owner-full-control",
+            )
+            log.info(f"Successfully completed {filename}")
 
     except Exception as e:
-        logging.exception(f"Failed to handle {filename} with error {e}")
+        log.exception(f"Failed to handle {filename} with error {e}")
         exit(1)
 
 
-@click.command("download-chirps-rainfall")
+@click.command("download-chirps")
+@click.option("--year", default="2020")
+@click.option("--month", default="01")
 @click.option(
-    "--s3_dst", default="s3://deafrica-input-datasets/chirps_rainfall_monthly/"
+    "--s3_dst", default="s3://deafrica-data-dev-af/chirps_rainfall/"
 )
 @click.option("--overwrite", is_flag=True, default=False)
 def cli(year, month, s3_dst, overwrite):
@@ -73,8 +93,13 @@ def cli(year, month, s3_dst, overwrite):
     Download CHIRPS Africa monthly tifs, COG, copy to
     S3 bucket.
 
-    geotifs are copied from here:
+    GeoTIFFs are copied from here:
         https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_monthly/tifs/
+
+    Run with  for m in {01..12}; do chirps-download --s3_dst s3://deafrica-data-dev-af/chirps_rainfall/ --year 1983 --month $m; done
+    to download a whole year.
+
+    Available years are 1981-2021.
     """
 
     download_and_cog_chirps(year=year, month=month, s3_dst=s3_dst, overwrite=overwrite)
