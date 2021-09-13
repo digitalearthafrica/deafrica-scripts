@@ -106,7 +106,7 @@ def test_publish_message_s2_gap_filler_cli(
                 for idx in range(max_workers):
                     returned = runner.invoke(
                         s2_gap_filler.cli,
-                        ['--limit', str(limit), str(max_workers), str(idx)],
+                        ["--limit", str(limit), str(max_workers), str(idx)],
                     )
 
                 queue = get_queue(queue_name=SQS_QUEUE_NAME)
@@ -122,6 +122,10 @@ def test_publish_message_s2_gap_filler_cli(
                     (max_limit > len(files) and int(number_of_msgs) == 8)
                     or
                     # if limit is 0 it returns error
-                    (limit == 0 and returned.exit_code == 1 and int(number_of_msgs) == 0)
+                    (
+                        limit == 0
+                        and returned.exit_code == 1
+                        and int(number_of_msgs) == 0
+                    )
                 )
                 sqs_client.purge_queue(QueueUrl=queue.url)
