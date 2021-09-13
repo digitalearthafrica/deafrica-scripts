@@ -11,9 +11,10 @@ from rio_cogeo import cog_translate
 from rio_cogeo.profiles import cog_profiles
 from rio_stac import create_stac_item
 
+from monitoring.tools.utils import setup_logging
+
 # Set log level to info
-log = logging.getLogger(__name__)
-log.setLevel(logging.INFO)
+log = setup_logging()
 
 log.info("Starting CHIRPS downloader")
 
