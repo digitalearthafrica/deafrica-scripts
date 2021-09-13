@@ -12,7 +12,7 @@ RUN apt-get update \
     rm -rf /var/lib/{apt,dpkg,cache,log}
 
 COPY requirements.txt /tmp/
-RUN python -m pip install --no-cache-dir --upgrade pip \
+RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r /tmp/requirements.txt
 
 RUN mkdir -p /code
