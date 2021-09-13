@@ -88,7 +88,8 @@ jobs:
       - name: Get version number for tagging the image
         run: |
           git fetch --all --tags
-          echo "VERSION=$(python3 setup.py --version)" >> $GITHUB_ENV
+          pip install setuptools-scm
+          echo "VERSION=$(python setup.py --version)" >> $GITHUB_ENV
 
       - name: Build and push
         uses: docker/build-push-action@v2
