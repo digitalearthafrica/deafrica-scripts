@@ -10,6 +10,8 @@ from rio_cogeo.profiles import cog_profiles
 from rio_stac import create_stac_item
 import pystac
 
+from odc.index import odc_uuid
+
 
 def download_and_cog_chirps(
     year: str, month: str, s3_dst: str, overwrite: bool = False
@@ -36,6 +38,7 @@ def download_and_cog_chirps(
             logging.info("Creating STAC...")
             item = create_stac_item(
                 mem_dst,
+                id=str(odc_uuid("chirps", "2.0", [filename])),
                 with_proj=True,
                 input_datetime=datetime(int(year), int(month), 1),
             )
