@@ -159,7 +159,7 @@ def publish_message(files: list, queue_name: str, slack_url: str = None) -> str:
 )
 @click.option(
     "--slack_url",
-    help="Set the queue which the process will send the messages",
+    help="Slack url to use to send a notification",
     default=None,
 )
 def cli(
