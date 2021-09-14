@@ -23,8 +23,11 @@ def download_and_cog_chirps(
     year: str, month: str, s3_dst: str, overwrite: bool = False
 ):
     # Set up file strings
-    filename = f"chirps-v2.0.{year}.{month}.tif.gz"
-    in_data = f"/vsigzip//vsicurl/https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_monthly/tifs/{filename}"
+    in_file = f"chirps-v2.0.{year}.{month}.tif.gz"
+    in_href = (
+        f"https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_monthly/tifs/{in_file}"
+    )
+    in_data = f"/vsigzip//vsicurl/{in_href}"
 
     s3_dst = s3_dst.rstrip("/")
     out_data = f"{s3_dst}/chirps-v2.0_{year}.{month}.tif"
@@ -32,13 +35,14 @@ def download_and_cog_chirps(
 
     try:
         # Check if file already exists
+        log.info(f"Working on {in_file}")
         if not overwrite and s3_head_object(out_stac):
             log.warning(f"File {out_stac} already exists. Skipping.")
             return
 
         # COG and STAC
         with MemoryFile() as mem_dst:
-            log.info("Creating COG in memory...")
+            # Creating the COG, with a memory cache and no download. Shiny.
             cog_translate(
                 in_data,
                 mem_dst.name,
@@ -46,21 +50,18 @@ def download_and_cog_chirps(
                 in_memory=True,
                 nodata=-9999,
             )
-            log.info("Creating STAC...")
-            start, end = calendar.monthrange(int(year), int(month))
+            # Creating the STAC document with appropriate date range
+            _, end = calendar.monthrange(int(year), int(month))
             item = create_stac_item(
                 mem_dst,
-                id=str(odc_uuid("chirps", "2.0", [filename])),
+                id=str(odc_uuid("chirps", "2.0", [in_file])),
                 with_proj=True,
                 input_datetime=datetime(int(year), int(month), 15),
                 properties={
+                    "odc:processing_datetime": datetime_to_str(datetime.now()),
                     "odc:product": "rainfall_chirps_monthly",
-                    "start_datetime": datetime_to_str(
-                        datetime(int(year), int(month), start)
-                    ),
-                    "end_datetime": datetime_to_str(
-                        datetime(int(year), int(month), end)
-                    ),
+                    "start_datetime": f"{year}-{month}-01T00:00:00",
+                    "end_datetime": f"{year}-{month}-{end}T23:59:59",
                 },
             )
             item.set_self_href(out_stac)
@@ -72,22 +73,35 @@ def download_and_cog_chirps(
                 media_type=pystac.MediaType.COG,
                 roles=["data"],
             )
+            # Let's add a link to the source
+            item.add_links(
+                [
+                    pystac.Link(
+                        target=in_href,
+                        title="Source file",
+                        rel=pystac.RelType.DERIVED_FROM,
+                        media_type="application/gzip",
+                    )
+                ]
+            )
 
-            log.info("Dumping files to S3")
             # Dump the data to S3
             mem_dst.seek(0)
             s3_dump(mem_dst, out_data, ACL="bucket-owner-full-control")
-            # Write STAC
+            log.info(f"File written to {out_data}")
+            # Write STAC to S3
             s3_dump(
                 json.dumps(item.to_dict(), indent=2),
                 out_stac,
                 ContentType="application/json",
                 ACL="bucket-owner-full-control",
             )
-            log.info(f"Successfully completed {filename}")
+            log.info(f"STAC written to {out_stac}")
+            # All done!
+            log.info(f"Completed work on {in_file}")
 
     except Exception as e:
-        log.exception(f"Failed to handle {filename} with error {e}")
+        log.exception(f"Failed to handle {in_file} with error {e}")
         exit(1)
 
 
