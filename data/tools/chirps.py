@@ -55,8 +55,12 @@ def download_and_cog_chirps(
                 input_datetime=datetime(int(year), int(month), 15),
                 properties={
                     "odc:product": "rainfall_chirps_monthly",
-                    "start_datetime": datetime_to_str(datetime(int(year), int(month), start)),
-                    "end_datetime": datetime_to_str(datetime(int(year), int(month), end)),
+                    "start_datetime": datetime_to_str(
+                        datetime(int(year), int(month), start)
+                    ),
+                    "end_datetime": datetime_to_str(
+                        datetime(int(year), int(month), end)
+                    ),
                 },
             )
             item.set_self_href(out_stac)
