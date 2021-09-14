@@ -7,6 +7,7 @@ import pystac
 from monitoring.tools.utils import setup_logging
 from odc.aws import s3_dump, s3_head_object
 from odc.index import odc_uuid
+from pystac.utils import datetime_to_str
 from rasterio.io import MemoryFile
 from rio_cogeo import cog_translate
 from rio_cogeo.profiles import cog_profiles
@@ -54,8 +55,8 @@ def download_and_cog_chirps(
                 input_datetime=datetime(int(year), int(month), 15),
                 properties={
                     "odc:product": "rainfall_chirps_monthly",
-                    "start_datetime": datetime(int(year), int(month), start),
-                    "end_datetime": datetime(int(year), int(month), end),
+                    "start_datetime": datetime_to_str(datetime(int(year), int(month), start)),
+                    "end_datetime": datetime_to_str(datetime(int(year), int(month), end)),
                 },
             )
             item.set_self_href(out_stac)
