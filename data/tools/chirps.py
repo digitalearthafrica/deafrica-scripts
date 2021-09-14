@@ -77,9 +77,10 @@ def download_and_cog_chirps(
             item.add_links(
                 [
                     pystac.Link(
-                        href=in_href,
+                        target=in_href,
                         title="Source file",
                         rel_type=pystac.RelType.DERIVED_FROM,
+                        media_type="application/gzip"
                     )
                 ]
             )
