@@ -80,7 +80,7 @@ def download_and_cog_chirps(
                         target=in_href,
                         title="Source file",
                         rel_type=pystac.RelType.DERIVED_FROM,
-                        media_type="application/gzip"
+                        media_type="application/gzip",
                     )
                 ]
             )
