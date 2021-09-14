@@ -206,8 +206,7 @@ def cli(
         returned = publish_message(
             files=split_list_scenes[idx],
             queue_name=sync_queue_name,
-            slack_url=slack_url,
-            log=log,
+            slack_url=slack_url
         )
         log.info(returned)
     except Exception as error:
