@@ -60,8 +60,8 @@ def download_and_cog_chirps(
                 properties={
                     "odc:processing_datetime": datetime_to_str(datetime.now()),
                     "odc:product": "rainfall_chirps_monthly",
-                    "start_datetime": f"{year}-{month}-01T00:00:00",
-                    "end_datetime": f"{year}-{month}-{end}T23:59:59",
+                    "start_datetime": f"{year}-{month}-01T00:00:00Z",
+                    "end_datetime": f"{year}-{month}-{end}T23:59:59Z",
                 },
             )
             item.set_self_href(out_stac)
