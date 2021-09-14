@@ -98,7 +98,7 @@ def prepare_message(s3_path):
     return message
 
 
-def publish_message(files: list, queue_name: str, slack_url: str = None):
+def publish_message(files: list, queue_name: str, slack_url: str = None) -> str:
     """ """
     max_workers = 300
     # counter for files that no longer exist
@@ -123,7 +123,6 @@ def publish_message(files: list, queue_name: str, slack_url: str = None):
             except Exception as exc:
                 failed += 1
                 error_list.append(exc)
-                log.info(f"File no longer exists: {exc}")
 
     if len(batch) > 0:
         publish_messages(queue=queue, messages=batch)
@@ -138,7 +137,7 @@ def publish_message(files: list, queue_name: str, slack_url: str = None):
     msg = f"Total messages sent {sent}"
     if slack_url is not None:
         send_slack_notification(slack_url, "S2 Gap Filler", msg)
-    log.info(f"Total of sent messages {sent}")
+    return msg
 
 
 @click.command("s2-gap-filler")
@@ -170,6 +169,9 @@ def cli(
     """
     Publish missing scenes
     """
+
+    log = setup_logging()
+
     try:
 
         if limit is not None:
@@ -180,8 +182,6 @@ def cli(
 
             if limit < 1:
                 raise ValueError(f"Limit {limit} lower than 1.")
-
-        log = setup_logging()
 
         latest_report = find_latest_report(report_folder_path=S3_BUKET_PATH)
 
@@ -203,11 +203,13 @@ def cli(
             log.warning("Worker Skipped!")
             sys.exit(0)
 
-        publish_message(
+        returned = publish_message(
             files=split_list_scenes[idx],
             queue_name=sync_queue_name,
             slack_url=slack_url,
+            log=log,
         )
+        log.info(returned)
     except Exception as error:
         log.exception(error)
         traceback.print_exc()
