@@ -4,7 +4,6 @@ from random import randrange
 from unittest.mock import patch
 
 import boto3
-import pytest
 from click.testing import CliRunner
 from monitoring.tests.conftest import (
     FAKE_STAC_FILE,
@@ -12,6 +11,7 @@ from monitoring.tests.conftest import (
     REPORT_FOLDER,
     SQS_QUEUE_NAME,
     TEST_BUCKET_NAME,
+    COGS_REGION,
 )
 from monitoring.tools import s2_gap_filler
 from moto import mock_s3, mock_sqs
@@ -24,14 +24,14 @@ from urlpath import URL
 def test_publish_message_s2_gap_filler(
     monkeypatch, update_report_file: Path, fake_stac_file: Path
 ):
-    sqs_client = boto3.client("sqs", region_name="af-south-1")
+    sqs_client = boto3.client("sqs", region_name=REGION)
     sqs_client.create_queue(QueueName=SQS_QUEUE_NAME)
 
-    s3_client = boto3.client("s3", region_name=REGION)
+    s3_client = boto3.client("s3", region_name=COGS_REGION)
     s3_client.create_bucket(
         Bucket=TEST_BUCKET_NAME,
         CreateBucketConfiguration={
-            "LocationConstraint": REGION,
+            "LocationConstraint": COGS_REGION,
         },
     )
 
@@ -63,14 +63,14 @@ def test_publish_message_s2_gap_filler_cli(
     """
     Test for random numbers of limits (between 1-10) for a random numbers of workers workers (between 1-30).
     """
-    sqs_client = boto3.client("sqs", region_name="af-south-1")
+    sqs_client = boto3.client("sqs", region_name=REGION)
     sqs_client.create_queue(QueueName=SQS_QUEUE_NAME)
 
-    s3_client = boto3.client("s3", region_name=REGION)
+    s3_client = boto3.client("s3", region_name=COGS_REGION)
     s3_client.create_bucket(
         Bucket=TEST_BUCKET_NAME,
         CreateBucketConfiguration={
-            "LocationConstraint": REGION,
+            "LocationConstraint": COGS_REGION,
         },
     )
 

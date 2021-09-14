@@ -10,6 +10,7 @@ TEST_DATA_DIR = Path(__file__).absolute().parent / "data"
 REPORT_FILE = "2021-08-17_update.txt.gz"
 FAKE_STAC_FILE = "fake_stac.json"
 REPORT_FOLDER = "status-report"
+COGS_REGION = "us-west-2"
 
 
 @pytest.fixture(autouse=True)

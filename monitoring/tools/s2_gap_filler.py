@@ -14,10 +14,11 @@ from monitoring.tools.utils import (
     split_list_equally,
 )
 from monitoring.tools.utils import send_slack_notification, setup_logging
-from odc.aws import s3_fetch, s3_head_object
+from odc.aws import s3_fetch, s3_head_object, s3_client
 from odc.aws.queue import get_queue, publish_messages
 
 PRODUCT_NAME = "s2_l2a"
+COGS_REGION = "us-west-2"
 S3_BUKET_PATH = "s3://deafrica-sentinel-2/status-report/"
 
 
@@ -82,10 +83,12 @@ def prepare_message(s3_path):
     Prepare a single message for each stac file
     """
 
-    if s3_head_object(url=s3_path) is None:
+    s3 = s3_client(region_name=COGS_REGION)
+
+    if s3_head_object(url=s3_path, s3=s3) is None:
         raise ValueError(f"{s3_path} does not exist")
 
-    contents = s3_fetch(url=s3_path, s3=None)
+    contents = s3_fetch(url=s3_path, s3=s3)
     contents_dict = json.loads(contents)
 
     attributes = get_common_message_attributes(contents_dict)
