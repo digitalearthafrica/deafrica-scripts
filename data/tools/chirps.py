@@ -51,7 +51,7 @@ def download_and_cog_chirps(
                 id=str(odc_uuid("chirps", "2.0", [filename])),
                 with_proj=True,
                 input_datetime=datetime(int(year), int(month), 1),
-                properties={"odc:product": "rainfall_chirps_monthy"},
+                properties={"odc:product": "rainfall_chirps_monthly"},
             )
             item.set_self_href(out_stac)
             # Manually redo the asset
