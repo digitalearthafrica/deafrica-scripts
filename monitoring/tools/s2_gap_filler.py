@@ -24,7 +24,6 @@ log.addHandler(console)
 
 PRODUCT_NAME = "s2_l2a"
 S3_BUKET_PATH = "s3://deafrica-sentinel-2/status-report/"
-SENTINEL_2_SYNC_SQS_NAME = "deafrica-pds-sentinel-2-sync-scene"
 
 
 def get_common_message_attributes(stac_doc: Dict) -> Dict:
@@ -104,7 +103,7 @@ def prepare_message(s3_path):
     return message
 
 
-def publish_message(files: list):
+def publish_message(files: list, queue_name: str):
     """ """
     max_workers = 300
     # counter for files that no longer exist
@@ -114,7 +113,7 @@ def publish_message(files: list):
         sent = 0
         batch = []
         message_id = 0
-        queue = get_queue(queue_name=SENTINEL_2_SYNC_SQS_NAME)
+        queue = get_queue(queue_name=queue_name)
         for future in as_completed(futures):
             try:
                 message_dict = future.result()
@@ -148,7 +147,17 @@ def publish_message(files: list):
     help="Limit the number of messages to transfer.",
     default=None,
 )
-def cli(idx: int, max_workers: int = 2, limit: int = None):
+@click.option(
+    "--sync_queue_name",
+    help="Set the queue which the process will send the messages",
+    default="deafrica-pds-sentinel-2-sync-scene",
+)
+def cli(
+    idx: int,
+    max_workers: int = 2,
+    limit: int = None,
+    sync_queue_name: str = "deafrica-pds-sentinel-2-sync-scene",
+):
     """
     Publish missing scenes
     """
@@ -183,7 +192,7 @@ def cli(idx: int, max_workers: int = 2, limit: int = None):
             log.warning("Worker Skipped!")
             sys.exit(0)
 
-        publish_message(files=split_list_scenes[idx])
+        publish_message(files=split_list_scenes[idx], queue_name=sync_queue_name)
     except Exception as error:
         log.exception(error)
         traceback.print_exc()
