@@ -44,7 +44,7 @@ def download_and_cog_chirps(
                 mem_dst.name,
                 cog_profiles.get("deflate"),
                 in_memory=True,
-                nodata=-9999
+                nodata=-9999,
             )
             log.info("Creating STAC...")
             item = create_stac_item(
@@ -85,9 +85,7 @@ def download_and_cog_chirps(
 @click.command("download-chirps")
 @click.option("--year", default="2020")
 @click.option("--month", default="01")
-@click.option(
-    "--s3_dst", default="s3://deafrica-data-dev-af/chirps_rainfall/"
-)
+@click.option("--s3_dst", default="s3://deafrica-data-dev-af/chirps_rainfall/")
 @click.option("--overwrite", is_flag=True, default=False)
 def cli(year, month, s3_dst, overwrite):
     """
@@ -97,7 +95,14 @@ def cli(year, month, s3_dst, overwrite):
     GeoTIFFs are copied from here:
         https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_monthly/tifs/
 
-    Run with  for m in {01..12}; do chirps-download --s3_dst s3://deafrica-data-dev-af/chirps_rainfall/ --year 1983 --month $m; done
+    Run with:
+        for m in {01..12};
+        do download-chirps
+        --s3_dst s3://deafrica-data-dev-af/chirps_rainfall/
+        --year 1983
+        --month $m;
+        done
+
     to download a whole year.
 
     Available years are 1981-2021.
