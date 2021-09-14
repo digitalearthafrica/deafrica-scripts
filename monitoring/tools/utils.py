@@ -6,11 +6,12 @@ import requests
 from odc.aws import s3_client, s3_fetch, s3_ls_dir
 
 
-def setup_logging() -> logging.Logger:
+def setup_logging(level: int = logging.INFO) -> logging.Logger:
     """Set up a simple logger"""
-    log = logging.getLogger()
+    log = logging.getLogger(__name__)
     console = logging.StreamHandler()
     log.addHandler(console)
+    log.setLevel(level)
     return log
 
 
