@@ -52,7 +52,9 @@ def download_and_cog_chirps(
                 id=str(odc_uuid("chirps", "2.0", [filename])),
                 with_proj=True,
                 input_datetime=datetime(int(year), int(month), 1),
-                properties={"odc:product": "rainfall_chirps"},
+                properties={
+                    "odc:product": "rainfall_chirps_monthy"
+                },
             )
             item.set_self_href(out_stac)
             # Manually redo the asset
@@ -85,7 +87,7 @@ def download_and_cog_chirps(
 @click.command("download-chirps")
 @click.option("--year", default="2020")
 @click.option("--month", default="01")
-@click.option("--s3_dst", default="s3://deafrica-data-dev-af/chirps_rainfall/")
+@click.option("--s3_dst", default="s3://deafrica-data-dev-af/rainfall_chirps_monthy/")
 @click.option("--overwrite", is_flag=True, default=False)
 def cli(year, month, s3_dst, overwrite):
     """
@@ -98,7 +100,7 @@ def cli(year, month, s3_dst, overwrite):
     Run with:
         for m in {01..12};
         do download-chirps
-        --s3_dst s3://deafrica-data-dev-af/chirps_rainfall/
+        --s3_dst s3://deafrica-data-dev-af/rainfall_chirps_monthy/
         --year 1983
         --month $m;
         done
