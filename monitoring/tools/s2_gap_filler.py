@@ -2,25 +2,20 @@
 """
 
 import json
-import logging
 import sys
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict
 
 import click
-from odc.aws import s3_fetch, s3_head_object
-from odc.aws.queue import get_queue, publish_messages
-
 from monitoring.tools.utils import (
     find_latest_report,
     read_report,
     split_list_equally,
 )
-
-log = logging.getLogger()
-console = logging.StreamHandler()
-log.addHandler(console)
+from monitoring.tools.utils import send_slack_notification, setup_logging
+from odc.aws import s3_fetch, s3_head_object
+from odc.aws.queue import get_queue, publish_messages
 
 PRODUCT_NAME = "s2_l2a"
 S3_BUKET_PATH = "s3://deafrica-sentinel-2/status-report/"
@@ -103,7 +98,7 @@ def prepare_message(s3_path):
     return message
 
 
-def publish_message(files: list, queue_name: str):
+def publish_message(files: list, queue_name: str, slack_url: str = None):
     """ """
     max_workers = 300
     # counter for files that no longer exist
@@ -112,6 +107,7 @@ def publish_message(files: list, queue_name: str):
         failed = 0
         sent = 0
         batch = []
+        error_list = []
         message_id = 0
         queue = get_queue(queue_name=queue_name)
         for future in as_completed(futures):
@@ -126,15 +122,22 @@ def publish_message(files: list, queue_name: str):
                     sent += 10
             except Exception as exc:
                 failed += 1
+                error_list.append(exc)
                 log.info(f"File no longer exists: {exc}")
 
     if len(batch) > 0:
         publish_messages(queue=queue, messages=batch)
         sent += len(batch)
+
     if failed > 0:
-        raise ValueError(
-            f"Total of {failed} files failed, Total of sent messages {sent}"
-        )
+        msg = f":red_circle: Total of {failed} files failed, Total of sent messages {sent}"
+        if slack_url is not None:
+            send_slack_notification(slack_url, "S2 Gap Filler", msg)
+        raise ValueError(f"{msg} - {set(error_list)}")
+
+    msg = f"Total messages sent {sent}"
+    if slack_url is not None:
+        send_slack_notification(slack_url, "S2 Gap Filler", msg)
     log.info(f"Total of sent messages {sent}")
 
 
@@ -152,11 +155,17 @@ def publish_message(files: list, queue_name: str):
     help="Set the queue which the process will send the messages",
     default="deafrica-pds-sentinel-2-sync-scene",
 )
+@click.option(
+    "--slack_url",
+    help="Set the queue which the process will send the messages",
+    default=None,
+)
 def cli(
     idx: int,
     max_workers: int = 2,
     limit: int = None,
     sync_queue_name: str = "deafrica-pds-sentinel-2-sync-scene",
+    slack_url: str = None,
 ):
     """
     Publish missing scenes
@@ -171,6 +180,8 @@ def cli(
 
             if limit < 1:
                 raise ValueError(f"Limit {limit} lower than 1.")
+
+        log = setup_logging()
 
         latest_report = find_latest_report(report_folder_path=S3_BUKET_PATH)
 
@@ -192,7 +203,11 @@ def cli(
             log.warning("Worker Skipped!")
             sys.exit(0)
 
-        publish_message(files=split_list_scenes[idx], queue_name=sync_queue_name)
+        publish_message(
+            files=split_list_scenes[idx],
+            queue_name=sync_queue_name,
+            slack_url=slack_url,
+        )
     except Exception as error:
         log.exception(error)
         traceback.print_exc()
