@@ -49,7 +49,7 @@ def test_publish_message_s2_gap_filler(
             str(fake_stac_file), TEST_BUCKET_NAME, f"{i}/{FAKE_STAC_FILE}"
         )
 
-    s2_gap_filler.publish_message(files=files, queue_name=SQS_QUEUE_NAME)
+    s2_gap_filler.send_messages(files=files, queue_name=SQS_QUEUE_NAME)
     queue = get_queue(queue_name=SQS_QUEUE_NAME)
     number_of_msgs = queue.attributes.get("ApproximateNumberOfMessages")
     assert int(number_of_msgs) == 8
@@ -96,7 +96,7 @@ def test_publish_message_s2_gap_filler_cli(
 
     s3_report_path = URL(f"s3://{TEST_BUCKET_NAME}") / URL(REPORT_FOLDER)
 
-    with patch.object(s2_gap_filler, "S3_BUKET_PATH", str(s3_report_path)):
+    with patch.object(s2_gap_filler, "S3_BUCKET_PATH", str(s3_report_path)):
         runner = CliRunner()
         max_workers = randrange(1, 6)
         max_limit = randrange(1, 10)

@@ -101,10 +101,14 @@ def prepare_message(s3_path):
     return message
 
 
-def publish_message(files: list, queue_name: str, slack_url: str = None) -> str:
-    """ """
+def send_messages(files: list, queue_name: str, slack_url: str = None) -> str:
+    """
+    Publish a list of missing scenes to an specific queue and by the end of that it's able to notify slack the result
+    :param files: (list) List of scenes to be send
+    :param queue_name: (str) queue to be sens to
+    :param slack_url: (str) Optional slack URL in case of you want to send a slack notification
+    """
     max_workers = 300
-    # counter for files that no longer exist
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(prepare_message, s3_path) for s3_path in files]
         failed = 0
@@ -169,12 +173,13 @@ def cli(
 ):
     """
     Publish missing scenes
-    :param idx: (int) sequential index which will be used to define the range of scenes that the POD will work with
-    :param max_workers: (int) total number of pods used for the task. This number is used to split the number of scenes
+
+    idx: (int) sequential index which will be used to define the range of scenes that the POD will work with
+    max_workers: (int) total number of pods used for the task. This number is used to split the number of scenes
     equally among the PODS
-    :param sync_queue_name: (str) Sync queue name
-    :param limit: (str) optional limit of messages to be read from the report
-    :param slack_url: (str) Slack notification channel hook URL
+    sync_queue_name: (str) Sync queue name
+    limit: (str) optional limit of messages to be read from the report
+    slack_url: (str) Slack notification channel hook URL
     """
 
     log = setup_logging()
@@ -213,7 +218,7 @@ def cli(
             sys.exit(0)
 
         # send the right range of scenes for this worker
-        returned = publish_message(
+        returned = send_messages(
             files=split_list_scenes[idx],
             queue_name=sync_queue_name,
             slack_url=slack_url,
