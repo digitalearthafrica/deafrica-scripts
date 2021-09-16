@@ -107,10 +107,9 @@ def test_publish_message_s2_gap_filler_cli(
                     [
                         str(idx),
                         str(max_workers),
+                        str(SQS_QUEUE_NAME),
                         "--limit",
                         str(limit),
-                        "--sync_queue_name",
-                        SQS_QUEUE_NAME,
                     ],
                 )
 
@@ -125,11 +124,13 @@ def test_publish_message_s2_gap_filler_cli(
                 assert int(number_of_msgs) == 0
 
             # if limit bigger than 0 and smaller than the number max of messages
-            if max_limit <= len(files):
+            elif limit < len(files):
                 assert int(number_of_msgs) == limit
 
             # if limit bigger than 8
-            if max_limit > len(files):
+            elif limit >= len(files):
                 assert int(number_of_msgs) == len(files)
 
             sqs_client.purge_queue(QueueUrl=queue.url)
+
+        print(f"max_limit {max_limit} - max_workers {max_workers}")
