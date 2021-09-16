@@ -97,7 +97,10 @@ def prepare_message(scene_paths: list, log: Optional[logging.Logger] = None):
             message = {
                 "Id": str(message_id),
                 "MessageBody": json.dumps(
-                    {"Message": json.dumps(contents_dict), "MessageAttributes": attributes}
+                    {
+                        "Message": json.dumps(contents_dict),
+                        "MessageAttributes": attributes,
+                    }
                 ),
             }
             message_id += 1
@@ -168,22 +171,22 @@ def send_messages(
         except Exception as exc:
             failed += 1
             error_list.append(exc)
+            batch = []
 
     if len(batch) > 0:
         publish_messages(queue=queue, messages=batch)
         sent += len(batch)
 
+    msg = f"Total messages sent {sent}"
+
     if failed > 0:
         msg = f":red_circle: Total of {failed} files failed, Total of sent messages {sent}"
-        if slack_url is not None:
-            send_slack_notification(slack_url, "S2 Gap Filler", msg)
-        raise ValueError(f"{msg} - {set(error_list)}")
+        log.error(f"{msg} - {set(error_list)}")
 
-    msg = f"Total messages sent {sent}"
     if slack_url is not None:
         send_slack_notification(slack_url, "S2 Gap Filler", msg)
 
-    log.info(msg)
+    sys.exit(1) if failed > 0 else log.info(msg)
 
 
 @click.command("s2-gap-filler")
