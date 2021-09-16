@@ -19,7 +19,7 @@ from odc.aws.queue import get_queue, publish_messages
 
 PRODUCT_NAME = "s2_l2a"
 COGS_REGION = "us-west-2"
-S3_BUKET_PATH = "s3://deafrica-sentinel-2/status-report/"
+S3_BUCKET_PATH = "s3://deafrica-sentinel-2/status-report/"
 
 
 def get_common_message_attributes(stac_doc: Dict) -> Dict:
@@ -169,6 +169,12 @@ def cli(
 ):
     """
     Publish missing scenes
+    :param idx: (int) sequential index which will be used to define the range of scenes that the POD will work with
+    :param max_workers: (int) total number of pods used for the task. This number is used to split the number of scenes
+    equally among the PODS
+    :param sync_queue_name: (str) Sync queue name
+    :param limit: (str) optional limit of messages to be read from the report
+    :param slack_url: (str) Slack notification channel hook URL
     """
 
     log = setup_logging()
@@ -196,14 +202,17 @@ def cli(
         log.info(f"Number of scenes found {len(files)}")
         log.info(f"Example scenes: {files[0:10]}")
 
+        # Split scenes equally among the workers
         split_list_scenes = split_list_equally(
             list_to_split=files, num_inter_lists=int(max_workers)
         )
 
+        # In case of the index being bigger than the number of positions in the array, the extra POD isn' necessary
         if len(split_list_scenes) <= idx:
             log.warning("Worker Skipped!")
             sys.exit(0)
 
+        # send the right range of scenes for this worker
         returned = publish_message(
             files=split_list_scenes[idx],
             queue_name=sync_queue_name,
