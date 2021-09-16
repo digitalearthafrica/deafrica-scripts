@@ -146,7 +146,9 @@ def publish_message(files: list, queue_name: str, slack_url: str = None) -> str:
 @click.command("s2-gap-filler")
 @click.argument("idx", type=int, nargs=1, required=True)
 @click.argument("max_workers", type=int, nargs=1, default=2)
-@click.argument("sync_queue_name", type=str, nargs=1, default="deafrica-pds-sentinel-2-sync-scene")
+@click.argument(
+    "sync_queue_name", type=str, nargs=1, default="deafrica-pds-sentinel-2-sync-scene"
+)
 @click.option(
     "--limit",
     "-l",
