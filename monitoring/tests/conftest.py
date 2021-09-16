@@ -19,7 +19,7 @@ def setup_env(monkeypatch):
 
 
 @pytest.fixture
-def update_report_file():
+def local_report_update_file():
     return TEST_DATA_DIR / REPORT_FILE
 
 
@@ -32,3 +32,8 @@ def fake_stac_file():
 def s3_report_file():
     s3_report_path = URL(REPORT_FOLDER)
     return s3_report_path / REPORT_FILE
+
+
+@pytest.fixture
+def s3_report_path():
+    return URL(f"s3://{TEST_BUCKET_NAME}") / URL(REPORT_FOLDER)

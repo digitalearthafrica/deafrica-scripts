@@ -5,24 +5,28 @@ from unittest.mock import patch
 
 import boto3
 from click.testing import CliRunner
+from moto import mock_s3, mock_sqs
+from odc.aws.queue import get_queue
+from urlpath import URL
+
 from monitoring.tests.conftest import (
     FAKE_STAC_FILE,
     REGION,
-    REPORT_FOLDER,
     SQS_QUEUE_NAME,
     TEST_BUCKET_NAME,
     COGS_REGION,
 )
 from monitoring.tools import s2_gap_filler
-from moto import mock_s3, mock_sqs
-from odc.aws.queue import get_queue
-from urlpath import URL
 
 
 @mock_s3
 @mock_sqs
 def test_publish_message_s2_gap_filler(
-    monkeypatch, update_report_file: Path, fake_stac_file: Path
+    monkeypatch,
+    local_report_update_file,
+    fake_stac_file: Path,
+    s3_report_path: URL,
+    s3_report_file: URL,
 ):
     sqs_client = boto3.client("sqs", region_name=REGION)
     sqs_client.create_queue(QueueName=SQS_QUEUE_NAME)
@@ -35,9 +39,15 @@ def test_publish_message_s2_gap_filler(
         },
     )
 
+    s3_client.upload_file(
+        str(local_report_update_file),
+        TEST_BUCKET_NAME,
+        str(s3_report_file),
+    )
+
     files = [
         scene_path.strip()
-        for scene_path in gzip.open(open(str(update_report_file), "rb"))
+        for scene_path in gzip.open(open(str(local_report_update_file), "rb"))
         .read()
         .decode("utf-8")
         .split("\n")
@@ -49,16 +59,28 @@ def test_publish_message_s2_gap_filler(
             str(fake_stac_file), TEST_BUCKET_NAME, f"{i}/{FAKE_STAC_FILE}"
         )
 
-    s2_gap_filler.send_messages(files=files, queue_name=SQS_QUEUE_NAME)
-    queue = get_queue(queue_name=SQS_QUEUE_NAME)
-    number_of_msgs = queue.attributes.get("ApproximateNumberOfMessages")
-    assert int(number_of_msgs) == 8
+    with patch.object(s2_gap_filler, "S3_BUCKET_PATH", str(s3_report_path)):
+        s2_gap_filler.send_messages(
+            limit=None,
+            max_workers=1,
+            idx=0,
+            queue_name=SQS_QUEUE_NAME,
+            slack_url=None,
+        )
+
+        queue = get_queue(queue_name=SQS_QUEUE_NAME)
+        number_of_msgs = queue.attributes.get("ApproximateNumberOfMessages")
+        assert int(number_of_msgs) == 8
 
 
 @mock_s3
 @mock_sqs
 def test_publish_message_s2_gap_filler_cli(
-    monkeypatch, update_report_file: Path, fake_stac_file: Path, s3_report_file: URL
+    monkeypatch,
+    local_report_update_file,
+    fake_stac_file: Path,
+    s3_report_file: URL,
+    s3_report_path: URL,
 ):
     """
     Test for random numbers of limits (between 1-10) for a random numbers of workers workers (between 1-30).
@@ -75,14 +97,14 @@ def test_publish_message_s2_gap_filler_cli(
     )
 
     s3_client.upload_file(
-        str(update_report_file),
+        str(local_report_update_file),
         TEST_BUCKET_NAME,
         str(s3_report_file),
     )
 
     files = [
         scene_path.strip()
-        for scene_path in gzip.open(open(str(update_report_file), "rb"))
+        for scene_path in gzip.open(open(str(local_report_update_file), "rb"))
         .read()
         .decode("utf-8")
         .split("\n")
@@ -93,8 +115,6 @@ def test_publish_message_s2_gap_filler_cli(
         s3_client.upload_file(
             str(fake_stac_file), TEST_BUCKET_NAME, f"{i}/{FAKE_STAC_FILE}"
         )
-
-    s3_report_path = URL(f"s3://{TEST_BUCKET_NAME}") / URL(REPORT_FOLDER)
 
     with patch.object(s2_gap_filler, "S3_BUCKET_PATH", str(s3_report_path)):
         runner = CliRunner()

@@ -2,10 +2,11 @@
 """
 
 import json
+import logging
 import sys
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict
+from typing import Dict, Optional
 
 import click
 from monitoring.tools.utils import (
@@ -78,58 +79,95 @@ def get_common_message_attributes(stac_doc: Dict) -> Dict:
     return msg_attributes
 
 
-def prepare_message(s3_path):
+def prepare_message(scene_paths: list, log: Optional[logging.Logger] = None):
     """
     Prepare a single message for each stac file
     """
 
     s3 = s3_client(region_name=COGS_REGION)
 
-    if s3_head_object(url=s3_path, s3=s3) is None:
-        raise ValueError(f"{s3_path} does not exist")
+    message_id = 0
+    for s3_path in scene_paths:
+        try:
+            contents = s3_fetch(url=s3_path, s3=s3)
+            contents_dict = json.loads(contents)
 
-    contents = s3_fetch(url=s3_path, s3=s3)
-    contents_dict = json.loads(contents)
+            attributes = get_common_message_attributes(contents_dict)
 
-    attributes = get_common_message_attributes(contents_dict)
+            message = {
+                "Id": str(message_id),
+                "MessageBody": json.dumps(
+                    {"Message": json.dumps(contents_dict), "MessageAttributes": attributes}
+                ),
+            }
+            message_id += 1
+            yield message
+        except Exception as exc:
+            if log:
+                log.error(f"{s3_path} does not exist - {exc}")
 
-    message = {
-        "MessageBody": json.dumps(
-            {"Message": json.dumps(contents_dict), "MessageAttributes": attributes}
-        ),
-    }
-    return message
 
-
-def send_messages(files: list, queue_name: str, slack_url: str = None) -> str:
+def send_messages(
+    idx: int,
+    queue_name: str,
+    max_workers: int = 2,
+    limit: int = None,
+    slack_url: str = None,
+) -> None:
     """
     Publish a list of missing scenes to an specific queue and by the end of that it's able to notify slack the result
-    :param files: (list) List of scenes to be send
+
+    :param limit: (int) optional limit of messages to be read from the report
+    :param max_workers: (int) total number of pods used for the task. This number is used to split the number of scenes
+    equally among the PODS
+    :param idx: (int) sequential index which will be used to define the range of scenes that the POD will work with
     :param queue_name: (str) queue to be sens to
     :param slack_url: (str) Optional slack URL in case of you want to send a slack notification
     """
-    max_workers = 300
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(prepare_message, s3_path) for s3_path in files]
-        failed = 0
-        sent = 0
-        batch = []
-        error_list = []
-        message_id = 0
-        queue = get_queue(queue_name=queue_name)
-        for future in as_completed(futures):
-            try:
-                message_dict = future.result()
-                message_dict["Id"] = str(message_id)
-                message_id += 1
-                batch.append(message_dict)
-                if len(batch) == 10:
-                    publish_messages(queue=queue, messages=batch)
-                    batch = []
-                    sent += 10
-            except Exception as exc:
-                failed += 1
-                error_list.append(exc)
+    log = setup_logging()
+
+    latest_report = find_latest_report(report_folder_path=S3_BUCKET_PATH)
+
+    if "update" in latest_report:
+        log.info("FORCED UPDATE FLAGGED!")
+
+    log.info(f"Limited: {int(limit) if limit else 'No limit'}")
+    log.info(f"Number of workers: {max_workers}")
+
+    files = read_report(report_path=latest_report, limit=limit)
+
+    log.info(f"Number of scenes found {len(files)}")
+    log.info(f"Example scenes: {files[0:10]}")
+
+    # Split scenes equally among the workers
+    split_list_scenes = split_list_equally(
+        list_to_split=files, num_inter_lists=int(max_workers)
+    )
+
+    # In case of the index being bigger than the number of positions in the array, the extra POD isn' necessary
+    if len(split_list_scenes) <= idx:
+        log.warning(f"Worker {idx} Skipped!")
+        sys.exit(0)
+
+    log.info(f"Executing worker {idx}")
+    messages = prepare_message(scene_paths=split_list_scenes[idx], log=log)
+
+    queue = get_queue(queue_name=queue_name)
+
+    batch = []
+    failed = 0
+    sent = 0
+    error_list = []
+    for message in messages:
+        try:
+            batch.append(message)
+            if len(batch) == 10:
+                publish_messages(queue=queue, messages=batch)
+                batch = []
+                sent += 10
+        except Exception as exc:
+            failed += 1
+            error_list.append(exc)
 
     if len(batch) > 0:
         publish_messages(queue=queue, messages=batch)
@@ -144,7 +182,8 @@ def send_messages(files: list, queue_name: str, slack_url: str = None) -> str:
     msg = f"Total messages sent {sent}"
     if slack_url is not None:
         send_slack_notification(slack_url, "S2 Gap Filler", msg)
-    return msg
+
+    log.info(msg)
 
 
 @click.command("s2-gap-filler")
@@ -175,14 +214,16 @@ def cli(
     Publish missing scenes
 
     idx: (int) sequential index which will be used to define the range of scenes that the POD will work with
+
     max_workers: (int) total number of pods used for the task. This number is used to split the number of scenes
     equally among the PODS
+
     sync_queue_name: (str) Sync queue name
+
     limit: (str) optional limit of messages to be read from the report
+
     slack_url: (str) Slack notification channel hook URL
     """
-
-    log = setup_logging()
 
     try:
 
@@ -195,39 +236,18 @@ def cli(
             if limit < 1:
                 raise ValueError(f"Limit {limit} lower than 1.")
 
-        latest_report = find_latest_report(report_folder_path=S3_BUKET_PATH)
-
-        if "update" in latest_report:
-            log.info("FORCED UPDATE FLAGGED!")
-
-        log.info(f"Limited: {int(limit) if limit else 'No limit'}")
-
-        files = read_report(report_path=latest_report, limit=limit)
-
-        log.info(f"Number of scenes found {len(files)}")
-        log.info(f"Example scenes: {files[0:10]}")
-
-        # Split scenes equally among the workers
-        split_list_scenes = split_list_equally(
-            list_to_split=files, num_inter_lists=int(max_workers)
-        )
-
-        # In case of the index being bigger than the number of positions in the array, the extra POD isn' necessary
-        if len(split_list_scenes) <= idx:
-            log.warning("Worker Skipped!")
-            sys.exit(0)
-
         # send the right range of scenes for this worker
-        returned = send_messages(
-            files=split_list_scenes[idx],
+        send_messages(
+            idx=idx,
             queue_name=sync_queue_name,
+            limit=limit,
+            max_workers=max_workers,
             slack_url=slack_url,
         )
-        log.info(returned)
+
     except Exception as error:
-        log.exception(error)
         traceback.print_exc()
-        raise error
+        sys.exit(1)
 
 
 if __name__ == "__main__":
