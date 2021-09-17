@@ -54,7 +54,7 @@ def test_get_no_msg_dead_queues(monkeypatch):
 
 
 @mock_s3
-def test_find_latest_report(monkeypatch, update_report_file: Path, s3_report_file: URL):
+def test_find_latest_report(monkeypatch, local_report_update_file, s3_report_file: URL):
     s3_client = boto3.client("s3", region_name=REGION)
     s3_client.create_bucket(
         Bucket=TEST_BUCKET_NAME,
@@ -64,7 +64,7 @@ def test_find_latest_report(monkeypatch, update_report_file: Path, s3_report_fil
     )
 
     s3_client.upload_file(
-        str(update_report_file),
+        str(local_report_update_file),
         TEST_BUCKET_NAME,
         str(s3_report_file),
     )
@@ -92,7 +92,7 @@ def test_not_found_latest_report(monkeypatch, s3_report_file: URL):
 
 
 @mock_s3
-def test_read_report(monkeypatch, update_report_file: Path, s3_report_file: URL):
+def test_read_report(monkeypatch, local_report_update_file, s3_report_file: URL):
     s3_client = boto3.client("s3", region_name=REGION)
     s3_client.create_bucket(
         Bucket=TEST_BUCKET_NAME,
@@ -102,7 +102,7 @@ def test_read_report(monkeypatch, update_report_file: Path, s3_report_file: URL)
     )
 
     s3_client.upload_file(
-        str(update_report_file), TEST_BUCKET_NAME, str(s3_report_file)
+        str(local_report_update_file), TEST_BUCKET_NAME, str(s3_report_file)
     )
     s3_path = f"s3://{TEST_BUCKET_NAME}/{s3_report_file.path}"
 
@@ -123,13 +123,13 @@ def test_split_list():
         list_to_split=[i for i in range(30)], num_inter_lists=max_of_workers
     )
     smaller_division = split_list_equally(
-        list_to_split=[i for i in range(29)], num_inter_lists=max_of_workers
+        list_to_split=[i for i in range(5)], num_inter_lists=max_of_workers
     )
     bigger_division = split_list_equally(
-        list_to_split=[i for i in range(31)], num_inter_lists=max_of_workers
+        list_to_split=[i for i in range(20)], num_inter_lists=max_of_workers
     )
 
     # The result must be at most 10 items
-    assert len(perfect_division) <= max_of_workers
-    assert len(smaller_division) <= max_of_workers
-    assert len(bigger_division) <= max_of_workers
+    assert len(perfect_division) == max_of_workers
+    assert len(smaller_division) < max_of_workers
+    assert len(bigger_division) == max_of_workers

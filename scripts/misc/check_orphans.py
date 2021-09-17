@@ -8,7 +8,7 @@ os.environ["AWS_SECRET_ACCESS_KEY"] = ""
 os.environ["AWS_S3_ENDPOINT"] = "s3.us-west-2.amazonaws.com"
 os.environ["AWS_DEFAULT_REGION"] = "us-west-2"
 
-S3_BUKET_PATH = "s3://deafrica-landsat/status-report/"
+S3_BUCKET_PATH = "s3://deafrica-landsat/status-report/"
 
 
 def get_orphans():
@@ -25,7 +25,7 @@ def get_orphans():
     print("Finding Orphans")
     report_files = [
         report
-        for report in s3_ls_dir(uri=S3_BUKET_PATH, s3=s3)
+        for report in s3_ls_dir(uri=S3_BUCKET_PATH, s3=s3)
         if "orphaned.txt.gz" in report
     ]
 
