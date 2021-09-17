@@ -2,10 +2,10 @@ from unittest.mock import patch
 
 import boto3
 from moto import mock_s3
-from odc.aws import s3_ls, s3_ls_dir
-from monitoring.tools import s2_gap_report
+
 from monitoring.tests.conftest import *
-from monitoring.tools.s2_gap_report import get_and_filter_cogs_keys, get_and_filter_deafrica_keys
+from monitoring.tools import s2_gap_report
+from monitoring.tools.s2_gap_report import get_and_filter_cogs_keys
 
 
 @mock_s3
