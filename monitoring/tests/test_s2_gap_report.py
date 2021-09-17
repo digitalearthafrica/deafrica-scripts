@@ -10,11 +10,11 @@ from monitoring.tools.s2_gap_report import get_and_filter_cogs_keys
 
 @mock_s3
 def test_get_and_filter_cogs_keys(
-        monkeypatch,
-        inventory_data_file: Path,
-        s3_inventory_data_file: URL,
-        inventory_manifest_file: Path,
-        s3_inventory_manifest_file: URL,
+    monkeypatch,
+    inventory_data_file: Path,
+    s3_inventory_data_file: URL,
+    inventory_manifest_file: Path,
+    s3_inventory_manifest_file: URL,
 ):
     s3_client = boto3.client("s3", region_name=COGS_REGION)
     s3_client.create_bucket(
@@ -38,10 +38,12 @@ def test_get_and_filter_cogs_keys(
         str(s3_inventory_data_file),
     )
     # list(boto3.resource('s3').Bucket("test-inventory-bucket").objects.all())
-    s3_inventory_path = URL(f"s3://{INVENTORY_BUCKET}/{INVENTORY_FOLDER}/{INVENTORY_BUCKET}/")
+    s3_inventory_path = URL(
+        f"s3://{INVENTORY_BUCKET}/{INVENTORY_FOLDER}/{INVENTORY_BUCKET}/"
+    )
 
     with patch.object(
-            s2_gap_report, "SENTINEL_COGS_INVENTORY_PATH", str(s3_inventory_path)
+        s2_gap_report, "SENTINEL_COGS_INVENTORY_PATH", str(s3_inventory_path)
     ):
         with patch.object(s2_gap_report, "COGS_FOLDER_NAME", str(INVENTORY_FOLDER)):
             scenes_list = get_and_filter_cogs_keys()
