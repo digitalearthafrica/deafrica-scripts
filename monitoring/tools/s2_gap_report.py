@@ -34,11 +34,9 @@ def get_and_filter_cogs_keys():
     Retrieve key list from a inventory bucket and filter
     :return:
     """
-    s3 = s3_client(region_name=COGS_REGION, aws_unsigned=True)
-    latest_manifest = find_latest_manifest(prefix=SENTINEL_COGS_INVENTORY_PATH, s3=s3)
+    # s3 = s3_client(region_name=COGS_REGION, aws_unsigned=True)
     source_keys = list_inventory(
-        manifest=latest_manifest,
-        s3=s3,
+        manifest=f"{SENTINEL_COGS_INVENTORY_PATH}",
         prefix=COGS_FOLDER_NAME,
         contains=".json",
         n_threads=200,
@@ -52,28 +50,12 @@ def get_and_filter_cogs_keys():
     )
 
     return set(
-        key
+        key.Key
         for key in source_keys
         if (
-            key.split("/")[-2].split("_")[1] in africa_tile_ids
+            key.Key.split("/")[-2].split("_")[1] in africa_tile_ids
             # We need to ensure we're ignoring the old format data
-            and re.match(r"sentinel-s2-l2a-cogs/\d{4}/", key) is None
-        )
-    )
-
-
-def get_and_filter_deafrica_keys():
-    s3 = s3_client(region_name="af-south-1", aws_unsigned=True)
-
-    latest_manifest = find_latest_manifest(prefix=SENTINEL_2_INVENTORY_PATH, s3=s3)
-
-    return set(
-        list_inventory(
-            manifest=latest_manifest,
-            s3=s3,
-            prefix=COGS_FOLDER_NAME,
-            contains=".json",
-            n_threads=200,
+            and re.match(r"sentinel-s2-l2a-cogs/\d{4}/", key.Key) is None
         )
     )
 
@@ -100,7 +82,15 @@ def generate_buckets_diff(update_stac: bool = False) -> None:
 
     else:
 
-        destination_keys = get_and_filter_deafrica_keys()
+        destination_keys = set(
+            ns.Key
+            for ns in list_inventory(
+                manifest=f"{SENTINEL_2_INVENTORY_PATH}",
+                prefix=COGS_FOLDER_NAME,
+                contains=".json",
+                n_threads=200,
+            )
+        )
 
         # Keys that are missing, they are in the source but not in the bucket
         missing_scenes = set(

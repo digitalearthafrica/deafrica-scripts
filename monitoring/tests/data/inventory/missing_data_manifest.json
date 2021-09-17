@@ -1,0 +1,13 @@
+{
+  "sourceBucket" : "test-inventory-bucket",
+  "destinationBucket" : "arn:aws:s3:::test-inventory-bucket",
+  "version" : "2016-11-30",
+  "creationTimestamp" : "1720950400000",
+  "fileFormat" : "CSV",
+  "fileSchema" : "Bucket, Key, Size, LastModifiedDate",
+  "files" : [ {
+    "key" : "test/test-inventory-bucket/data/missing_data_file.csv.gz",
+    "size" : 349984,
+    "MD5checksum" : "90618d2fe105f412343b831e05c60950"
+  }]
+}
