@@ -11,6 +11,8 @@ from odc.aws import s3_client, s3_dump
 from odc.aws.inventory import list_inventory, find_latest_manifest
 from urlpath import URL
 
+from monitoring.tools.utils import send_slack_notification
+
 log = logging.getLogger()
 console = logging.StreamHandler()
 log.addHandler(console)
@@ -60,10 +62,12 @@ def get_and_filter_cogs_keys():
     )
 
 
-def generate_buckets_diff(update_stac: bool = False) -> None:
+def generate_buckets_diff(update_stac: bool = False, slack_url: str = None) -> None:
     """
     Compare Sentinel-2 buckets in US and Africa and detect differences
     A report containing missing keys will be written to s3://deafrica-sentinel-2/status-report
+    :param update_stac: (bool) Define if the report will contain all scenes from the source for an update
+    :param slack_url: (str) Optional slack URL in case of you want to send a slack notification
     """
     log.info("Process started")
 
@@ -132,6 +136,10 @@ def generate_buckets_diff(update_stac: bool = False) -> None:
         )
 
     message = f"{len(missing_scenes)} scenes are missing from and {len(orphaned_keys)} scenes no longer exist in source"
+
+    if slack_url is not None:
+        send_slack_notification(slack_url, "S2 Gap Report", message)
+
     log.info(message)
 
     if not update_stac and (len(missing_scenes) > 200 or len(orphaned_keys) > 200):
@@ -144,13 +152,18 @@ def generate_buckets_diff(update_stac: bool = False) -> None:
     default=False,
     help="Defines if all stacs need to be updated",
 )
+@click.option(
+    "--slack_url",
+    help="Slack url to use to send a notification",
+    default=None,
+)
 @click.command("s2-gap-report")
-def cli(update_stac: bool = False):
+def cli(update_stac: bool = False, slack_url: str = None):
     """
     Publish missing scenes
     """
     try:
-        generate_buckets_diff(update_stac=update_stac)
+        generate_buckets_diff(update_stac=update_stac, slack_url=slack_url)
     except Exception as error:
         log.exception(error)
         traceback.print_exc()
