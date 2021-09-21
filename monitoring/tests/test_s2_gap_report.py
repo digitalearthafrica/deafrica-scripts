@@ -5,7 +5,10 @@ from moto import mock_s3
 
 from monitoring.tests.conftest import *
 from monitoring.tools import s2_gap_report
-from monitoring.tools.s2_gap_report import get_and_filter_cogs_keys, generate_buckets_diff
+from monitoring.tools.s2_gap_report import (
+    get_and_filter_cogs_keys,
+    generate_buckets_diff,
+)
 
 
 @mock_s3
@@ -38,7 +41,7 @@ def test_get_and_filter_cogs_keys(
         str(s3_inventory_data_file),
     )
 
-    print(list(boto3.resource('s3').Bucket("test-inventory-bucket").objects.all()))
+    print(list(boto3.resource("s3").Bucket("test-inventory-bucket").objects.all()))
 
     s3_inventory_path = URL(
         f"s3://{INVENTORY_BUCKET}/{INVENTORY_FOLDER}/{INVENTORY_BUCKET}/"
@@ -46,9 +49,7 @@ def test_get_and_filter_cogs_keys(
 
     with patch.object(
         s2_gap_report, "SENTINEL_COGS_INVENTORY_PATH", str(s3_inventory_path)
-    ), patch.object(
-        s2_gap_report, "COGS_FOLDER_NAME", str(INVENTORY_FOLDER)
-    ):
+    ), patch.object(s2_gap_report, "COGS_FOLDER_NAME", str(INVENTORY_FOLDER)):
         scenes_list = get_and_filter_cogs_keys()
         assert len(scenes_list) == 6
 
@@ -85,7 +86,7 @@ def test_generate_buckets_diff(
         str(s3_inventory_data_file),
     )
 
-    print(list(boto3.resource('s3').Bucket("test-cogs-inventory-bucket").objects.all()))
+    print(list(boto3.resource("s3").Bucket("test-cogs-inventory-bucket").objects.all()))
 
     s3_client = boto3.client("s3", region_name=REGION)
     s3_client.create_bucket(
@@ -109,7 +110,7 @@ def test_generate_buckets_diff(
         str(s3_inventory_data_file),
     )
 
-    print(list(boto3.resource('s3').Bucket("test-inventory-bucket").objects.all()))
+    print(list(boto3.resource("s3").Bucket("test-inventory-bucket").objects.all()))
 
     s3_inventory_path = URL(
         f"s3://{INVENTORY_BUCKET}/{INVENTORY_FOLDER}/{INVENTORY_BUCKET}/"
@@ -119,9 +120,7 @@ def test_generate_buckets_diff(
         f"s3://{INVENTORY_BUCKET_COGS}/{INVENTORY_FOLDER}/{INVENTORY_BUCKET}/"
     )
 
-    status_report_path = URL(
-        f"s3://{INVENTORY_BUCKET}/{REPORT_FOLDER}/"
-    )
+    status_report_path = URL(f"s3://{INVENTORY_BUCKET}/{REPORT_FOLDER}/")
 
     with patch.object(
         s2_gap_report, "SENTINEL_COGS_INVENTORY_PATH", str(s3_cogs_inventory_path)
@@ -134,4 +133,11 @@ def test_generate_buckets_diff(
     ):
         # No differences
         generate_buckets_diff()
-        assert len(s3_client.list_objects_v2(Bucket=INVENTORY_BUCKET, Prefix=REPORT_FOLDER).get('Contents', [])) == 1
+        assert (
+            len(
+                s3_client.list_objects_v2(
+                    Bucket=INVENTORY_BUCKET, Prefix=REPORT_FOLDER
+                ).get("Contents", [])
+            )
+            == 1
+        )

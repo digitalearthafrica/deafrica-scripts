@@ -118,7 +118,9 @@ def generate_buckets_diff(update_stac: bool = False, slack_url: str = None) -> N
     )
 
     log.info(f"10 first missing_scenes {list(missing_scenes)[0:10]}")
-    log.info(f"Wrote inventory to: {str(URL(SENTINEL_2_STATUS_REPORT_PATH) / output_filename)}")
+    log.info(
+        f"Wrote inventory to: {str(URL(SENTINEL_2_STATUS_REPORT_PATH) / output_filename)}"
+    )
 
     if len(orphaned_keys) > 0:
         output_filename = URL(f"{date_string}_orphaned.txt")
