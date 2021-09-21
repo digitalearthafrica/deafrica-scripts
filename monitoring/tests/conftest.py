@@ -13,6 +13,7 @@ REPORT_FOLDER = "status-report"
 COGS_REGION = "us-west-2"
 
 # INVENTORY
+INVENTORY_BUCKET_COGS = "test-cogs-inventory-bucket"
 INVENTORY_BUCKET = "test-inventory-bucket"
 INVENTORY_FOLDER = "test"
 INVENTORY_DATA_FILE = "data_file.csv.gz"

@@ -82,7 +82,7 @@ def generate_buckets_diff(update_stac: bool = False, slack_url: str = None) -> N
 
         orphaned_keys = set()
 
-        output_filename = f"{date_string}_update.txt.gz"
+        output_filename = URL(f"{date_string}_update.txt.gz")
 
     else:
 
@@ -106,25 +106,25 @@ def generate_buckets_diff(update_stac: bool = False, slack_url: str = None) -> N
         # Keys that are lost, they are in the bucket but not found in the files
         orphaned_keys = destination_keys.difference(source_keys)
 
-        output_filename = f"{date_string}.txt.gz"
+        output_filename = URL(f"{date_string}.txt.gz")
 
     log.info(f"File will be saved in {SENTINEL_2_STATUS_REPORT_PATH}{output_filename}")
 
     s3_dump(
         data=gzip.compress(str.encode("\n".join(missing_scenes))),
-        url=SENTINEL_2_STATUS_REPORT_PATH / output_filename,
+        url=str(URL(SENTINEL_2_STATUS_REPORT_PATH) / output_filename),
         s3=None,
         ContentType="application/gzip",
     )
 
     log.info(f"10 first missing_scenes {list(missing_scenes)[0:10]}")
-    log.info(f"Wrote inventory to: {SENTINEL_2_STATUS_REPORT_PATH}/{output_filename}")
+    log.info(f"Wrote inventory to: {str(URL(SENTINEL_2_STATUS_REPORT_PATH) / output_filename)}")
 
     if len(orphaned_keys) > 0:
-        output_filename = f"{date_string}_orphaned.txt"
+        output_filename = URL(f"{date_string}_orphaned.txt")
         s3_dump(
             data=gzip.compress(str.encode("\n".join(orphaned_keys))),
-            url=SENTINEL_2_STATUS_REPORT_PATH / output_filename,
+            url=str(URL(SENTINEL_2_STATUS_REPORT_PATH) / output_filename),
             s3=None,
             ContentType="application/gzip",
         )
@@ -132,7 +132,7 @@ def generate_buckets_diff(update_stac: bool = False, slack_url: str = None) -> N
         log.info(f"10 first orphaned_keys {orphaned_keys[0:10]}")
 
         log.info(
-            f"Wrote orphaned scenes to: {SENTINEL_2_INVENTORY_PATH}/{output_filename}"
+            f"Wrote orphaned scenes to: {str(SENTINEL_2_INVENTORY_PATH)}/{str(output_filename)}"
         )
 
     message = f"{len(missing_scenes)} scenes are missing from and {len(orphaned_keys)} scenes no longer exist in source"

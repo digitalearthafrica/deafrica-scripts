@@ -5,18 +5,18 @@ import json
 import logging
 import sys
 import traceback
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, Optional
 
 import click
+from odc.aws import s3_fetch, s3_client
+from odc.aws.queue import get_queue, publish_messages
+
 from monitoring.tools.utils import (
     find_latest_report,
     read_report,
     split_list_equally,
 )
 from monitoring.tools.utils import send_slack_notification, setup_logging
-from odc.aws import s3_fetch, s3_head_object, s3_client
-from odc.aws.queue import get_queue, publish_messages
 
 PRODUCT_NAME = "s2_l2a"
 COGS_REGION = "us-west-2"
