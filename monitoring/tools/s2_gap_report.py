@@ -1,5 +1,4 @@
 import gzip
-import logging
 import re
 import sys
 import traceback
@@ -11,12 +10,7 @@ from odc.aws import s3_dump, s3_client
 from odc.aws.inventory import list_inventory
 from urlpath import URL
 
-from monitoring.tools.utils import send_slack_notification
-
-log = logging.getLogger()
-console = logging.StreamHandler()
-log.addHandler(console)
-
+from monitoring.tools.utils import send_slack_notification, setup_logging
 
 AFRICA_TILES = "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/master/deafrica-mgrs-tiles.csv.gz"
 SENTINEL_2_STATUS_REPORT_PATH = URL("s3://deafrica-sentinel-2/status-report/")
@@ -75,12 +69,17 @@ def generate_buckets_diff(
     :param dev: (bool) Define if the task is running in dev environment
     :param slack_url: (str) Optional slack URL in case of you want to send a slack notification
     """
+
+    log = setup_logging()
+
     log.info("Process started")
 
     # defines where the report will be saved
-    s2_status_report_path = (
-        SENTINEL_2_DEV_STATUS_REPORT_PATH if dev else SENTINEL_2_STATUS_REPORT_PATH
-    )
+    s2_status_report_path = SENTINEL_2_STATUS_REPORT_PATH
+
+    if dev:
+        log.info("Environment DEV")
+        s2_status_report_path = SENTINEL_2_DEV_STATUS_REPORT_PATH
 
     date_string = datetime.now().strftime("%Y-%m-%d")
 
@@ -183,6 +182,5 @@ def cli(update_stac: bool = False, dev: bool = False, slack_url: str = None):
     try:
         generate_buckets_diff(update_stac=update_stac, dev=dev, slack_url=slack_url)
     except Exception as error:
-        log.exception(error)
         traceback.print_exc()
         raise error
