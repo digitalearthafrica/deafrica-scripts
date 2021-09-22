@@ -12,6 +12,13 @@ FAKE_STAC_FILE = "fake_stac.json"
 REPORT_FOLDER = "status-report"
 COGS_REGION = "us-west-2"
 
+# INVENTORY
+INVENTORY_BUCKET_COGS = "test-cogs-inventory-bucket"
+INVENTORY_BUCKET = "test-inventory-bucket"
+INVENTORY_FOLDER = "test"
+INVENTORY_DATA_FILE = "data_file.csv.gz"
+INVENTORY_MANIFEST_FILE = "manifest.json"
+
 
 @pytest.fixture(autouse=True)
 def setup_env(monkeypatch):
@@ -37,3 +44,33 @@ def s3_report_file():
 @pytest.fixture
 def s3_report_path():
     return URL(f"s3://{TEST_BUCKET_NAME}") / URL(REPORT_FOLDER)
+
+
+@pytest.fixture
+def inventory_manifest_file():
+    return TEST_DATA_DIR / "inventory" / INVENTORY_MANIFEST_FILE
+
+
+@pytest.fixture
+def inventory_data_file():
+    return TEST_DATA_DIR / "inventory" / INVENTORY_DATA_FILE
+
+
+@pytest.fixture
+def s3_inventory_manifest_file():
+    return (
+        URL(INVENTORY_FOLDER)
+        / URL(INVENTORY_BUCKET)
+        / "2021-09-17T00-00Z"
+        / INVENTORY_MANIFEST_FILE
+    )
+
+
+@pytest.fixture
+def s3_inventory_data_file():
+    return (
+        URL(INVENTORY_FOLDER)
+        / URL(INVENTORY_BUCKET)
+        / URL("data")
+        / INVENTORY_DATA_FILE
+    )
