@@ -61,8 +61,6 @@ def test_generate_buckets_diff(
     s3_inventory_data_file: URL,
     inventory_manifest_file: Path,
     s3_inventory_manifest_file: URL,
-    inventory_missing_data_manifest_file: URL,
-    inventory_missing_data_file: URL,
 ):
     s3_client_cogs = boto3.client("s3", region_name=COGS_REGION)
     s3_client_cogs.create_bucket(

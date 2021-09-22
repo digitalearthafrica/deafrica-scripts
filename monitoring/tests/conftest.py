@@ -18,8 +18,6 @@ INVENTORY_BUCKET = "test-inventory-bucket"
 INVENTORY_FOLDER = "test"
 INVENTORY_DATA_FILE = "data_file.csv.gz"
 INVENTORY_MANIFEST_FILE = "manifest.json"
-INVENTORY_MISSING_DATA_FILE = "missing_data_file.csv.gz"
-INVENTORY_MISSING_DATA_MANIFEST_FILE = "missing_data_manifest.json"
 
 
 @pytest.fixture(autouse=True)
@@ -54,18 +52,8 @@ def inventory_manifest_file():
 
 
 @pytest.fixture
-def inventory_missing_data_manifest_file():
-    return TEST_DATA_DIR / "inventory" / INVENTORY_MISSING_DATA_MANIFEST_FILE
-
-
-@pytest.fixture
 def inventory_data_file():
     return TEST_DATA_DIR / "inventory" / INVENTORY_DATA_FILE
-
-
-@pytest.fixture
-def inventory_missing_data_file():
-    return TEST_DATA_DIR / "inventory" / INVENTORY_MISSING_DATA_FILE
 
 
 @pytest.fixture

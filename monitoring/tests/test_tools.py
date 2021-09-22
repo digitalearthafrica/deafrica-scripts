@@ -1,18 +1,16 @@
-from pathlib import Path
-
 import boto3
 import pytest
 from moto import mock_s3, mock_sqs
 from odc.aws.queue import publish_message
 from urlpath import URL
 
+from monitoring.tests.conftest import REGION, TEST_BUCKET_NAME
 from monitoring.tools.check_dead_queues import check_deadletter_queues
 from monitoring.tools.utils import (
     find_latest_report,
     read_report,
     split_list_equally,
 )
-from monitoring.tests.conftest import REGION, TEST_BUCKET_NAME
 
 
 @mock_sqs
