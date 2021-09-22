@@ -44,7 +44,7 @@ def get_and_filter_cogs_keys():
         s3=s3,
         prefix=COGS_FOLDER_NAME,
         contains=".json",
-        n_threads=200
+        n_threads=200,
     )
 
     africa_tile_ids = set(
