@@ -3,6 +3,7 @@ import re
 import sys
 import traceback
 from datetime import datetime
+from textwrap import dedent
 
 import click
 import pandas as pd
@@ -132,10 +133,10 @@ def generate_buckets_diff(
     log.info(f"Wrote inventory to: {str(URL(s2_status_report_path) / output_filename)}")
 
     if len(orphaned_keys) > 0:
-        output_filename = URL(f"{date_string}_orphaned.txt")
+        orphan_output_filename = URL(f"{date_string}_orphaned.txt")
         s3_dump(
             data=gzip.compress(str.encode("\n".join(orphaned_keys))),
-            url=str(URL(s2_status_report_path) / output_filename),
+            url=str(URL(s2_status_report_path) / orphan_output_filename),
             s3=s2_s3,
             ContentType="application/gzip",
         )
@@ -146,7 +147,12 @@ def generate_buckets_diff(
             f"Wrote orphaned scenes to: {str(SENTINEL_2_INVENTORY_PATH)}/{str(output_filename)}"
         )
 
-    message = f"{len(missing_scenes)} scenes are missing from and {len(orphaned_keys)} scenes no longer exist in source"
+    message = dedent(
+        f"*Environment*: {'DEV' if dev else 'PROD'}\n "
+        f"Missing Scenes: {len(missing_scenes)}\n"
+        f"Orphan Scenes: {len(orphaned_keys)}\n"
+        f"Reports Saved: {s2_status_report_path}\n"
+    )
 
     if slack_url is not None:
         send_slack_notification(slack_url, "S2 Gap Report", message)
