@@ -7,7 +7,7 @@ from datetime import datetime
 
 import click
 import pandas as pd
-from odc.aws import s3_dump
+from odc.aws import s3_dump, s3_client
 from odc.aws.inventory import list_inventory
 from urlpath import URL
 
@@ -37,11 +37,14 @@ def get_and_filter_cogs_keys():
     Retrieve key list from a inventory bucket and filter
     :return:
     """
+
+    s3 = s3_client(region_name=COGS_REGION)
     source_keys = list_inventory(
         manifest=f"{SENTINEL_COGS_INVENTORY_PATH}",
+        s3=s3,
         prefix=COGS_FOLDER_NAME,
         contains=".json",
-        n_threads=200,
+        n_threads=200
     )
 
     africa_tile_ids = set(
@@ -118,10 +121,11 @@ def generate_buckets_diff(
 
     log.info(f"File will be saved in {s2_status_report_path}{output_filename}")
 
+    s2_s3 = s3_client(region_name=SENTINEL_2_REGION)
     s3_dump(
         data=gzip.compress(str.encode("\n".join(missing_scenes))),
         url=str(URL(s2_status_report_path) / output_filename),
-        s3=None,
+        s3=s2_s3,
         ContentType="application/gzip",
     )
 
@@ -133,7 +137,7 @@ def generate_buckets_diff(
         s3_dump(
             data=gzip.compress(str.encode("\n".join(orphaned_keys))),
             url=str(URL(s2_status_report_path) / output_filename),
-            s3=None,
+            s3=s2_s3,
             ContentType="application/gzip",
         )
 
