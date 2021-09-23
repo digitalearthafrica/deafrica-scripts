@@ -16,10 +16,10 @@ from monitoring.tools.utils import (
     read_report,
     split_list_equally,
 )
-from monitoring.tools.utils import send_slack_notification, setup_logging
+from monitoring.tools.utils import send_slack_notification, setup_logging, slack_url
 
 PRODUCT_NAME = "s2_l2a"
-COGS_REGION = "us-west-2"
+SOURCE_REGION = "us-west-2"
 S3_BUCKET_PATH = "s3://deafrica-sentinel-2/status-report/"
 
 
@@ -84,7 +84,7 @@ def prepare_message(scene_paths: list, log: Optional[logging.Logger] = None):
     Prepare a single message for each stac file
     """
 
-    s3 = s3_client(region_name=COGS_REGION)
+    s3 = s3_client(region_name=SOURCE_REGION)
 
     message_id = 0
     for s3_path in scene_paths:
@@ -201,11 +201,7 @@ def send_messages(
     help="Limit the number of messages to transfer.",
     default=None,
 )
-@click.option(
-    "--slack_url",
-    help="Slack url to use to send a notification",
-    default=None,
-)
+@slack_url
 def cli(
     idx: int,
     max_workers: int = 2,
