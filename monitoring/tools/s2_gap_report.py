@@ -17,9 +17,7 @@ from monitoring.tools.utils import send_slack_notification, setup_logging
 SENTINEL_2_INVENTORY_PATH = URL(
     "s3://deafrica-sentinel-2-inventory/deafrica-sentinel-2/deafrica-sentinel-2-inventory/"
 )
-SENTINEL_COGS_INVENTORY_PATH = URL(
-    "s3://sentinel-cogs-inventory/sentinel-cogs/sentinel-cogs/"
-)
+SOURCE_INVENTORY_PATH = URL("s3://sentinel-cogs-inventory/sentinel-cogs/sentinel-cogs/")
 SENTINEL_2_REGION = "af-south-1"
 SOURCE_REGION = "us-west-2"
 BASE_FOLDER_NAME = "sentinel-s2-l2a-cogs"
@@ -33,7 +31,7 @@ def get_and_filter_cogs_keys():
 
     s3 = s3_client(region_name=SOURCE_REGION)
     source_keys = list_inventory(
-        manifest=f"{SENTINEL_COGS_INVENTORY_PATH}",
+        manifest=f"{SOURCE_INVENTORY_PATH}",
         s3=s3,
         prefix=BASE_FOLDER_NAME,
         contains=".json",
