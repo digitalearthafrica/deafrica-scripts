@@ -10,9 +10,9 @@ import pandas as pd
 from odc.aws import s3_dump, s3_client
 from odc.aws.inventory import list_inventory
 from urlpath import URL
-from monitoring.tools.utils import slack_url, update_stac
+from tools.monitoring.utils import slack_url, update_stac
 
-from monitoring.tools.utils import send_slack_notification, setup_logging
+from tools.monitoring.utils import send_slack_notification, setup_logging
 
 SENTINEL_2_INVENTORY_PATH = URL(
     "s3://deafrica-sentinel-2-inventory/deafrica-sentinel-2/deafrica-sentinel-2-inventory/"
