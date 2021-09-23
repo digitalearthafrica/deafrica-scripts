@@ -1,7 +1,7 @@
 import gzip
 import logging
 import math
-
+import click
 import requests
 from odc.aws import s3_client, s3_fetch, s3_ls_dir
 
@@ -94,3 +94,18 @@ def split_list_equally(list_to_split: list, num_inter_lists: int):
         list_to_split[i : i + max_list_items]
         for i in range(0, len(list_to_split), max_list_items)
     ]
+
+
+# A whole bunch of generic Click options
+slack_url = click.option(
+    "--slack_url",
+    help="Slack url to use to send a notification",
+    default=None,
+)
+
+update_stac = click.option(
+    "--update_stac",
+    is_flag=True,
+    default=False,
+    help="Will fill a special report within all scenes from the source",
+)

@@ -13,8 +13,8 @@ REPORT_FOLDER = "status-report"
 COGS_REGION = "us-west-2"
 
 # INVENTORY
-INVENTORY_BUCKET_COGS = "test-cogs-inventory-bucket"
-INVENTORY_BUCKET = "test-inventory-bucket"
+INVENTORY_BUCKET_SOURCE_NAME = "test-cogs-inventory-bucket"
+INVENTORY_BUCKET_NAME = "test-inventory-bucket"
 INVENTORY_FOLDER = "test"
 INVENTORY_DATA_FILE = "data_file.csv.gz"
 INVENTORY_MANIFEST_FILE = "manifest.json"
@@ -60,7 +60,7 @@ def inventory_data_file():
 def s3_inventory_manifest_file():
     return (
         URL(INVENTORY_FOLDER)
-        / URL(INVENTORY_BUCKET)
+        / URL(INVENTORY_BUCKET_NAME)
         / "2021-09-17T00-00Z"
         / INVENTORY_MANIFEST_FILE
     )
@@ -70,7 +70,7 @@ def s3_inventory_manifest_file():
 def s3_inventory_data_file():
     return (
         URL(INVENTORY_FOLDER)
-        / URL(INVENTORY_BUCKET)
+        / URL(INVENTORY_BUCKET_NAME)
         / URL("data")
         / INVENTORY_DATA_FILE
     )
