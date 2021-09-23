@@ -48,7 +48,7 @@ def test_get_and_filter_cogs_keys(
     )
 
     with patch.object(
-            s2_gap_report, "SOURCE_INVENTORY_PATH", str(s3_inventory_path)
+        s2_gap_report, "SOURCE_INVENTORY_PATH", str(s3_inventory_path)
     ), patch.object(s2_gap_report, "BASE_FOLDER_NAME", str(INVENTORY_FOLDER)):
         scenes_list = get_and_filter_cogs_keys()
         assert len(scenes_list) == 6
@@ -119,7 +119,7 @@ def test_generate_buckets_diff(
     )
 
     with patch.object(
-            s2_gap_report, "SOURCE_INVENTORY_PATH", str(s3_cogs_inventory_path)
+        s2_gap_report, "SOURCE_INVENTORY_PATH", str(s3_cogs_inventory_path)
     ), patch.object(
         s2_gap_report, "SENTINEL_2_INVENTORY_PATH", str(s3_inventory_path)
     ), patch.object(
