@@ -4,7 +4,7 @@ from datetime import datetime
 
 import click
 import pystac
-from monitoring.tools.utils import setup_logging
+from tools.monitoring import setup_logging
 from odc.aws import s3_dump, s3_head_object
 from odc.index import odc_uuid
 from pystac.utils import datetime_to_str
