@@ -130,7 +130,7 @@ def generate_buckets_diff(
     log.info(f"10 first missing_scenes {list(missing_scenes)[0:10]}")
     log.info(f"Wrote inventory to: {str(URL(s2_status_report_path) / output_filename)}")
 
-    orphan_output_filename = 'No orphan found'
+    orphan_output_filename = "No orphan found"
     if len(orphaned_keys) > 0:
         orphan_output_filename = URL(f"{date_string}_orphaned.txt")
         s3_dump(
@@ -154,7 +154,9 @@ def generate_buckets_diff(
         f"Orphan Scenes reports Saved: {str(URL(s2_status_report_path) / orphan_output_filename)}\n"
     )
 
-    if notification_url is not None and (len(missing_scenes) > 0 or len(orphaned_keys) > 0):
+    if notification_url is not None and (
+        len(missing_scenes) > 0 or len(orphaned_keys) > 0
+    ):
         send_slack_notification(notification_url, "S2 Gap Report", message)
 
     log.info(message)
