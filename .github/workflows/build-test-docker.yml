@@ -24,7 +24,7 @@ jobs:
       uses: rickstaa/action-black@v1
       id: action_black
       with:
-        black_args: "--check monitoring"
+        black_args: "--check tools"
 
     # Set up a cache
     - name: Set up Docker Buildx
