@@ -5,7 +5,10 @@ from textwrap import dedent
 import click as click
 from odc.aws.queue import get_queues
 
-from tools.monitoring.utils import send_slack_notification, setup_logging
+from tools.utils.utils import (
+    send_slack_notification,
+    setup_logging
+)
 
 from typing import Optional
 

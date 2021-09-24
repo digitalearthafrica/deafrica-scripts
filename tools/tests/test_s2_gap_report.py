@@ -133,5 +133,5 @@ def test_generate_buckets_diff(
                     Bucket=INVENTORY_BUCKET_NAME, Prefix=REPORT_FOLDER
                 ).get("Contents", [])
             )
-            == 1
+            == 0
         )

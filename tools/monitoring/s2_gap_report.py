@@ -10,9 +10,13 @@ import pandas as pd
 from odc.aws import s3_dump, s3_client
 from odc.aws.inventory import list_inventory
 from urlpath import URL
-from tools.monitoring.utils import slack_url, update_stac
 
-from tools.monitoring.utils import send_slack_notification, setup_logging
+from tools.utils.utils import (
+    slack_url,
+    update_stac,
+    send_slack_notification,
+    setup_logging,
+)
 
 SENTINEL_2_INVENTORY_PATH = URL(
     "s3://deafrica-sentinel-2-inventory/deafrica-sentinel-2/deafrica-sentinel-2-inventory/"
@@ -115,22 +119,24 @@ def generate_buckets_diff(
         # Keys that are lost, they are in the bucket but not found in the files
         orphaned_keys = destination_keys.difference(source_keys)
 
-        output_filename = URL(f"{date_string}.txt.gz")
-
-    log.info(f"File will be saved in {s2_status_report_path}{output_filename}")
-
     s2_s3 = s3_client(region_name=SENTINEL_2_REGION)
-    s3_dump(
-        data=gzip.compress(str.encode("\n".join(missing_scenes))),
-        url=str(URL(s2_status_report_path) / output_filename),
-        s3=s2_s3,
-        ContentType="application/gzip",
-    )
+    orphan_output_filename = "No orphan scenes were found"
+    output_filename = "No missing scenes were found"
+    if len(missing_scenes) > 0:
+        log.info(f"File will be saved in {s2_status_report_path}{output_filename}")
+        output_filename = URL(f"{date_string}.txt.gz")
+        s3_dump(
+            data=gzip.compress(str.encode("\n".join(missing_scenes))),
+            url=str(URL(s2_status_report_path) / output_filename),
+            s3=s2_s3,
+            ContentType="application/gzip",
+        )
 
-    log.info(f"10 first missing_scenes {list(missing_scenes)[0:10]}")
-    log.info(f"Wrote inventory to: {str(URL(s2_status_report_path) / output_filename)}")
+        log.info(f"10 first missing_scenes {list(missing_scenes)[0:10]}")
+        log.info(
+            f"Wrote inventory to: {str(URL(s2_status_report_path) / output_filename)}"
+        )
 
-    orphan_output_filename = "No orphan found"
     if len(orphaned_keys) > 0:
         orphan_output_filename = URL(f"{date_string}_orphaned.txt")
         s3_dump(
