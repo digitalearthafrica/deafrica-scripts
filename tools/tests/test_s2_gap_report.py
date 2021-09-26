@@ -3,12 +3,12 @@ from unittest.mock import patch
 import boto3
 from moto import mock_s3
 
-from monitoring.tests.conftest import *
-from monitoring.tools import s2_gap_report
-from monitoring.tools.s2_gap_report import (
+from tools.monitoring import s2_gap_report
+from tools.monitoring.s2_gap_report import (
     get_and_filter_cogs_keys,
     generate_buckets_diff,
 )
+from tools.tests.conftest import *
 
 
 @mock_s3
@@ -133,5 +133,5 @@ def test_generate_buckets_diff(
                     Bucket=INVENTORY_BUCKET_NAME, Prefix=REPORT_FOLDER
                 ).get("Contents", [])
             )
-            == 1
+            == 0
         )

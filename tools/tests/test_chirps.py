@@ -1,6 +1,6 @@
 import boto3
 import moto
-from data.tools.chirps import download_and_cog_chirps
+from tools.data.chirps import download_and_cog_chirps
 
 
 @moto.mock_s3
