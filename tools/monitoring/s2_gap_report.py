@@ -147,7 +147,7 @@ def generate_buckets_diff(
             ContentType="application/gzip",
         )
 
-        log.info(f"10 first orphaned_keys {orphaned_keys[0:10]}")
+        log.info(f"10 first orphaned_keys {list(orphaned_keys)[0:10]}")
 
     message = dedent(
         f"*SENTINEL 2 GAP REPORT*"
