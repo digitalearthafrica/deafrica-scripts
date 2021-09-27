@@ -29,7 +29,8 @@ from tools.utils.utils import (
     setup_logging,
     download_file_to_tmp,
     convert_str_to_date,
-    time_process, )
+    time_process,
+)
 
 FILES = {
     "landsat_8": "fake_landsat_8_bulk_file.csv.gz",

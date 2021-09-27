@@ -6,15 +6,16 @@ from moto import mock_s3
 
 from tools.monitoring.landsat_gap_report import (
     get_and_filter_keys_from_files,
-    get_and_filter_keys, generate_buckets_diff
+    get_and_filter_keys,
+    generate_buckets_diff,
 )
 from tools.monitoring import landsat_gap_report
 from tools.tests.conftest import *
 
 
 def test_get_and_filter_keys_from_files(
-        monkeypatch,
-        fake_landsat_bulk_file: Path,
+    monkeypatch,
+    fake_landsat_bulk_file: Path,
 ):
     keys = get_and_filter_keys_from_files(fake_landsat_bulk_file)
     assert len(keys) == 20
@@ -22,11 +23,11 @@ def test_get_and_filter_keys_from_files(
 
 @mock_s3
 def test_get_and_filter_keys(
-        monkeypatch,
-        inventory_landsat_manifest_file,
-        s3_inventory_data_file: URL,
-        inventory_landsat_data_file,
-        s3_inventory_manifest_file: URL,
+    monkeypatch,
+    inventory_landsat_manifest_file,
+    s3_inventory_data_file: URL,
+    inventory_landsat_data_file,
+    s3_inventory_manifest_file: URL,
 ):
     s3_client = boto3.client("s3", region_name=REGION)
     s3_client.create_bucket(
@@ -56,19 +57,21 @@ def test_get_and_filter_keys(
         f"s3://{INVENTORY_BUCKET_NAME}/{INVENTORY_FOLDER}/{INVENTORY_BUCKET_NAME}/"
     )
 
-    with patch.object(landsat_gap_report, "LANDSAT_INVENTORY_PATH", str(s3_inventory_path)):
+    with patch.object(
+        landsat_gap_report, "LANDSAT_INVENTORY_PATH", str(s3_inventory_path)
+    ):
         keys = get_and_filter_keys("landsat_5")
         assert len(keys) == 1
 
 
 @mock_s3
 def test_landsat_gap_report_cli(
-        monkeypatch,
-        inventory_landsat_manifest_file,
-        s3_inventory_data_file: URL,
-        inventory_landsat_data_file,
-        s3_inventory_manifest_file: URL,
-        fake_landsat_bulk_file: Path
+    monkeypatch,
+    inventory_landsat_manifest_file,
+    s3_inventory_data_file: URL,
+    inventory_landsat_data_file,
+    s3_inventory_manifest_file: URL,
+    fake_landsat_bulk_file: Path,
 ):
     s3_client = boto3.client("s3", region_name=REGION)
     s3_client.create_bucket(
@@ -107,7 +110,7 @@ def test_landsat_gap_report_cli(
     )
 
     with patch.object(
-            landsat_gap_report, "LANDSAT_INVENTORY_PATH", str(s3_inventory_path)
+        landsat_gap_report, "LANDSAT_INVENTORY_PATH", str(s3_inventory_path)
     ):
 
         landsat_gap_report.download_file_to_tmp = Mock()
@@ -126,4 +129,3 @@ def test_landsat_gap_report_cli(
         assert len(bucket_objs) == 2
         assert "landsat_5" in bucket_objs[0].key
         assert "orphaned" in bucket_objs[1].key
-

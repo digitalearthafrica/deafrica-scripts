@@ -14,9 +14,9 @@ from tools.tests.conftest import *
 @mock_s3
 def test_get_and_filter_cogs_keys(
     monkeypatch,
-        inventory_s2_data_file,
+    inventory_s2_data_file,
     s3_inventory_data_file: URL,
-        inventory_s2_manifest_file,
+    inventory_s2_manifest_file,
     s3_inventory_manifest_file: URL,
 ):
     s3_client = boto3.client("s3", region_name=COGS_REGION)
@@ -57,9 +57,9 @@ def test_get_and_filter_cogs_keys(
 @mock_s3
 def test_generate_buckets_diff(
     monkeypatch,
-        inventory_s2_data_file,
+    inventory_s2_data_file,
     s3_inventory_data_file: URL,
-        inventory_s2_manifest_file,
+    inventory_s2_manifest_file,
     s3_inventory_manifest_file: URL,
 ):
     s3_client_cogs = boto3.client("s3", region_name=COGS_REGION)
