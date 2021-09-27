@@ -76,7 +76,7 @@ def generate_buckets_diff(
 
     log = setup_logging()
 
-    log.info("Process started")
+    log.info("Task started")
 
     # defines where the report will be saved
     s2_status_report_path = URL(f"s3://{bucket_name}/status-report/")
@@ -89,13 +89,13 @@ def generate_buckets_diff(
     # Retrieve keys from inventory bucket
     source_keys = get_and_filter_cogs_keys()
 
+    orphan_output_filename = "No orphan scenes were found"
+    output_filename = "No missing scenes were found"
+
     if update_stac:
         log.info("FORCED UPDATE ACTIVE!")
         missing_scenes = set(f"s3://sentinel-cogs/{key}" for key in source_keys)
-
         orphaned_keys = set()
-
-        output_filename = URL(f"{date_string}_update.txt.gz")
 
     else:
 
@@ -120,11 +120,15 @@ def generate_buckets_diff(
         orphaned_keys = destination_keys.difference(source_keys)
 
     s2_s3 = s3_client(region_name=SENTINEL_2_REGION)
-    orphan_output_filename = "No orphan scenes were found"
-    output_filename = "No missing scenes were found"
     if len(missing_scenes) > 0:
+
+        output_filename = (
+            URL(f"{date_string}.txt.gz")
+            if not update_stac
+            else URL(f"{date_string}_update.txt.gz")
+        )
+
         log.info(f"File will be saved in {s2_status_report_path}{output_filename}")
-        output_filename = URL(f"{date_string}.txt.gz")
         s3_dump(
             data=gzip.compress(str.encode("\n".join(missing_scenes))),
             url=str(URL(s2_status_report_path) / output_filename),
@@ -133,9 +137,6 @@ def generate_buckets_diff(
         )
 
         log.info(f"10 first missing_scenes {list(missing_scenes)[0:10]}")
-        log.info(
-            f"Wrote inventory to: {str(URL(s2_status_report_path) / output_filename)}"
-        )
 
     if len(orphaned_keys) > 0:
         orphan_output_filename = URL(f"{date_string}_orphaned.txt")
@@ -148,16 +149,13 @@ def generate_buckets_diff(
 
         log.info(f"10 first orphaned_keys {orphaned_keys[0:10]}")
 
-        log.info(
-            f"Wrote orphaned scenes to: {str(URL(s2_status_report_path) / orphan_output_filename)}"
-        )
-
     message = dedent(
-        f"*Environment*: {environment}\n "
+        f"*SENTINEL 2 GAP REPORT*"
+        f"Environment: {environment}\n "
         f"Missing Scenes: {len(missing_scenes)}\n"
         f"Orphan Scenes: {len(orphaned_keys)}\n"
-        f"Missing Scenes reports Saved: {str(URL(s2_status_report_path) / output_filename)}\n"
-        f"Orphan Scenes reports Saved: {str(URL(s2_status_report_path) / orphan_output_filename)}\n"
+        f"Missing Scenes report Saved: {str(URL(s2_status_report_path) / output_filename)}\n"
+        f"Orphan Scenes report Saved: {str(URL(s2_status_report_path) / orphan_output_filename)}\n"
     )
 
     if notification_url is not None and (
