@@ -12,7 +12,6 @@ import logging
 import sys
 import time
 import traceback
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from textwrap import dedent
@@ -22,6 +21,7 @@ import pandas as pd
 from odc.aws import s3_dump, s3_client
 from odc.aws.inventory import list_inventory
 from urlpath import URL
+
 from tools.utils.utils import (
     slack_url,
     update_stac,
@@ -29,8 +29,7 @@ from tools.utils.utils import (
     setup_logging,
     download_file_to_tmp,
     convert_str_to_date,
-    time_process,
-)
+    time_process, )
 
 FILES = {
     "landsat_8": "fake_landsat_8_bulk_file.csv.gz",
@@ -47,6 +46,10 @@ AFRICA_GZ_PATHROWS_URL = URL(
 )
 LANDSAT_INVENTORY_PATH = URL("s3://deafrica-landsat/deafrica-landsat-inventory/")
 USGS_S3_BUCKET_PATH = URL(f"s3://usgs-landsat")
+USGS_BASE_URL = "https://landsatlook.usgs.gov/"
+USGS_INDEX_URL = f"{USGS_BASE_URL}stac-browser/"
+USGS_API_MAIN_URL = f"{USGS_BASE_URL}sat-api/"
+USGS_API_INDIVIDUAL_ITEM_URL = f"{USGS_API_MAIN_URL}collections/landsat-c2l2-sr/items"
 
 
 def get_and_filter_keys_from_files(file_path: Path):
@@ -138,45 +141,6 @@ def get_and_filter_keys(landsat: str) -> set:
     return set(f"{key.Key.rsplit('/', 1)[0]}/" for key in list_json_keys)
 
 
-def build_s3_url_from_api_metadata(display_ids):
-    """
-    Function to create Python threads which will request the API simultaneously
-
-    :param display_ids: (list) id list from the bulk CSV file
-    :return:
-    """
-
-    def request_usgs_api(url: str):
-
-        try:
-            response = request_url(url=url)
-            if response.get("assets"):
-                index_asset = response["assets"].get("index")
-                if index_asset and hasattr(index_asset, "href"):
-                    file_name = index_asset.href.split("/")[-1]
-                    asset_s3_path = index_asset.href.replace(USGS_INDEX_URL, "")
-                    return f"{asset_s3_path}/{file_name}_SR_stac.json"
-
-        except Exception as error:
-            # If the request return an error, just log and keep going
-            logging.error(f"Error requesting API: {error}")
-
-    # Limit number of threads
-    num_of_threads = 50
-    with ThreadPoolExecutor(max_workers=num_of_threads) as executor:
-        tasks = []
-        for display_id in display_ids:
-            tasks.append(
-                executor.submit(
-                    request_usgs_api, f"{USGS_API_INDIVIDUAL_ITEM_URL}/{display_id}"
-                )
-            )
-
-        for future in as_completed(tasks):
-            if future.result():
-                yield future.result()
-
-
 def generate_buckets_diff(
     bucket_name: str,
     landsat: str,
@@ -232,14 +196,14 @@ def generate_buckets_diff(
             # Keys that are missing, they are in the source but not in the bucket
             logging.info("Filtering missing scenes")
             missing_scenes = [
-                USGS_S3_BUCKET_PATH / path
+                str(USGS_S3_BUCKET_PATH / path)
                 for path in source_paths.difference(dest_paths)
             ]
 
             # Keys that are orphan, they are in the bucket but not found in the files
             logging.info("Filtering orphan scenes")
             orphaned_scenes = [
-                URL(f"s3://{bucket_name}") / path
+                str(URL(f"s3://{bucket_name}") / path)
                 for path in dest_paths.difference(source_paths)
             ]
 
@@ -325,7 +289,7 @@ def generate_buckets_diff(
 )
 @update_stac
 @slack_url
-@click.command("s2-gap-report")
+@click.command("landsat-gap-report")
 def cli(
     bucket_name: str, satellite: str, update_stac: bool = False, slack_url: str = None
 ):

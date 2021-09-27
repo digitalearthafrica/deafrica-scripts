@@ -76,8 +76,8 @@ def read_report(report_path: str, limit=None):
     missing_scene_paths = [
         scene_path.strip()
         for scene_path in gzip.decompress(missing_scene_file_gzip)
-        .decode("utf-8")
-        .split("\n")
+            .decode("utf-8")
+            .split("\n")
         if scene_path
     ]
 
@@ -96,7 +96,7 @@ def split_list_equally(list_to_split: list, num_inter_lists: int):
 
     max_list_items = math.ceil(len(list_to_split) / num_inter_lists)
     return [
-        list_to_split[i : i + max_list_items]
+        list_to_split[i: i + max_list_items]
         for i in range(0, len(list_to_split), max_list_items)
     ]
 
@@ -174,6 +174,30 @@ def download_file_to_tmp(url: str, file_name: str, always_return_path: bool = Tr
 
     logging.info(f"{file_name} Downloaded!")
     return file_path
+
+
+def test_http_return(returned):
+    """
+    Test API response
+    :param returned:
+    :return:
+    """
+    if hasattr(returned, "status_code") and returned.status_code != 200:
+        url = returned.url if hasattr(returned, "url") else "Not informed"
+        content = returned.content if hasattr(returned, "content") else "Not informed"
+        text = returned.text if hasattr(returned, "text") else "Not informed"
+        status_code = (
+            returned.status_code if hasattr(returned, "status_code") else "Not informed"
+        )
+        reason = returned.reason if hasattr(returned, "reason") else "Not informed"
+        raise Exception(
+            f"API return is not 200: \n"
+            f"-url: {url} \n"
+            f"-content: {content} \n"
+            f"-text: {text} \n"
+            f"-status_code: {status_code} \n"
+            f"-reason: {reason} \n"
+        )
 
 
 # A whole bunch of generic Click options
