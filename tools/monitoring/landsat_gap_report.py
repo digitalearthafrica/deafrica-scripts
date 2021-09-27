@@ -1,21 +1,11 @@
 """
-# Generate a gap report between deafrica-landsat-dev and usgs-landsat buckets
+# Generate a gap report between deafrica-landsat-dev and usgs-landsat bulk file
 
 This DAG runs weekly and creates a gap report in the folowing location:
 s3://deafrica-landsat-dev/<date>/status-report
 
-#### Utility utilization
-The DAG can be parameterized with run time configurations `update_stac`.
-
-* The option update_stac will force the process to buil a list with all scenes ignoring any comparative,
-therefore forcing to rebuild all stacs
-
-#### example conf in json format
-    {
-        "update_stac":true
-    }
-
 """
+
 import csv
 import gzip
 import logging
@@ -43,21 +33,18 @@ from tools.utils.utils import (
 )
 
 FILES = {
-    "landsat_8": "LANDSAT_OT_C2_L2.csv.gz",
+    "landsat_8": "fake_landsat_8_bulk_file.csv.gz",
     "landsat_7": "LANDSAT_ETM_C2_L2.csv.gz",
     "landsat_5": "LANDSAT_TM_C2_L2.csv.gz",
 }
 
-LANDSAT_REGION = "af-south-1"
-BASE_FOLDER_NAME = "status-report"
-C2_FOLDER_NAME = "collection02"
+
 BASE_BULK_CSV_URL = URL(
     "https://landsat.usgs.gov/landsat/metadata_service/bulk_metadata_files/"
 )
-MAIN_GITHUB_DIGITALAFRICA_URL = URL(
-    "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/master/"
+AFRICA_GZ_PATHROWS_URL = URL(
+    "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/master/deafrica-usgs-pathrows.csv.gz"
 )
-AFRICA_GZ_PATHROWS_URL = MAIN_GITHUB_DIGITALAFRICA_URL / "deafrica-usgs-pathrows.csv.gz"
 LANDSAT_INVENTORY_PATH = URL("s3://deafrica-landsat/deafrica-landsat-inventory/")
 USGS_S3_BUCKET_PATH = URL(f"s3://usgs-landsat")
 
@@ -103,6 +90,7 @@ def get_and_filter_keys_from_files(file_path: Path):
                 # Filter to skip all LANDSAT_4
                 row.get("Satellite") is not None
                 and row["Satellite"] != "LANDSAT_4"
+                and row["Satellite"] != "4"
                 # Filter to get just day
                 and (
                     row.get("Day/Night Indicator") is not None
@@ -140,7 +128,7 @@ def get_and_filter_keys(landsat: str) -> set:
 
     list_json_keys = list_inventory(
         manifest=str(LANDSAT_INVENTORY_PATH),
-        prefix=C2_FOLDER_NAME,
+        prefix="collection02",
         suffix="_stac.json",
         contains=sat_prefix,
         n_threads=200,
@@ -258,7 +246,7 @@ def generate_buckets_diff(
             logging.info(f"missing_scenes 10 first keys {list(missing_scenes)[0:10]}")
             logging.info(f"orphaned_scenes 10 first keys {list(orphaned_scenes)[0:10]}")
 
-        landsat_s3 = s3_client(region_name=LANDSAT_REGION)
+        landsat_s3 = s3_client(region_name="af-south-1")
 
         if len(missing_scenes) > 0:
             output_filename = (
