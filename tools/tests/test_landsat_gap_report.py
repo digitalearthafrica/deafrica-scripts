@@ -1,15 +1,14 @@
-from unittest.mock import patch, MagicMock, Mock
+from unittest.mock import patch, Mock
 
 import boto3
 from click.testing import CliRunner
 from moto import mock_s3
 
+from tools.monitoring import landsat_gap_report
 from tools.monitoring.landsat_gap_report import (
     get_and_filter_keys_from_files,
     get_and_filter_keys,
-    generate_buckets_diff,
 )
-from tools.monitoring import landsat_gap_report
 from tools.tests.conftest import *
 
 

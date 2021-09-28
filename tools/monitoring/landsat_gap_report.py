@@ -2,16 +2,13 @@
 # Generate a gap report between deafrica-landsat-dev and usgs-landsat bulk file
 
 This DAG runs weekly and creates a gap report in the folowing location:
-s3://deafrica-landsat-dev/<date>/status-report
+s3://deafrica-landsat-dev/status-report/<satellite_date.csv.gz>
 
 """
 
 import csv
 import gzip
-import logging
-import sys
 import time
-import traceback
 from datetime import datetime
 from pathlib import Path
 from textwrap import dedent
@@ -33,7 +30,7 @@ from tools.utils.utils import (
 )
 
 FILES = {
-    "landsat_8": "fake_landsat_8_bulk_file.csv.gz",
+    "landsat_8": "LANDSAT_OT_C2_L2.csv.gz",
     "landsat_7": "LANDSAT_ETM_C2_L2.csv.gz",
     "landsat_5": "LANDSAT_TM_C2_L2.csv.gz",
 }
@@ -46,7 +43,7 @@ AFRICA_GZ_PATHROWS_URL = URL(
     "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/master/deafrica-usgs-pathrows.csv.gz"
 )
 LANDSAT_INVENTORY_PATH = URL("s3://deafrica-landsat/deafrica-landsat-inventory/")
-USGS_S3_BUCKET_PATH = URL(f"s3://usgs-landsat")
+USGS_S3_BUCKET_PATH = URL("s3://usgs-landsat")
 USGS_BASE_URL = "https://landsatlook.usgs.gov/"
 USGS_INDEX_URL = f"{USGS_BASE_URL}stac-browser/"
 USGS_API_MAIN_URL = f"{USGS_BASE_URL}sat-api/"
@@ -76,8 +73,6 @@ def get_and_filter_keys_from_files(file_path: Path):
             )
         )
 
-    # Download updated Pathrows
-    logging.info(f"Retrieving allowed Africa Pathrows from {AFRICA_GZ_PATHROWS_URL}")
     africa_pathrows = set(
         pd.read_csv(
             AFRICA_GZ_PATHROWS_URL,
@@ -85,7 +80,6 @@ def get_and_filter_keys_from_files(file_path: Path):
         ).values.ravel()
     )
 
-    logging.info("Reading and filtering Bulk file")
     with gzip.open(file_path, "rt") as csv_file:
         return set(
             build_path(row)
@@ -137,14 +131,12 @@ def get_and_filter_keys(landsat: str) -> set:
         contains=sat_prefix,
         n_threads=200,
     )
-    logging.info(f"Filtering by sat prefix {sat_prefix}")
-
     return set(f"{key.Key.rsplit('/', 1)[0]}/" for key in list_json_keys)
 
 
 def generate_buckets_diff(
     bucket_name: str,
-    landsat: str,
+    satellite_name: str,
     file_name: str,
     update_stac: bool = False,
     notification_url: str = None,
@@ -153,74 +145,74 @@ def generate_buckets_diff(
     Compare USGS bulk files and Africa inventory bucket detecting differences
     A report containing missing keys will be written to AFRICA_S3_BUCKET_PATH
     """
+    log = setup_logging()
+
     try:
         start_timer = time.time()
-
-        log = setup_logging()
 
         log.info("Task started")
 
         landsat_status_report_path = URL(f"s3://{bucket_name}/status-report/")
         environment = "DEV" if "dev" in bucket_name else "PDS"
-        logging.info(f"Environment {environment}")
+        log.info(f"Environment {environment}")
 
         # Create connection to the inventory S3 bucket
-        logging.info(f"Retrieving keys from inventory bucket {LANDSAT_INVENTORY_PATH}")
-        dest_paths = get_and_filter_keys(landsat=landsat)
+        log.info(f"Retrieving keys from inventory bucket {LANDSAT_INVENTORY_PATH}")
+        dest_paths = get_and_filter_keys(landsat=satellite_name)
 
-        logging.info(f"INVENTORY bucket number of objects {len(dest_paths)}")
-        logging.info(f"INVENTORY 10 first {list(dest_paths)[0:10]}")
+        log.info(f"INVENTORY bucket number of objects {len(dest_paths)}")
+        log.info(f"INVENTORY 10 first {list(dest_paths)[0:10]}")
         date_string = datetime.now().strftime("%Y-%m-%d")
 
         # Download bulk file
-        logging.info("Download Bulk file")
+        log.info("Download Bulk file")
         file_path = download_file_to_tmp(
             url=str(BASE_BULK_CSV_URL), file_name=file_name
         )
 
         # Retrieve keys from the bulk file
-        logging.info("Filtering keys from bulk file")
+        log.info("Filtering keys from bulk file")
         source_paths = get_and_filter_keys_from_files(file_path)
 
-        logging.info(f"BULK FILE number of objects {len(source_paths)}")
-        logging.info(f"BULK 10 First {list(source_paths)[0:10]}")
+        log.info(f"BULK FILE number of objects {len(source_paths)}")
+        log.info(f"BULK 10 First {list(source_paths)[0:10]}")
 
         orphan_output_filename = "No orphan scenes were found"
         output_filename = "No missing scenes were found"
 
         if update_stac:
-            logging.info("FORCED UPDATE ACTIVE!")
+            log.info("FORCED UPDATE ACTIVE!")
             missing_scenes = source_paths
             orphaned_scenes = []
 
         else:
             # Keys that are missing, they are in the source but not in the bucket
-            logging.info("Filtering missing scenes")
+            log.info("Filtering missing scenes")
             missing_scenes = [
                 str(USGS_S3_BUCKET_PATH / path)
                 for path in source_paths.difference(dest_paths)
             ]
 
             # Keys that are orphan, they are in the bucket but not found in the files
-            logging.info("Filtering orphan scenes")
+            log.info("Filtering orphan scenes")
             orphaned_scenes = [
                 str(URL(f"s3://{bucket_name}") / path)
                 for path in dest_paths.difference(source_paths)
             ]
 
-            logging.info(f"missing_scenes 10 first keys {list(missing_scenes)[0:10]}")
-            logging.info(f"orphaned_scenes 10 first keys {list(orphaned_scenes)[0:10]}")
+            log.info(f"missing_scenes 10 first keys {list(missing_scenes)[0:10]}")
+            log.info(f"orphaned_scenes 10 first keys {list(orphaned_scenes)[0:10]}")
 
         landsat_s3 = s3_client(region_name="af-south-1")
 
         if len(missing_scenes) > 0:
             output_filename = (
-                f"{landsat}_{date_string}.txt.gz"
+                f"{satellite_name}_{date_string}.txt.gz"
                 if not update_stac
-                else f"{landsat}_{date_string}_update.txt.gz"
+                else f"{satellite_name}_{date_string}_update.txt.gz"
             )
 
-            logging.info(
+            log.info(
                 f"File will be saved in {URL(landsat_status_report_path) / output_filename}"
             )
             s3_dump(
@@ -230,10 +222,10 @@ def generate_buckets_diff(
                 ContentType="application/gzip",
             )
 
-            logging.info(f"Number of missing scenes: {len(missing_scenes)}")
+            log.info(f"Number of missing scenes: {len(missing_scenes)}")
 
         if len(orphaned_scenes) > 0:
-            orphan_output_filename = f"{landsat}_{date_string}_orphaned.txt.gz"
+            orphan_output_filename = f"{satellite_name}_{date_string}_orphaned.txt.gz"
             s3_dump(
                 data=gzip.compress(str.encode("\n".join(orphaned_scenes))),
                 url=str(URL(landsat_status_report_path) / orphan_output_filename),
@@ -241,10 +233,10 @@ def generate_buckets_diff(
                 ContentType="application/gzip",
             )
 
-            logging.info(f"Number of orphaned scenes: {len(orphaned_scenes)}")
+            log.info(f"Number of orphaned scenes: {len(orphaned_scenes)}")
 
         message = dedent(
-            f"*{landsat.upper()} GAP REPORT*\n "
+            f"*{satellite_name.upper()} GAP REPORT*\n "
             f"Environment: {environment}\n "
             f"Missing Scenes: {len(missing_scenes)}\n"
             f"Orphan Scenes: {len(orphaned_scenes)}\n"
@@ -252,25 +244,26 @@ def generate_buckets_diff(
             f"Orphan Scenes report Saved: {str(URL(landsat_status_report_path) / orphan_output_filename)}\n"
         )
 
-        if notification_url is not None and (
-            len(missing_scenes) > 0 or len(orphaned_scenes) > 0
-        ):
-            send_slack_notification(notification_url, f"{landsat} Gap Report", message)
-
         log.info(message)
-        log.info(
-            f"File {file_name} processed and sent in {time_process(start=start_timer)}"
-        )
 
-        if (
-            len(missing_scenes) > 200 or len(orphaned_scenes) > 200
-        ) and not update_stac:
-            sys.exit(1)
+        if len(missing_scenes) > 0 or len(orphaned_scenes) > 0:
+
+            log.info(
+                f"File {file_name} processed and sent in {time_process(start=start_timer)}"
+            )
+
+            if notification_url is not None:
+                send_slack_notification(
+                    notification_url, f"{satellite_name} Gap Report", message
+                )
+
+            if not update_stac and (
+                len(missing_scenes) > 200 or len(orphaned_scenes) > 200
+            ):
+                raise Exception(f"More than 200 scenes were found \n {message}")
 
     except Exception as error:
-        logging.error(error)
-        # print traceback but does not stop execution
-        traceback.print_exc()
+        log.exception(error)
         raise error
 
 
@@ -297,14 +290,10 @@ def cli(
     """
     Publish missing scenes
     """
-    try:
-        generate_buckets_diff(
-            bucket_name=bucket_name,
-            landsat=satellite,
-            file_name=FILES.get(satellite, None),
-            update_stac=update_stac,
-            notification_url=slack_url,
-        )
-    except Exception as error:
-        traceback.print_exc()
-        raise error
+    generate_buckets_diff(
+        bucket_name=bucket_name,
+        satellite_name=satellite,
+        file_name=FILES.get(satellite, None),
+        update_stac=update_stac,
+        notification_url=slack_url,
+    )
