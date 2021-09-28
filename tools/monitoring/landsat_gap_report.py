@@ -248,8 +248,8 @@ def generate_buckets_diff(
         f"*{satellite_name.upper()} GAP REPORT - {environment}*\n "
         f"Missing Scenes: {len(missing_scenes)}\n"
         f"Orphan Scenes: {len(orphaned_scenes)}\n"
-        f"Missing Scenes report: {str(landsat_status_report_url / output_filename)}\n"
-        f"Orphan Scenes report Saved: {str(landsat_status_report_url / orphan_output_filename)}\n"
+        f"Missing Scenes: {str(landsat_status_report_url / output_filename)}\n"
+        f"Orphan Scenes {str(landsat_status_report_url / orphan_output_filename)}\n"
     )
 
     log.info(message)
