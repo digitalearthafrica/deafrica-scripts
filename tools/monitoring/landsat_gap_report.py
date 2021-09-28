@@ -117,7 +117,7 @@ def get_and_filter_keys(landsat: str) -> set:
         sat_prefix = "LT05"
 
     if not sat_prefix:
-        raise Exception("Informed satellite not supported")
+        raise Exception(f"Informed satellite {landsat} not supported")
 
     list_json_keys = list_inventory(
         manifest=str(LANDSAT_INVENTORY_PATH),
@@ -150,6 +150,10 @@ def generate_buckets_diff(
     landsat_status_report_path = URL(f"s3://{bucket_name}/status-report/")
     environment = "DEV" if "dev" in bucket_name else "PDS"
     log.info(f"Environment {environment}")
+    log.info(f"Satellite Name {satellite_name}")
+    log.info(f"File Name {file_name}")
+    log.info(f"Update all ({update_stac})")
+    log.info(f"Notification URL all ({notification_url})")
 
     # Create connection to the inventory S3 bucket
     log.info(f"Retrieving keys from inventory bucket {LANDSAT_INVENTORY_PATH}")
@@ -274,6 +278,7 @@ def cli(
     """
     Publish missing scenes
     """
+
     generate_buckets_diff(
         bucket_name=bucket_name,
         satellite_name=satellite,
