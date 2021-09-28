@@ -67,7 +67,7 @@ def test_publish_message_s2_gap_filler(
 
 @mock_s3
 @mock_sqs
-def test_publish_message_s2_gap_filler_cli(
+def test_s2_gap_filler_cli(
     monkeypatch,
     local_report_update_file,
     fake_stac_file: Path,

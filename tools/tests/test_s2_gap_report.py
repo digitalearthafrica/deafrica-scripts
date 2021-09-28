@@ -14,9 +14,9 @@ from tools.tests.conftest import *
 @mock_s3
 def test_get_and_filter_cogs_keys(
     monkeypatch,
-    inventory_data_file: Path,
+    inventory_s2_data_file,
     s3_inventory_data_file: URL,
-    inventory_manifest_file: Path,
+    inventory_s2_manifest_file,
     s3_inventory_manifest_file: URL,
 ):
     s3_client = boto3.client("s3", region_name=COGS_REGION)
@@ -29,14 +29,14 @@ def test_get_and_filter_cogs_keys(
 
     # Upload inventory manifest
     s3_client.upload_file(
-        str(inventory_manifest_file),
+        str(inventory_s2_manifest_file),
         INVENTORY_BUCKET_NAME,
         str(s3_inventory_manifest_file),
     )
 
     # Upload inventory data
     s3_client.upload_file(
-        str(inventory_data_file),
+        str(inventory_s2_data_file),
         INVENTORY_BUCKET_NAME,
         str(s3_inventory_data_file),
     )
@@ -57,9 +57,9 @@ def test_get_and_filter_cogs_keys(
 @mock_s3
 def test_generate_buckets_diff(
     monkeypatch,
-    inventory_data_file: Path,
+    inventory_s2_data_file,
     s3_inventory_data_file: URL,
-    inventory_manifest_file: Path,
+    inventory_s2_manifest_file,
     s3_inventory_manifest_file: URL,
 ):
     s3_client_cogs = boto3.client("s3", region_name=COGS_REGION)
@@ -72,14 +72,14 @@ def test_generate_buckets_diff(
 
     # Upload inventory manifest
     s3_client_cogs.upload_file(
-        str(inventory_manifest_file),
+        str(inventory_s2_manifest_file),
         INVENTORY_BUCKET_SOURCE_NAME,
         str(s3_inventory_manifest_file),
     )
 
     # Upload inventory data
     s3_client_cogs.upload_file(
-        str(inventory_data_file),
+        str(inventory_s2_data_file),
         INVENTORY_BUCKET_SOURCE_NAME,
         str(s3_inventory_data_file),
     )
@@ -96,14 +96,14 @@ def test_generate_buckets_diff(
 
     # Upload inventory manifest
     s3_client.upload_file(
-        str(inventory_manifest_file),
+        str(inventory_s2_manifest_file),
         INVENTORY_BUCKET_NAME,
         str(s3_inventory_manifest_file),
     )
 
     # Upload inventory data
     s3_client.upload_file(
-        str(inventory_data_file),
+        str(inventory_s2_data_file),
         INVENTORY_BUCKET_NAME,
         str(s3_inventory_data_file),
     )
