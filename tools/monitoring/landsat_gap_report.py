@@ -150,6 +150,7 @@ def generate_buckets_diff(
     landsat_status_report_path = URL(f"s3://{bucket_name}/status-report/")
     environment = "DEV" if "dev" in bucket_name else "PDS"
     log.info(f"Environment {environment}")
+    log.info(f"Bucket Name {bucket_name}")
     log.info(f"Satellite Name {satellite_name}")
     log.info(f"File Name {file_name}")
     log.info(f"Update all ({update_stac})")
