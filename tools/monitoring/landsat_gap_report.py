@@ -151,6 +151,9 @@ def generate_buckets_diff(
     log.info("Task started")
 
     landsat_status_report_path = URL(f"s3://{bucket_name}/status-report/")
+    landsat_status_report_url = URL(
+        f"https://{bucket_name}.s3.af-south-1.amazonaws.com/status-report/"
+    )
     environment = "DEV" if "dev" in bucket_name else "PDS"
     log.info(f"Environment {environment}")
     log.info(f"Bucket Name {bucket_name}")
@@ -216,11 +219,11 @@ def generate_buckets_diff(
         )
 
         log.info(
-            f"Missing scenes file will be saved in {URL(landsat_status_report_path) / output_filename}"
+            f"Missing scenes file will be saved in {landsat_status_report_path / output_filename}"
         )
         s3_dump(
             data=gzip.compress(str.encode("\n".join(missing_scenes))),
-            url=str(URL(landsat_status_report_path) / output_filename),
+            url=str(landsat_status_report_path / output_filename),
             s3=landsat_s3,
             ContentType="application/gzip",
         )
@@ -229,12 +232,12 @@ def generate_buckets_diff(
 
     if len(orphaned_scenes) > 0:
         log.info(
-            f"Orphan scenes file will be saved in {URL(landsat_status_report_path) / output_filename}"
+            f"Orphan scenes file will be saved in {landsat_status_report_path / output_filename}"
         )
         orphan_output_filename = f"{satellite_name}_{date_string}_orphaned.txt.gz"
         s3_dump(
             data=gzip.compress(str.encode("\n".join(orphaned_scenes))),
-            url=str(URL(landsat_status_report_path) / orphan_output_filename),
+            url=str(landsat_status_report_path / orphan_output_filename),
             s3=landsat_s3,
             ContentType="application/gzip",
         )
@@ -242,12 +245,11 @@ def generate_buckets_diff(
         log.info(f"Number of orphaned scenes: {len(orphaned_scenes)}")
 
     message = dedent(
-        f"*{satellite_name.upper()} GAP REPORT*\n "
-        f"Environment: {environment}\n "
+        f"*{satellite_name.upper()} GAP REPORT - {environment}*\n "
         f"Missing Scenes: {len(missing_scenes)}\n"
         f"Orphan Scenes: {len(orphaned_scenes)}\n"
-        f"Missing Scenes report Saved: {str(URL(landsat_status_report_path) / output_filename)}\n"
-        f"Orphan Scenes report Saved: {str(URL(landsat_status_report_path) / orphan_output_filename)}\n"
+        f"Missing Scenes report: {str(landsat_status_report_url / output_filename)}\n"
+        f"Orphan Scenes report Saved: {str(landsat_status_report_url / orphan_output_filename)}\n"
     )
 
     log.info(message)
