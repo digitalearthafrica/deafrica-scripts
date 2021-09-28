@@ -201,7 +201,9 @@ def generate_buckets_diff(
             for path in dest_paths.difference(source_paths)
         ]
 
+        log.info(f"Found {len(missing_scenes)} missing scenes")
         log.info(f"missing_scenes 10 first keys {list(missing_scenes)[0:10]}")
+        log.info(f"Found {len(orphaned_scenes)} orphaned scenes")
         log.info(f"orphaned_scenes 10 first keys {list(orphaned_scenes)[0:10]}")
 
     landsat_s3 = s3_client(region_name="af-south-1")
@@ -214,7 +216,7 @@ def generate_buckets_diff(
         )
 
         log.info(
-            f"File will be saved in {URL(landsat_status_report_path) / output_filename}"
+            f"Missing scenes file will be saved in {URL(landsat_status_report_path) / output_filename}"
         )
         s3_dump(
             data=gzip.compress(str.encode("\n".join(missing_scenes))),
@@ -226,6 +228,9 @@ def generate_buckets_diff(
         log.info(f"Number of missing scenes: {len(missing_scenes)}")
 
     if len(orphaned_scenes) > 0:
+        log.info(
+            f"Orphan scenes file will be saved in {URL(landsat_status_report_path) / output_filename}"
+        )
         orphan_output_filename = f"{satellite_name}_{date_string}_orphaned.txt.gz"
         s3_dump(
             data=gzip.compress(str.encode("\n".join(orphaned_scenes))),
