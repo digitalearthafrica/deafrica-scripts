@@ -41,7 +41,8 @@ BASE_BULK_CSV_URL = URL(
 AFRICA_GZ_PATHROWS_URL = URL(
     "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/master/deafrica-usgs-pathrows.csv.gz"
 )
-LANDSAT_INVENTORY_PATH = URL("s3://deafrica-landsat/deafrica-landsat-inventory/")
+
+LANDSAT_INVENTORY_PATH = URL("s3://deafrica-landsat-inventory/deafrica-landsat/deafrica-landsat-inventory/")
 USGS_S3_BUCKET_PATH = URL("s3://usgs-landsat")
 
 
