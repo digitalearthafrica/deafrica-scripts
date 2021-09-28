@@ -166,7 +166,7 @@ def download_file_to_tmp(url: str, file_name: str, always_return_path: bool = Tr
 
             if int(file_size) == int(server_file_size):
                 logging.info("Already updated!!")
-                return file_path if always_return_path else ""
+                return file_path if always_return_path else None
 
     logging.info(f"Downloading file {file_name} to {file_path}")
     downloaded = requests.get(url.geturl(), stream=True)

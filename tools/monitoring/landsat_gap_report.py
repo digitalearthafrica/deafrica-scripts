@@ -35,7 +35,6 @@ FILES = {
     "landsat_5": "LANDSAT_TM_C2_L2.csv.gz",
 }
 
-
 BASE_BULK_CSV_URL = URL(
     "https://landsat.usgs.gov/landsat/metadata_service/bulk_metadata_files/"
 )
@@ -44,10 +43,6 @@ AFRICA_GZ_PATHROWS_URL = URL(
 )
 LANDSAT_INVENTORY_PATH = URL("s3://deafrica-landsat/deafrica-landsat-inventory/")
 USGS_S3_BUCKET_PATH = URL("s3://usgs-landsat")
-USGS_BASE_URL = "https://landsatlook.usgs.gov/"
-USGS_INDEX_URL = f"{USGS_BASE_URL}stac-browser/"
-USGS_API_MAIN_URL = f"{USGS_BASE_URL}sat-api/"
-USGS_API_INDIVIDUAL_ITEM_URL = f"{USGS_API_MAIN_URL}collections/landsat-c2l2-sr/items"
 
 
 def get_and_filter_keys_from_files(file_path: Path):
@@ -145,126 +140,115 @@ def generate_buckets_diff(
     Compare USGS bulk files and Africa inventory bucket detecting differences
     A report containing missing keys will be written to AFRICA_S3_BUCKET_PATH
     """
+
     log = setup_logging()
 
-    try:
-        start_timer = time.time()
+    start_timer = time.time()
 
-        log.info("Task started")
+    log.info("Task started")
 
-        landsat_status_report_path = URL(f"s3://{bucket_name}/status-report/")
-        environment = "DEV" if "dev" in bucket_name else "PDS"
-        log.info(f"Environment {environment}")
+    landsat_status_report_path = URL(f"s3://{bucket_name}/status-report/")
+    environment = "DEV" if "dev" in bucket_name else "PDS"
+    log.info(f"Environment {environment}")
 
-        # Create connection to the inventory S3 bucket
-        log.info(f"Retrieving keys from inventory bucket {LANDSAT_INVENTORY_PATH}")
-        dest_paths = get_and_filter_keys(landsat=satellite_name)
+    # Create connection to the inventory S3 bucket
+    log.info(f"Retrieving keys from inventory bucket {LANDSAT_INVENTORY_PATH}")
+    dest_paths = get_and_filter_keys(landsat=satellite_name)
 
-        log.info(f"INVENTORY bucket number of objects {len(dest_paths)}")
-        log.info(f"INVENTORY 10 first {list(dest_paths)[0:10]}")
-        date_string = datetime.now().strftime("%Y-%m-%d")
+    log.info(f"INVENTORY bucket number of objects {len(dest_paths)}")
+    log.info(f"INVENTORY 10 first {list(dest_paths)[0:10]}")
+    date_string = datetime.now().strftime("%Y-%m-%d")
 
-        # Download bulk file
-        log.info("Download Bulk file")
-        file_path = download_file_to_tmp(
-            url=str(BASE_BULK_CSV_URL), file_name=file_name
+    # Download bulk file
+    log.info("Download Bulk file")
+    file_path = download_file_to_tmp(url=str(BASE_BULK_CSV_URL), file_name=file_name)
+
+    # Retrieve keys from the bulk file
+    log.info("Filtering keys from bulk file")
+    source_paths = get_and_filter_keys_from_files(file_path)
+
+    log.info(f"BULK FILE number of objects {len(source_paths)}")
+    log.info(f"BULK 10 First {list(source_paths)[0:10]}")
+
+    orphan_output_filename = "No orphan scenes were found"
+    output_filename = "No missing scenes were found"
+
+    if update_stac:
+        log.info("FORCED UPDATE ACTIVE!")
+        missing_scenes = source_paths
+        orphaned_scenes = []
+
+    else:
+        # Keys that are missing, they are in the source but not in the bucket
+        log.info("Filtering missing scenes")
+        missing_scenes = [
+            str(USGS_S3_BUCKET_PATH / path)
+            for path in source_paths.difference(dest_paths)
+        ]
+
+        # Keys that are orphan, they are in the bucket but not found in the files
+        log.info("Filtering orphan scenes")
+        orphaned_scenes = [
+            str(URL(f"s3://{bucket_name}") / path)
+            for path in dest_paths.difference(source_paths)
+        ]
+
+        log.info(f"missing_scenes 10 first keys {list(missing_scenes)[0:10]}")
+        log.info(f"orphaned_scenes 10 first keys {list(orphaned_scenes)[0:10]}")
+
+    landsat_s3 = s3_client(region_name="af-south-1")
+
+    if len(missing_scenes) > 0:
+        output_filename = (
+            f"{satellite_name}_{date_string}.txt.gz"
+            if not update_stac
+            else f"{satellite_name}_{date_string}_update.txt.gz"
         )
 
-        # Retrieve keys from the bulk file
-        log.info("Filtering keys from bulk file")
-        source_paths = get_and_filter_keys_from_files(file_path)
-
-        log.info(f"BULK FILE number of objects {len(source_paths)}")
-        log.info(f"BULK 10 First {list(source_paths)[0:10]}")
-
-        orphan_output_filename = "No orphan scenes were found"
-        output_filename = "No missing scenes were found"
-
-        if update_stac:
-            log.info("FORCED UPDATE ACTIVE!")
-            missing_scenes = source_paths
-            orphaned_scenes = []
-
-        else:
-            # Keys that are missing, they are in the source but not in the bucket
-            log.info("Filtering missing scenes")
-            missing_scenes = [
-                str(USGS_S3_BUCKET_PATH / path)
-                for path in source_paths.difference(dest_paths)
-            ]
-
-            # Keys that are orphan, they are in the bucket but not found in the files
-            log.info("Filtering orphan scenes")
-            orphaned_scenes = [
-                str(URL(f"s3://{bucket_name}") / path)
-                for path in dest_paths.difference(source_paths)
-            ]
-
-            log.info(f"missing_scenes 10 first keys {list(missing_scenes)[0:10]}")
-            log.info(f"orphaned_scenes 10 first keys {list(orphaned_scenes)[0:10]}")
-
-        landsat_s3 = s3_client(region_name="af-south-1")
-
-        if len(missing_scenes) > 0:
-            output_filename = (
-                f"{satellite_name}_{date_string}.txt.gz"
-                if not update_stac
-                else f"{satellite_name}_{date_string}_update.txt.gz"
-            )
-
-            log.info(
-                f"File will be saved in {URL(landsat_status_report_path) / output_filename}"
-            )
-            s3_dump(
-                data=gzip.compress(str.encode("\n".join(missing_scenes))),
-                url=str(URL(landsat_status_report_path) / output_filename),
-                s3=landsat_s3,
-                ContentType="application/gzip",
-            )
-
-            log.info(f"Number of missing scenes: {len(missing_scenes)}")
-
-        if len(orphaned_scenes) > 0:
-            orphan_output_filename = f"{satellite_name}_{date_string}_orphaned.txt.gz"
-            s3_dump(
-                data=gzip.compress(str.encode("\n".join(orphaned_scenes))),
-                url=str(URL(landsat_status_report_path) / orphan_output_filename),
-                s3=landsat_s3,
-                ContentType="application/gzip",
-            )
-
-            log.info(f"Number of orphaned scenes: {len(orphaned_scenes)}")
-
-        message = dedent(
-            f"*{satellite_name.upper()} GAP REPORT*\n "
-            f"Environment: {environment}\n "
-            f"Missing Scenes: {len(missing_scenes)}\n"
-            f"Orphan Scenes: {len(orphaned_scenes)}\n"
-            f"Missing Scenes report Saved: {str(URL(landsat_status_report_path) / output_filename)}\n"
-            f"Orphan Scenes report Saved: {str(URL(landsat_status_report_path) / orphan_output_filename)}\n"
+        log.info(
+            f"File will be saved in {URL(landsat_status_report_path) / output_filename}"
+        )
+        s3_dump(
+            data=gzip.compress(str.encode("\n".join(missing_scenes))),
+            url=str(URL(landsat_status_report_path) / output_filename),
+            s3=landsat_s3,
+            ContentType="application/gzip",
         )
 
-        log.info(message)
+        log.info(f"Number of missing scenes: {len(missing_scenes)}")
 
-        if len(missing_scenes) > 0 or len(orphaned_scenes) > 0:
+    if len(orphaned_scenes) > 0:
+        orphan_output_filename = f"{satellite_name}_{date_string}_orphaned.txt.gz"
+        s3_dump(
+            data=gzip.compress(str.encode("\n".join(orphaned_scenes))),
+            url=str(URL(landsat_status_report_path) / orphan_output_filename),
+            s3=landsat_s3,
+            ContentType="application/gzip",
+        )
 
-            log.info(
-                f"File {file_name} processed and sent in {time_process(start=start_timer)}"
+        log.info(f"Number of orphaned scenes: {len(orphaned_scenes)}")
+
+    message = dedent(
+        f"*{satellite_name.upper()} GAP REPORT*\n "
+        f"Environment: {environment}\n "
+        f"Missing Scenes: {len(missing_scenes)}\n"
+        f"Orphan Scenes: {len(orphaned_scenes)}\n"
+        f"Missing Scenes report Saved: {str(URL(landsat_status_report_path) / output_filename)}\n"
+        f"Orphan Scenes report Saved: {str(URL(landsat_status_report_path) / orphan_output_filename)}\n"
+    )
+
+    log.info(message)
+
+    log.info(
+        f"File {file_name} processed and sent in {time_process(start=start_timer)}"
+    )
+
+    if not update_stac and (len(missing_scenes) > 200 or len(orphaned_scenes) > 200):
+        if notification_url is not None:
+            send_slack_notification(
+                notification_url, f"{satellite_name} Gap Report", message
             )
-
-            if notification_url is not None:
-                send_slack_notification(
-                    notification_url, f"{satellite_name} Gap Report", message
-                )
-
-            if not update_stac and (
-                len(missing_scenes) > 200 or len(orphaned_scenes) > 200
-            ):
-                raise Exception(f"More than 200 scenes were found \n {message}")
-
-    except Exception as error:
-        log.exception(error)
-        raise error
+        raise Exception(f"More than 200 scenes were found \n {message}")
 
 
 @click.argument(

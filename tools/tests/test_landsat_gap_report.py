@@ -12,17 +12,13 @@ from tools.monitoring.landsat_gap_report import (
 from tools.tests.conftest import *
 
 
-def test_get_and_filter_keys_from_files(
-    monkeypatch,
-    fake_landsat_bulk_file: Path,
-):
+def test_get_and_filter_keys_from_files(fake_landsat_bulk_file: Path):
     keys = get_and_filter_keys_from_files(fake_landsat_bulk_file)
     assert len(keys) == 20
 
 
 @mock_s3
 def test_get_and_filter_keys(
-    monkeypatch,
     inventory_landsat_manifest_file,
     s3_inventory_data_file: URL,
     inventory_landsat_data_file,
@@ -65,7 +61,6 @@ def test_get_and_filter_keys(
 
 @mock_s3
 def test_landsat_gap_report_cli(
-    monkeypatch,
     inventory_landsat_manifest_file,
     s3_inventory_data_file: URL,
     inventory_landsat_data_file,
