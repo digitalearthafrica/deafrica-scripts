@@ -117,7 +117,7 @@ def get_and_filter_keys(landsat: str) -> set:
         sat_prefix = "LT05"
 
     if not sat_prefix:
-        raise Exception("Prefix not defined")
+        raise Exception("Informed satellite not supported")
 
     list_json_keys = list_inventory(
         manifest=str(LANDSAT_INVENTORY_PATH),
