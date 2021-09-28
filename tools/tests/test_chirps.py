@@ -1,18 +1,16 @@
 import boto3
 import moto
 from tools.data.chirps import download_and_cog_chirps
+from tools.tests.conftest import *
 
 
 @moto.mock_s3
 def test_one_full():
-
-    TEST_BUCKET_NAME = "fake-bucket"
-    REGION = "ap-southeast-2"
-    s3_client = boto3.client("s3", region_name=REGION)
+    s3_client = boto3.client("s3", region_name=CHIRPS_REGION)
     s3_client.create_bucket(
         Bucket=TEST_BUCKET_NAME,
         CreateBucketConfiguration={
-            "LocationConstraint": REGION,
+            "LocationConstraint": CHIRPS_REGION,
         },
     )
 

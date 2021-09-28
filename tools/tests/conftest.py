@@ -11,6 +11,7 @@ REPORT_FILE = "2021-08-17_update.txt.gz"
 FAKE_STAC_FILE = "fake_stac.json"
 REPORT_FOLDER = "status-report"
 COGS_REGION = "us-west-2"
+CHIRPS_REGION = "ap-southeast-2"
 
 # INVENTORY
 INVENTORY_BUCKET_SOURCE_NAME = "test-cogs-inventory-bucket"
