@@ -62,20 +62,20 @@ def inventory_s2_data_file():
 @pytest.fixture
 def s3_inventory_manifest_file():
     return (
-            URL(INVENTORY_FOLDER)
-            / URL(INVENTORY_BUCKET_NAME)
-            / "2021-09-17T00-00Z"
-            / INVENTORY_MANIFEST_FILE
+        URL(INVENTORY_FOLDER)
+        / URL(INVENTORY_BUCKET_NAME)
+        / "2021-09-17T00-00Z"
+        / INVENTORY_MANIFEST_FILE
     )
 
 
 @pytest.fixture
 def s3_inventory_data_file():
     return (
-            URL(INVENTORY_FOLDER)
-            / URL(INVENTORY_BUCKET_NAME)
-            / URL("data")
-            / INVENTORY_DATA_FILE
+        URL(INVENTORY_FOLDER)
+        / URL(INVENTORY_BUCKET_NAME)
+        / URL("data")
+        / INVENTORY_DATA_FILE
     )
 
 

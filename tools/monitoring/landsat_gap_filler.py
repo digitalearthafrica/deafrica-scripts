@@ -22,7 +22,9 @@ from tools.utils.utils import (
 S3_BUCKET_PATH = "s3://deafrica-landsat/status-report/"
 
 
-def post_messages(message_list, queue_name: str, log: Optional[logging.Logger] = None) -> dict:
+def post_messages(
+    message_list, queue_name: str, log: Optional[logging.Logger] = None
+) -> dict:
     """
     Publish messages
 
@@ -75,20 +77,18 @@ def post_messages(message_list, queue_name: str, log: Optional[logging.Logger] =
 
 
 def build_message(missing_scene_paths, update_stac):
-    """
-
-    """
+    """ """
     message_list = []
     for path in missing_scene_paths:
         landsat_product_id = str(path.strip("/").split("/")[-1])
         if not landsat_product_id:
-            raise Exception(f'It was not possible to build product ID from path {path}')
+            raise Exception(f"It was not possible to build product ID from path {path}")
         message_list.append(
             {
                 "Message": {
                     "landsat_product_id": landsat_product_id,
                     "s3_location": str(path),
-                    "update_stac": update_stac
+                    "update_stac": update_stac,
                 }
             }
         )
@@ -96,10 +96,10 @@ def build_message(missing_scene_paths, update_stac):
 
 
 def fill_the_gap(
-        landsat: str,
-        sync_queue_name: str,
-        scenes_limit: Optional[int] = None,
-        notification_url: str = None
+    landsat: str,
+    sync_queue_name: str,
+    scenes_limit: Optional[int] = None,
+    notification_url: str = None,
 ) -> None:
     """
     Function to retrieve the latest gap report and create messages to the filter queue process.
@@ -138,15 +138,12 @@ def fill_the_gap(
         log.info(f"Example scenes: {missing_scene_paths[0:10]}")
 
         messages_to_send = build_message(
-            missing_scene_paths=missing_scene_paths,
-            update_stac=update_stac
+            missing_scene_paths=missing_scene_paths, update_stac=update_stac
         )
 
         log.info("Publishing messages")
         result = post_messages(
-            message_list=messages_to_send,
-            queue_name=sync_queue_name,
-            log=log
+            message_list=messages_to_send, queue_name=sync_queue_name, log=log
         )
 
         log.info(result["msg"])
@@ -170,7 +167,10 @@ def fill_the_gap(
     default="satellite to be compared, supported ones (landsat_8, landsat_7, landsat_5)",
 )
 @click.argument(
-    "sync_queue_name", type=str, nargs=1, required=True,
+    "sync_queue_name",
+    type=str,
+    nargs=1,
+    required=True,
 )
 @click.option(
     "--limit",
@@ -181,10 +181,10 @@ def fill_the_gap(
 @slack_url
 @click.command("landsat-gap-filler")
 def cli(
-        satellite: str,
-        sync_queue_name: str = "deafrica-pds-sentinel-2-sync-scene",
-        limit: int = None,
-        slack_url: str = None,
+    satellite: str,
+    sync_queue_name: str = "deafrica-pds-sentinel-2-sync-scene",
+    limit: int = None,
+    slack_url: str = None,
 ):
     """
     Publish missing scenes
