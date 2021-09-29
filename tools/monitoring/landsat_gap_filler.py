@@ -76,7 +76,7 @@ def post_messages(
     return {"msg": msg, "fail": failed > 0}
 
 
-def build_message(missing_scene_paths, update_stac):
+def build_messages(missing_scene_paths, update_stac):
     """ """
     message_list = []
     for path in missing_scene_paths:
