@@ -7,7 +7,6 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import click
-import pandas as pd
 import requests
 from odc.aws import s3_client, s3_fetch, s3_ls_dir
 
