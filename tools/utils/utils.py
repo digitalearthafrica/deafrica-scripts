@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import click
+import pandas as pd
 import requests
 from odc.aws import s3_client, s3_fetch, s3_ls_dir
 
@@ -80,6 +81,13 @@ def read_report(report_path: str, limit=None):
         .split("\n")
         if scene_path
     ]
+    # TODO TEST IT
+    # missing_scene_paths = set(
+    #     pd.read_csv(
+    #         missing_scene_file_gzip,
+    #         header=None,
+    #     ).values.ravel()
+    # )
 
     if limit:
         missing_scene_paths = missing_scene_paths[: int(limit)]
