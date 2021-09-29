@@ -112,51 +112,43 @@ def fill_the_gap(
     """
     log = setup_logging()
 
-    try:
+    log.info(f"Satellite: {landsat}")
+    log.info(f"Queue: {sync_queue_name}")
+    log.info(f"Limited: {int(scenes_limit) if scenes_limit else 'No limit'}")
+    log.info(f"Notification URL: {notification_url}")
 
-        log.info(f"Satellite: {landsat}")
-        log.info(f"Queue: {sync_queue_name}")
-        log.info(f"Limited: {int(scenes_limit) if scenes_limit else 'No limit'}")
-        log.info(f"Notification URL: {notification_url}")
+    latest_report = find_latest_report(report_folder_path=S3_BUCKET_PATH)
 
-        latest_report = find_latest_report(report_folder_path=S3_BUCKET_PATH)
+    if not latest_report:
+        logging.error("Report not found")
+        raise RuntimeError("Report not found!")
 
-        if not latest_report:
-            logging.error("Report not found")
-            raise RuntimeError("Report not found!")
+    update_stac = False
+    if "update" in latest_report:
+        log.info("FORCED UPDATE FLAGGED!")
+        update_stac = True
 
-        update_stac = False
-        if "update" in latest_report:
-            log.info("FORCED UPDATE FLAGGED!")
-            update_stac = True
+    log.info("Reading missing scenes from the report")
 
-        log.info("Reading missing scenes from the report")
+    missing_scene_paths = read_report(report_path=latest_report, limit=scenes_limit)
 
-        missing_scene_paths = read_report(report_path=latest_report, limit=scenes_limit)
+    log.info(f"Number of scenes found {len(missing_scene_paths)}")
+    log.info(f"Example scenes: {missing_scene_paths[0:10]}")
 
-        log.info(f"Number of scenes found {len(missing_scene_paths)}")
-        log.info(f"Example scenes: {missing_scene_paths[0:10]}")
+    messages_to_send = build_message(
+        missing_scene_paths=missing_scene_paths, update_stac=update_stac
+    )
 
-        messages_to_send = build_message(
-            missing_scene_paths=missing_scene_paths, update_stac=update_stac
-        )
+    log.info("Publishing messages")
+    result = post_messages(
+        message_list=messages_to_send, queue_name=sync_queue_name, log=log
+    )
 
-        log.info("Publishing messages")
-        result = post_messages(
-            message_list=messages_to_send, queue_name=sync_queue_name, log=log
-        )
-
-        log.info(result["msg"])
-        if result["fail"]:
-            if slack_url is not None:
-                send_slack_notification(slack_url, "Landsat Gap Filler", result["msg"])
-            sys.exit(1)
-
-    except Exception as error:
-        log.error(error)
-        # print traceback but does not stop execution
-        traceback.print_exc()
-        raise error
+    log.info(result["msg"])
+    if result["fail"]:
+        if slack_url is not None:
+            send_slack_notification(slack_url, "Landsat Gap Filler", result["msg"])
+        sys.exit(1)
 
 
 @click.argument(
