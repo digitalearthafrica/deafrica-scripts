@@ -23,8 +23,8 @@ def test_build_messages(landsat_gap_report: Path):
     )
     returned_list = build_messages(missing_scene_paths, False)
 
-    assert len(returned_list) == 28
-    for value in returned_list:
+    assert len(returned_list['message_list']) == 28
+    for value in returned_list['message_list']:
         assert value.get("Message", False)
         assert value["Message"].get("landsat_product_id", False)
         assert value["Message"].get("s3_location", False)
@@ -44,7 +44,7 @@ def test_post_messages(landsat_gap_report: Path):
     )
     messages_to_send = build_messages(missing_scene_paths, False)
 
-    post_messages(message_list=messages_to_send, queue_name=SQS_QUEUE_NAME)
+    post_messages(message_list=messages_to_send['message_list'], queue_name=SQS_QUEUE_NAME)
 
 
 @mock_sqs

@@ -160,8 +160,8 @@ def fill_the_gap(
     )
 
     log.info(message)
-    if slack_url is not None:
-        send_slack_notification(slack_url, "Landsat Gap Filler", message)
+    if notification_url is not None:
+        send_slack_notification(notification_url, "Landsat Gap Filler", message)
 
     if (int(result["failed"]) + len(returned["failed"])) > 0:
         sys.exit(1)
