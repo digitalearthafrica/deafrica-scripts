@@ -20,18 +20,15 @@ from tools.utils.utils import (
 )
 
 S3_BUCKET_PATH = "s3://deafrica-landsat/status-report/"
-REPORTING_PREFIX = "status-report/"
-# This process is manually run
-SCHEDULE_INTERVAL = None
 
 
-def post_messages(message_list, queue_name: str, log: logging.Logger, slack_url: str = None) -> None:
+def post_messages(message_list, queue_name: str, log: Optional[logging.Logger] = None) -> dict:
     """
     Publish messages
+
     :param message_list:(list) list of messages
     :param queue_name: (str) queue to be sens to
     :param log: (str) log
-    :param slack_url: (str) Notification URL
     :return:(None)
     """
 
@@ -71,12 +68,10 @@ def post_messages(message_list, queue_name: str, log: logging.Logger, slack_url:
     msg = f"Total messages sent {sent}"
     if failed > 0:
         msg = f":red_circle: Total of {failed} files failed, Total of sent messages {sent}"
-        log.error(f"{msg} - {set(error_list)}")
+        if log:
+            log.error(f"{set(error_list)}")
 
-    if slack_url is not None:
-        send_slack_notification(slack_url, "Landsat Gap Filler", msg)
-
-    sys.exit(1) if failed > 0 else log.info(msg)
+    return {"msg": msg, "fail": failed > 0}
 
 
 def build_message(missing_scene_paths, update_stac):
@@ -148,9 +143,20 @@ def fill_the_gap(
         )
 
         log.info("Publishing messages")
-        post_messages(message_list=messages_to_send)
+        result = post_messages(
+            message_list=messages_to_send,
+            queue_name=sync_queue_name,
+            log=log
+        )
+
+        log.info(result["msg"])
+        if result["fail"]:
+            if slack_url is not None:
+                send_slack_notification(slack_url, "Landsat Gap Filler", result["msg"])
+            sys.exit(1)
+
     except Exception as error:
-        logging.error(error)
+        log.error(error)
         # print traceback but does not stop execution
         traceback.print_exc()
         raise error

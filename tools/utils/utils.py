@@ -81,13 +81,6 @@ def read_report(report_path: str, limit=None):
         .split("\n")
         if scene_path
     ]
-    # TODO TEST IT
-    # missing_scene_paths = set(
-    #     pd.read_csv(
-    #         missing_scene_file_gzip,
-    #         header=None,
-    #     ).values.ravel()
-    # )
 
     if limit:
         missing_scene_paths = missing_scene_paths[: int(limit)]

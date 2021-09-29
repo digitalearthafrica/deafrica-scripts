@@ -17,8 +17,8 @@ def test_publish_message_s2_gap_filler(
     monkeypatch,
     local_report_update_file,
     fake_stac_file: Path,
-    s3_report_path: URL,
-    s3_report_file: URL,
+        s3_report_path,
+        s3_s2_report_file,
 ):
     sqs_client = boto3.client("sqs", region_name=REGION)
     sqs_client.create_queue(QueueName=SQS_QUEUE_NAME)
@@ -34,7 +34,7 @@ def test_publish_message_s2_gap_filler(
     s3_client.upload_file(
         str(local_report_update_file),
         TEST_BUCKET_NAME,
-        str(s3_report_file),
+        str(s3_s2_report_file),
     )
 
     files = [
@@ -71,8 +71,8 @@ def test_s2_gap_filler_cli(
     monkeypatch,
     local_report_update_file,
     fake_stac_file: Path,
-    s3_report_file: URL,
-    s3_report_path: URL,
+        s3_s2_report_file,
+        s3_report_path,
 ):
     """
     Test for random numbers of limits (between 1-10) for a random numbers of workers workers (between 1-30).
@@ -91,7 +91,7 @@ def test_s2_gap_filler_cli(
     s3_client.upload_file(
         str(local_report_update_file),
         TEST_BUCKET_NAME,
-        str(s3_report_file),
+        str(s3_s2_report_file),
     )
 
     files = [
