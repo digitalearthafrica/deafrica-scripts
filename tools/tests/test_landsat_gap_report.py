@@ -1,14 +1,15 @@
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, PropertyMock
 
 import boto3
 from click.testing import CliRunner
 from moto import mock_s3
 
-from tools.monitoring import landsat_gap_report
 from tools.monitoring.landsat_gap_report import (
     get_and_filter_keys_from_files,
     get_and_filter_keys,
+    cli,
 )
+
 from tools.tests.conftest import *
 
 
@@ -19,7 +20,7 @@ def test_get_and_filter_keys_from_files(fake_landsat_bulk_file: Path):
 
 @mock_s3
 def test_get_and_filter_keys(
-    inventory_landsat_manifest_file,
+    inventory_landsat_manifest_file: Path,
     s3_inventory_data_file: URL,
     inventory_landsat_data_file,
     s3_inventory_manifest_file: URL,
@@ -52,8 +53,8 @@ def test_get_and_filter_keys(
         f"s3://{INVENTORY_BUCKET_NAME}/{INVENTORY_FOLDER}/{INVENTORY_BUCKET_NAME}/"
     )
 
-    with patch.object(
-        landsat_gap_report, "LANDSAT_INVENTORY_PATH", str(s3_inventory_path)
+    with patch(
+        "tools.monitoring.landsat_gap_report.LANDSAT_INVENTORY_PATH", s3_inventory_path
     ):
         keys = get_and_filter_keys("landsat_5")
         assert len(keys) == 1
@@ -61,7 +62,7 @@ def test_get_and_filter_keys(
 
 @mock_s3
 def test_landsat_gap_report_cli(
-    inventory_landsat_manifest_file,
+    inventory_landsat_manifest_file: Path,
     s3_inventory_data_file: URL,
     inventory_landsat_data_file,
     s3_inventory_manifest_file: URL,
@@ -103,16 +104,17 @@ def test_landsat_gap_report_cli(
         },
     )
 
-    with patch.object(
-        landsat_gap_report, "LANDSAT_INVENTORY_PATH", str(s3_inventory_path)
+    with patch(
+        "tools.monitoring.landsat_gap_report.LANDSAT_INVENTORY_PATH", s3_inventory_path
+    ), patch(
+        "tools.monitoring.landsat_gap_report.download_file_to_tmp",
+        new_callable=PropertyMock,
+        return_value=fake_landsat_bulk_file,
     ):
-
-        landsat_gap_report.download_file_to_tmp = Mock()
-        landsat_gap_report.download_file_to_tmp.return_value = fake_landsat_bulk_file
 
         runner = CliRunner()
         runner.invoke(
-            landsat_gap_report.cli,
+            cli,
             [
                 "landsat_5",
                 TEST_BUCKET_NAME,
