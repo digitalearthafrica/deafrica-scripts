@@ -183,10 +183,6 @@ def cli(bucket_name: str, update_stac: bool = False, slack_url: str = None):
     """
     Publish missing scenes
     """
-    try:
-        generate_buckets_diff(
-            bucket_name=bucket_name, update_stac=update_stac, notification_url=slack_url
-        )
-    except Exception as error:
-        traceback.print_exc()
-        raise error
+    generate_buckets_diff(
+        bucket_name=bucket_name, update_stac=update_stac, notification_url=slack_url
+    )

@@ -22,7 +22,7 @@ def test_get_and_filter_keys_from_files(fake_landsat_bulk_file: Path):
 def test_get_and_filter_keys(
     inventory_landsat_manifest_file: Path,
     s3_inventory_data_file: URL,
-    inventory_landsat_data_file,
+    inventory_landsat_data_file: Path,
     s3_inventory_manifest_file: URL,
 ):
     s3_client = boto3.client("s3", region_name=REGION)
@@ -64,7 +64,7 @@ def test_get_and_filter_keys(
 def test_landsat_gap_report_cli(
     inventory_landsat_manifest_file: Path,
     s3_inventory_data_file: URL,
-    inventory_landsat_data_file,
+    inventory_landsat_data_file: Path,
     s3_inventory_manifest_file: URL,
     fake_landsat_bulk_file: Path,
 ):

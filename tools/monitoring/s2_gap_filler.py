@@ -5,6 +5,7 @@ import json
 import logging
 import sys
 import traceback
+from textwrap import dedent
 from typing import Dict, Optional
 
 import click
@@ -179,16 +180,22 @@ def send_messages(
         publish_messages(queue=queue, messages=batch)
         sent += len(batch)
 
-    msg = f"Total messages sent {sent}"
+    environment = "DEV" if "dev" in queue_name else "PDS"
+    error_flag = ":red_circle:" if failed > 0 else ""
+
+    message = dedent(
+        f"{error_flag}*Sentinel 2 GAP Filler*"
+        f"Environment: {environment}\n "
+        f"Sent Messages: {sent}\n"
+        f"Failed Messages: {failed}\n"
+    )
+    if slack_url is not None:
+        send_slack_notification(slack_url, "S2 Gap Filler", message)
+
+    log.info(message)
 
     if failed > 0:
-        msg = f":red_circle: Total of {failed} files failed, Total of sent messages {sent}"
-        log.error(f"{msg} - {set(error_list)}")
-
-    if slack_url is not None:
-        send_slack_notification(slack_url, "S2 Gap Filler", msg)
-
-    sys.exit(1) if failed > 0 else log.info(msg)
+        sys.exit(1)
 
 
 @click.command("s2-gap-filler")
@@ -226,26 +233,20 @@ def cli(
     slack_url: (str) Slack notification channel hook URL
     """
 
-    try:
+    if limit is not None:
+        try:
+            limit = int(limit)
+        except ValueError:
+            raise ValueError(f"Limit {limit} is not valid")
 
-        if limit is not None:
-            try:
-                limit = int(limit)
-            except ValueError:
-                raise ValueError(f"Limit {limit} is not valid")
+        if limit < 1:
+            raise ValueError(f"Limit {limit} lower than 1.")
 
-            if limit < 1:
-                raise ValueError(f"Limit {limit} lower than 1.")
-
-        # send the right range of scenes for this worker
-        send_messages(
-            idx=idx,
-            queue_name=sync_queue_name,
-            limit=limit,
-            max_workers=max_workers,
-            slack_url=slack_url,
-        )
-
-    except Exception as error:
-        traceback.print_exc()
-        sys.exit(1)
+    # send the right range of scenes for this worker
+    send_messages(
+        idx=idx,
+        queue_name=sync_queue_name,
+        limit=limit,
+        max_workers=max_workers,
+        slack_url=slack_url,
+    )

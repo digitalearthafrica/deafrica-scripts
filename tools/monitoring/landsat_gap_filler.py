@@ -6,6 +6,7 @@ import json
 import logging
 import sys
 import traceback
+from textwrap import dedent
 from typing import Optional
 
 import click
@@ -67,22 +68,19 @@ def post_messages(
         sent += len(messages)
         publish_messages(queue, messages)
 
-    msg = f"Total messages sent {sent}"
-    if failed > 0:
-        msg = f":red_circle: Total of {failed} files failed, Total of sent messages {sent}"
-        if log:
-            log.error(f"{set(error_list)}")
-
-    return {"msg": msg, "fail": failed > 0}
+    return {"failed": failed, "sent": sent}
 
 
 def build_messages(missing_scene_paths, update_stac):
     """ """
     message_list = []
+    error_list = []
     for path in missing_scene_paths:
         landsat_product_id = str(path.strip("/").split("/")[-1])
         if not landsat_product_id:
-            raise Exception(f"It was not possible to build product ID from path {path}")
+            error_list.append(
+                f"It was not possible to build product ID from path {path}"
+            )
         message_list.append(
             {
                 "Message": {
@@ -92,7 +90,8 @@ def build_messages(missing_scene_paths, update_stac):
                 }
             }
         )
-    return message_list
+
+    return {"message_list": message_list, "failed": error_list}
 
 
 def fill_the_gap(
@@ -117,10 +116,11 @@ def fill_the_gap(
     log.info(f"Limited: {int(scenes_limit) if scenes_limit else 'No limit'}")
     log.info(f"Notification URL: {notification_url}")
 
+    environment = "DEV" if "dev" in sync_queue_name else "PDS"
+
     latest_report = find_latest_report(report_folder_path=S3_BUCKET_PATH)
 
     if not latest_report:
-        logging.error("Report not found")
         raise RuntimeError("Report not found!")
 
     update_stac = False
@@ -135,19 +135,35 @@ def fill_the_gap(
     log.info(f"Number of scenes found {len(missing_scene_paths)}")
     log.info(f"Example scenes: {missing_scene_paths[0:10]}")
 
-    messages_to_send = build_message(
+    returned = build_messages(
         missing_scene_paths=missing_scene_paths, update_stac=update_stac
     )
+
+    messages_to_send = returned["message_list"]
 
     log.info("Publishing messages")
     result = post_messages(
         message_list=messages_to_send, queue_name=sync_queue_name, log=log
     )
 
-    log.info(result["msg"])
-    if result["fail"]:
-        if slack_url is not None:
-            send_slack_notification(slack_url, "Landsat Gap Filler", result["msg"])
+    error_flag = (
+        ":red_circle:" if result["failed"] > 0 or len(returned["failed"]) > 0 else ""
+    )
+
+    message = dedent(
+        f"{error_flag}*Landsat GAP Filler*"
+        f"Environment: {environment}\n "
+        f"Sent Messages: {result['sent']}\n"
+        f"Failed Messages: {int(result['failed']) + len(returned['failed'])}\n"
+        f"Failed sending: {int(result['failed'])}\n"
+        f"Other issues presented: {returned['failed']}\n"
+    )
+
+    log.info(message)
+    if slack_url is not None:
+        send_slack_notification(slack_url, "Landsat Gap Filler", message)
+
+    if (int(result["failed"]) + len(returned["failed"])) > 0:
         sys.exit(1)
 
 
