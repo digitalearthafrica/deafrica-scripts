@@ -52,7 +52,9 @@ def test_get_no_msg_dead_queues(monkeypatch):
 
 
 @mock_s3
-def test_find_latest_report(monkeypatch, local_report_update_file, s3_report_file: URL):
+def test_find_latest_report(
+    monkeypatch, local_report_update_file, s3_s2_report_file: URL
+):
     s3_client = boto3.client("s3", region_name=REGION)
     s3_client.create_bucket(
         Bucket=TEST_BUCKET_NAME,
@@ -64,17 +66,17 @@ def test_find_latest_report(monkeypatch, local_report_update_file, s3_report_fil
     s3_client.upload_file(
         str(local_report_update_file),
         TEST_BUCKET_NAME,
-        str(s3_report_file),
+        str(s3_s2_report_file),
     )
 
     last_report = find_latest_report(
-        report_folder_path=f"s3://{TEST_BUCKET_NAME}/{s3_report_file.parent}"
+        report_folder_path=f"s3://{TEST_BUCKET_NAME}/{s3_s2_report_file.parent}"
     )
     assert last_report is not None and last_report != []
 
 
 @mock_s3
-def test_not_found_latest_report(monkeypatch, s3_report_file: URL):
+def test_not_found_latest_report(monkeypatch, s3_s2_report_file: URL):
     s3_client = boto3.client("s3", region_name=REGION)
     s3_client.create_bucket(
         Bucket=TEST_BUCKET_NAME,
@@ -85,12 +87,12 @@ def test_not_found_latest_report(monkeypatch, s3_report_file: URL):
 
     with pytest.raises(RuntimeError):
         find_latest_report(
-            report_folder_path=f"s3://{TEST_BUCKET_NAME}/{s3_report_file.parent}"
+            report_folder_path=f"s3://{TEST_BUCKET_NAME}/{s3_s2_report_file.parent}"
         )
 
 
 @mock_s3
-def test_read_report(monkeypatch, local_report_update_file, s3_report_file: URL):
+def test_read_report(monkeypatch, local_report_update_file, s3_s2_report_file: URL):
     s3_client = boto3.client("s3", region_name=REGION)
     s3_client.create_bucket(
         Bucket=TEST_BUCKET_NAME,
@@ -100,9 +102,9 @@ def test_read_report(monkeypatch, local_report_update_file, s3_report_file: URL)
     )
 
     s3_client.upload_file(
-        str(local_report_update_file), TEST_BUCKET_NAME, str(s3_report_file)
+        str(local_report_update_file), TEST_BUCKET_NAME, str(s3_s2_report_file)
     )
-    s3_path = f"s3://{TEST_BUCKET_NAME}/{s3_report_file.path}"
+    s3_path = f"s3://{TEST_BUCKET_NAME}/{s3_s2_report_file.path}"
 
     values = read_report(report_path=s3_path)
     assert len(values) == 8
