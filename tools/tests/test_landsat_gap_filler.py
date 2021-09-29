@@ -7,21 +7,21 @@ from odc.aws.queue import get_queue
 
 from tools.monitoring import landsat_gap_filler
 from tools.monitoring.landsat_gap_filler import (
-    build_message,
+    build_messages,
     post_messages,
     fill_the_gap,
 )
 from tools.tests.conftest import *
 
 
-def test_build_message(landsat_gap_report: Path):
+def test_build_messages(landsat_gap_report: Path):
     missing_scene_paths = set(
         pd.read_csv(
             landsat_gap_report,
             header=None,
         ).values.ravel()
     )
-    returned_list = build_message(missing_scene_paths, False)
+    returned_list = build_messages(missing_scene_paths, False)
 
     assert len(returned_list) == 28
     for value in returned_list:
@@ -42,7 +42,7 @@ def test_post_messages(landsat_gap_report: Path):
             header=None,
         ).values.ravel()
     )
-    messages_to_send = build_message(missing_scene_paths, False)
+    messages_to_send = build_messages(missing_scene_paths, False)
 
     post_messages(message_list=messages_to_send, queue_name=SQS_QUEUE_NAME)
 
