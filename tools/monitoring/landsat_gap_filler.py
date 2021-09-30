@@ -23,9 +23,7 @@ from tools.utils.utils import (
 S3_BUCKET_PATH = "s3://deafrica-landsat/status-report/"
 
 
-def post_messages(
-    message_list, queue_name: str
-) -> dict:
+def post_messages(message_list, queue_name: str) -> dict:
     """
     Publish messages
 
@@ -142,9 +140,7 @@ def fill_the_gap(
     messages_to_send = returned["message_list"]
 
     log.info("Publishing messages")
-    result = post_messages(
-        message_list=messages_to_send, queue_name=sync_queue_name, log=log
-    )
+    result = post_messages(message_list=messages_to_send, queue_name=sync_queue_name)
 
     error_flag = (
         ":red_circle:" if result["failed"] > 0 or len(returned["failed"]) > 0 else ""
