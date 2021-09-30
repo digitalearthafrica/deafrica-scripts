@@ -150,8 +150,7 @@ def generate_buckets_diff(
         log.info(f"10 first orphaned_keys {list(orphaned_keys)[0:10]}")
 
     message = dedent(
-        f"*SENTINEL 2 GAP REPORT*"
-        f"Environment: {environment}\n "
+        f"*SENTINEL 2 GAP REPORT - {environment}*\n"
         f"Missing Scenes: {len(missing_scenes)}\n"
         f"Orphan Scenes: {len(orphaned_keys)}\n"
         f"Missing Scenes report Saved: {str(URL(s2_status_report_path) / output_filename)}\n"

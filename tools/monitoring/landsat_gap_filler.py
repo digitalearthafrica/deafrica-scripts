@@ -148,17 +148,17 @@ def fill_the_gap(
         ":red_circle:" if result["failed"] > 0 or len(returned["failed"]) > 0 else ""
     )
 
+    extra_issues = "\n".join(returned["failed"])
     message = dedent(
-        f"{error_flag}*Landsat GAP Filler*"
-        f"Environment: {environment}\n "
+        f"{error_flag}*Landsat GAP Filler - {environment}*\n"
         f"Sent Messages: {result['sent']}\n"
         f"Failed Messages: {int(result['failed']) + len(returned['failed'])}\n"
         f"Failed sending: {int(result['failed'])}\n"
-        f"Other issues presented: {returned['failed']}\n"
+        f"Other issues presented: {extra_issues}"
     )
 
     log.info(message)
-    if notification_url is not None:
+    if notification_url is not None and result["sent"] > 0:
         send_slack_notification(notification_url, "Landsat Gap Filler", message)
 
     if (int(result["failed"]) + len(returned["failed"])) > 0:

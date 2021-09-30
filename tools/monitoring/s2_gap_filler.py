@@ -185,8 +185,7 @@ def send_messages(
     error_flag = ":red_circle:" if failed > 0 else ""
 
     message = dedent(
-        f"{error_flag}*Sentinel 2 GAP Filler*"
-        f"Environment: {environment}\n "
+        f"{error_flag}*Sentinel 2 GAP Filler - {environment}*\n"
         f"Sent Messages: {sent}\n"
         f"Failed Messages: {failed}\n"
     )
