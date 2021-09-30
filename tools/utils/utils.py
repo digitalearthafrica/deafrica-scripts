@@ -213,3 +213,9 @@ update_stac = click.option(
     default=False,
     help="Will fill a special report within all scenes from the source",
 )
+limit = click.option(
+    "--limit",
+    "-l",
+    help="Limit the number of messages to transfer.",
+    default=None,
+)

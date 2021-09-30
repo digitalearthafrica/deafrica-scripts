@@ -5,7 +5,6 @@
 import json
 import logging
 import sys
-import traceback
 from textwrap import dedent
 from typing import Optional
 
@@ -18,6 +17,7 @@ from tools.utils.utils import (
     send_slack_notification,
     setup_logging,
     slack_url,
+    limit,
 )
 
 S3_BUCKET_PATH = "s3://deafrica-landsat/status-report/"
@@ -180,17 +180,12 @@ def fill_the_gap(
     nargs=1,
     required=True,
 )
-@click.option(
-    "--limit",
-    "-l",
-    help="Limit the number of messages to transfer.",
-    default=None,
-)
+@limit
 @slack_url
 @click.command("landsat-gap-filler")
 def cli(
     satellite: str,
-    sync_queue_name: str = "deafrica-pds-sentinel-2-sync-scene",
+    sync_queue_name: str = "sync_queue_name",
     limit: int = None,
     slack_url: str = None,
 ):
