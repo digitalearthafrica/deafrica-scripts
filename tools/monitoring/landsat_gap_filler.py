@@ -116,7 +116,9 @@ def fill_the_gap(
 
     environment = "DEV" if "dev" in sync_queue_name else "PDS"
 
-    latest_report = find_latest_report(report_folder_path=S3_BUCKET_PATH)
+    latest_report = find_latest_report(
+        report_folder_path=S3_BUCKET_PATH, contains=landsat, not_contains="orphaned"
+    )
 
     if not latest_report:
         raise RuntimeError("Report not found!")

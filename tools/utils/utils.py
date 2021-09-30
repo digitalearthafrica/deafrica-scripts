@@ -47,7 +47,9 @@ def send_slack_notification(url: str, title: str, message: str):
     response.raise_for_status()
 
 
-def find_latest_report(report_folder_path: str) -> str:
+def find_latest_report(
+    report_folder_path: str, contains: str = None, not_contains: str = None
+) -> str:
     """
     Function to find the latest gap report
     :return:(str) return the latest report file name
@@ -59,6 +61,12 @@ def find_latest_report(report_folder_path: str) -> str:
 
     if not report_files:
         raise RuntimeError("Report not found!")
+
+    if contains is not None:
+        report_files = [report for report in report_files if contains in report]
+
+    if not_contains is not None:
+        report_files = [report for report in report_files if not_contains not in report]
 
     report_files.sort()
 
