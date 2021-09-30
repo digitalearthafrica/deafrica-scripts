@@ -4,7 +4,6 @@
 import json
 import logging
 import sys
-import traceback
 from textwrap import dedent
 from typing import Dict, Optional
 

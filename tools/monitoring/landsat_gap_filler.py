@@ -24,14 +24,14 @@ S3_BUCKET_PATH = "s3://deafrica-landsat/status-report/"
 
 
 def post_messages(
-    message_list, queue_name: str, log: Optional[logging.Logger] = None
+    message_list, queue_name: str
 ) -> dict:
     """
     Publish messages
 
     :param message_list:(list) list of messages
     :param queue_name: (str) queue to be sens to
-    :param log: (str) log
+
     :return:(None)
     """
 
