@@ -59,9 +59,6 @@ def find_latest_report(
 
     report_files = list(s3_ls_dir(uri=report_folder_path, s3=s3))
 
-    if not report_files:
-        raise RuntimeError("Report not found!")
-
     if contains is not None:
         report_files = [report for report in report_files if contains in report]
 
@@ -69,6 +66,9 @@ def find_latest_report(
         report_files = [report for report in report_files if not_contains not in report]
 
     report_files.sort()
+
+    if not report_files:
+        raise RuntimeError("Report not found!")
 
     return report_files[-1]
 
