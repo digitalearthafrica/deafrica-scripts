@@ -1,3 +1,3 @@
 # Deafrica Scripts
 
-Dockerfile for use in tools
+Dockerfile for use in scripts

@@ -1,7 +1,7 @@
-name : Tools Test and Push
+name : Scripts Test and Push
 
 env:
-  IMAGE_NAME: digitalearthafrica/deafrica-tools
+  IMAGE_NAME: digitalearthafrica/deafrica-scripts
 
 on:
   pull_request:
