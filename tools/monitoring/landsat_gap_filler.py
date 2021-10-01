@@ -111,7 +111,7 @@ def fill_the_gap(
 
     log.info(f"Satellite: {landsat}")
     log.info(f"Queue: {sync_queue_name}")
-    log.info(f"Limited: {int(scenes_limit) if scenes_limit else 'No limit'}")
+    log.info(f"Limited: {scenes_limit if scenes_limit else 'No limit'}")
     log.info(f"Notification URL: {notification_url}")
 
     environment = "DEV" if "dev" in sync_queue_name else "PDS"
@@ -191,9 +191,18 @@ def cli(
     Publish missing scenes
     """
 
+    if limit is not None:
+        try:
+            limit = int(limit)
+        except ValueError:
+            raise ValueError(f"Limit {limit} is not valid")
+
+        if limit < 1:
+            raise ValueError(f"Limit {limit} lower than 1.")
+
     fill_the_gap(
         landsat=satellite,
         sync_queue_name=sync_queue_name,
-        scenes_limit=int(limit),
+        scenes_limit=limit,
         notification_url=slack_url,
     )
