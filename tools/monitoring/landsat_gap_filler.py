@@ -111,7 +111,7 @@ def fill_the_gap(
 
     log.info(f"Satellite: {landsat}")
     log.info(f"Queue: {sync_queue_name}")
-    log.info(f"Limited: {scenes_limit if scenes_limit else 'No limit'}")
+    log.info(f"Limit: {scenes_limit if scenes_limit else 'No limit'}")
     log.info(f"Notification URL: {notification_url}")
 
     environment = "DEV" if "dev" in sync_queue_name else "PDS"
