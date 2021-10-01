@@ -30,6 +30,11 @@ def setup_env(monkeypatch):
 
 
 @pytest.fixture
+def chirps_file():
+    return TEST_DATA_DIR / "chirps-v2.0.2018.09.tif.gz"
+
+
+@pytest.fixture
 def local_report_update_file():
     return TEST_DATA_DIR / REPORT_FILE
 

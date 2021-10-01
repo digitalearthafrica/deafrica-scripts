@@ -19,15 +19,19 @@ log = setup_logging()
 log.info("Starting CHIRPS downloader")
 
 
-def download_and_cog_chirps(
-    year: str, month: str, s3_dst: str, overwrite: bool = False
-):
+def build_in_data(in_file):
     # Set up file strings
-    in_file = f"chirps-v2.0.{year}.{month}.tif.gz"
     in_href = (
         f"https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_monthly/tifs/{in_file}"
     )
-    in_data = f"/vsigzip//vsicurl/{in_href}"
+    return f"/vsigzip//vsicurl/{in_href}"
+
+
+def download_and_cog_chirps(
+    year: str, month: str, s3_dst: str, overwrite: bool = False
+):
+    in_file = f"chirps-v2.0.{year}.{month}.tif.gz"
+    in_data = build_in_data(in_file)
 
     s3_dst = s3_dst.rstrip("/")
     out_data = f"{s3_dst}/chirps-v2.0_{year}.{month}.tif"
