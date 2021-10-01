@@ -1,16 +1,15 @@
 import boto3
 import moto
 import pytest
-from tools.data.chirps import download_and_cog_chirps, URL_TEMPLATE
-
+from tools.data.chirps import URL_TEMPLATE, download_and_cog_chirps
 from tools.tests.conftest import TEST_DATA_DIR
 
 
 @pytest.mark.xfail(reason="Rasterio isn't able to retrieve file from URL")
 @moto.mock_s3
 def test_one_full(remote_file):
-    TEST_BUCKET_NAME = 'test-bucket'
-    TEST_REGION = 'ap-southeast-2'
+    TEST_BUCKET_NAME = "test-bucket"
+    TEST_REGION = "ap-southeast-2"
 
     s3_client = boto3.client("s3", region_name=TEST_REGION)
     s3_client.create_bucket(
@@ -39,5 +38,5 @@ def remote_file(httpserver):
     in_file = "chirps-v2.0.2018.09.tif.gz"
     local_file = TEST_DATA_DIR / in_file
     test_url = URL_TEMPLATE.format(in_file=in_file)
-    httpserver.expect_request(test_url).respond_with_data(open(local_file, 'rb').read())
+    httpserver.expect_request(test_url).respond_with_data(open(local_file, "rb").read())
     yield httpserver.url_for(test_url)

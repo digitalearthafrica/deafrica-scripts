@@ -4,7 +4,6 @@ from datetime import datetime
 
 import click
 import pystac
-from tools.utils.utils import setup_logging
 from odc.aws import s3_dump, s3_head_object
 from odc.index import odc_uuid
 from pystac.utils import datetime_to_str
@@ -12,9 +11,11 @@ from rasterio.io import MemoryFile
 from rio_cogeo import cog_translate
 from rio_cogeo.profiles import cog_profiles
 from rio_stac import create_stac_item
+from tools.utils.utils import setup_logging
 
-
-URL_TEMPLATE = "https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_monthly/tifs/{in_file}"
+URL_TEMPLATE = (
+    "https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_monthly/tifs/{in_file}"
+)
 
 # Set log level to info
 log = setup_logging()
