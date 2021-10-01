@@ -1,4 +1,5 @@
 import gzip
+from pathlib import Path
 from random import randrange
 from unittest.mock import patch
 
@@ -6,15 +7,21 @@ import boto3
 from click.testing import CliRunner
 from moto import mock_s3, mock_sqs
 from odc.aws.queue import get_queue
+from urlpath import URL
 
 from tools.monitoring import s2_gap_filler
-from tools.tests.conftest import *
+from tools.tests.conftest import (
+    REGION,
+    SQS_QUEUE_NAME,
+    COGS_REGION,
+    TEST_BUCKET_NAME,
+    FAKE_STAC_FILE,
+)
 
 
 @mock_s3
 @mock_sqs
 def test_publish_message_s2_gap_filler(
-    monkeypatch,
     local_report_update_file,
     fake_stac_file: Path,
     s3_report_path: URL,
@@ -68,7 +75,6 @@ def test_publish_message_s2_gap_filler(
 @mock_s3
 @mock_sqs
 def test_s2_gap_filler_cli(
-    monkeypatch,
     local_report_update_file,
     fake_stac_file: Path,
     s3_s2_report_file: URL,

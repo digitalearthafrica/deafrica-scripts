@@ -1,9 +1,11 @@
+from pathlib import Path
 from unittest.mock import patch
 
 import boto3
 import pandas as pd
 from moto import mock_sqs, mock_s3
 from odc.aws.queue import get_queue
+from urlpath import URL
 
 from tools.monitoring import landsat_gap_filler
 from tools.monitoring.landsat_gap_filler import (
@@ -11,7 +13,7 @@ from tools.monitoring.landsat_gap_filler import (
     post_messages,
     fill_the_gap,
 )
-from tools.tests.conftest import *
+from tools.tests.conftest import SQS_QUEUE_NAME, REGION, TEST_BUCKET_NAME
 
 
 def test_build_messages(landsat_gap_report: Path):

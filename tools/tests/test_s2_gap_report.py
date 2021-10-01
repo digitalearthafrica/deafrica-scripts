@@ -1,14 +1,23 @@
+from pathlib import Path
 from unittest.mock import patch
 
 import boto3
 from moto import mock_s3
+from urlpath import URL
 
 from tools.monitoring import s2_gap_report
 from tools.monitoring.s2_gap_report import (
     get_and_filter_cogs_keys,
     generate_buckets_diff,
 )
-from tools.tests.conftest import *
+from tools.tests.conftest import (
+    COGS_REGION,
+    INVENTORY_BUCKET_NAME,
+    INVENTORY_FOLDER,
+    INVENTORY_BUCKET_SOURCE_NAME,
+    REGION,
+    REPORT_FOLDER,
+)
 
 
 @mock_s3

@@ -1,16 +1,22 @@
-from unittest.mock import patch, Mock, PropertyMock
+from pathlib import Path
+from unittest.mock import patch, PropertyMock
 
 import boto3
 from click.testing import CliRunner
 from moto import mock_s3
+from urlpath import URL
 
 from tools.monitoring.landsat_gap_report import (
     get_and_filter_keys_from_files,
     get_and_filter_keys,
     cli,
 )
-
-from tools.tests.conftest import *
+from tools.tests.conftest import (
+    REGION,
+    INVENTORY_BUCKET_NAME,
+    INVENTORY_FOLDER,
+    TEST_BUCKET_NAME,
+)
 
 
 def test_get_and_filter_keys_from_files(fake_landsat_bulk_file: Path):
