@@ -14,7 +14,6 @@ FAKE_LANDSAT_8_BULK_FILE = "fake_landsat_8_bulk_file.csv.gz"
 FAKE_LANDSAT_GAP_REPORT = "landsat_5_2021-08-16.txt.gz"
 REPORT_FOLDER = "status-report"
 COGS_REGION = "us-west-2"
-CHIRPS_REGION = "ap-southeast-2"
 
 # INVENTORY
 INVENTORY_BUCKET_SOURCE_NAME = "test-cogs-inventory-bucket"
