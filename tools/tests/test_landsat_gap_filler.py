@@ -55,7 +55,7 @@ def test_post_messages(landsat_gap_report: Path):
 @mock_sqs
 @mock_s3
 def test_generate_buckets_diff(
-        landsat_gap_report: Path, s3_report_path: URL, s3_landsat_gap_report: URL
+    landsat_gap_report: Path, s3_report_path: URL, s3_landsat_gap_report: URL
 ):
     sqs_client = boto3.client("sqs", region_name=REGION)
     sqs_client.create_queue(QueueName=SQS_QUEUE_NAME)
@@ -87,7 +87,7 @@ def test_generate_buckets_diff(
 @mock_sqs
 @mock_s3
 def test_exceptions(
-        landsat_gap_report: Path, s3_report_path: URL, s3_landsat_gap_report: URL
+    landsat_gap_report: Path, s3_report_path: URL, s3_landsat_gap_report: URL
 ):
     sqs_client = boto3.client("sqs", region_name=REGION)
     sqs_client.create_queue(QueueName=SQS_QUEUE_NAME)
@@ -111,8 +111,16 @@ def test_exceptions(
     with patch.object(landsat_gap_filler, "S3_BUCKET_PATH", str(s3_report_path)):
         # String Limit
         with pytest.raises(ValueError):
-            fill_the_gap(landsat="landsat_5", sync_queue_name=SQS_QUEUE_NAME, scenes_limit="string test")
+            fill_the_gap(
+                landsat="landsat_5",
+                sync_queue_name=SQS_QUEUE_NAME,
+                scenes_limit="string test",
+            )
 
         # Fake slack notification
         with pytest.raises(Exception):
-            fill_the_gap(landsat="landsat_5", sync_queue_name=SQS_QUEUE_NAME, notification_url="fake_notification")
+            fill_the_gap(
+                landsat="landsat_5",
+                sync_queue_name=SQS_QUEUE_NAME,
+                notification_url="fake_notification",
+            )
