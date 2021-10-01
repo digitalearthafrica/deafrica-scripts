@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 import boto3
 import pandas as pd
+import pytest
 from moto import mock_sqs, mock_s3
 from odc.aws.queue import get_queue
 from urlpath import URL
@@ -56,8 +57,8 @@ def test_post_messages(landsat_gap_report: Path):
 def test_generate_buckets_diff(
     landsat_gap_report: Path, s3_report_path: URL, s3_landsat_gap_report: URL
 ):
-    resource = boto3.resource("sqs")
-    resource.create_queue(QueueName=SQS_QUEUE_NAME)
+    sqs_client = boto3.client("sqs", region_name=REGION)
+    sqs_client.create_queue(QueueName=SQS_QUEUE_NAME)
 
     s3_client = boto3.client("s3", region_name=REGION)
     s3_client.create_bucket(
@@ -75,11 +76,51 @@ def test_generate_buckets_diff(
     )
 
     print(list(boto3.resource("s3").Bucket(TEST_BUCKET_NAME).objects.all()))
-
     with patch.object(landsat_gap_filler, "S3_BUCKET_PATH", str(s3_report_path)):
         # No differences
         fill_the_gap(landsat="landsat_5", sync_queue_name=SQS_QUEUE_NAME)
-
         queue = get_queue(queue_name=SQS_QUEUE_NAME)
         number_of_msgs = queue.attributes.get("ApproximateNumberOfMessages")
         assert int(number_of_msgs) == 28
+
+
+@mock_sqs
+@mock_s3
+def test_exceptions(
+    landsat_gap_report: Path, s3_report_path: URL, s3_landsat_gap_report: URL
+):
+    sqs_client = boto3.client("sqs", region_name=REGION)
+    sqs_client.create_queue(QueueName=SQS_QUEUE_NAME)
+
+    s3_client = boto3.client("s3", region_name=REGION)
+    s3_client.create_bucket(
+        Bucket=TEST_BUCKET_NAME,
+        CreateBucketConfiguration={
+            "LocationConstraint": REGION,
+        },
+    )
+
+    # Upload fake gap report
+    s3_client.upload_file(
+        str(landsat_gap_report),
+        TEST_BUCKET_NAME,
+        str(s3_landsat_gap_report),
+    )
+
+    print(list(boto3.resource("s3").Bucket(TEST_BUCKET_NAME).objects.all()))
+    with patch.object(landsat_gap_filler, "S3_BUCKET_PATH", str(s3_report_path)):
+        # String Limit
+        with pytest.raises(ValueError):
+            fill_the_gap(
+                landsat="landsat_5",
+                sync_queue_name=SQS_QUEUE_NAME,
+                scenes_limit="string test",
+            )
+
+        # Fake slack notification
+        with pytest.raises(Exception):
+            fill_the_gap(
+                landsat="landsat_5",
+                sync_queue_name=SQS_QUEUE_NAME,
+                notification_url="fake_notification",
+            )
