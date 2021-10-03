@@ -6,7 +6,7 @@ from urlpath import URL
 
 from tools.tests.conftest import REGION, TEST_BUCKET_NAME
 from tools.monitoring.check_dead_queues import check_deadletter_queues
-from tools.utils.utils import (
+from tools.utils import (
     find_latest_report,
     read_report,
     split_list_equally,

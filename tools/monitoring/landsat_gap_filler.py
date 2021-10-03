@@ -11,7 +11,7 @@ from typing import Optional
 import click
 from odc.aws.queue import publish_messages, get_queue
 
-from tools.utils.utils import (
+from tools.utils import (
     find_latest_report,
     read_report,
     send_slack_notification,
