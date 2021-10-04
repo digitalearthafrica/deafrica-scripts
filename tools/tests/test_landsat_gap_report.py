@@ -128,6 +128,5 @@ def test_landsat_gap_report_cli(
         )
 
         bucket_objs = list(boto3.resource("s3").Bucket(TEST_BUCKET_NAME).objects.all())
-        assert len(bucket_objs) == 2
+        assert len(bucket_objs) == 1
         assert "landsat_5" in bucket_objs[0].key
-        assert "orphaned" in bucket_objs[1].key

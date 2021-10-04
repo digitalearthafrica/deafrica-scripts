@@ -8,6 +8,7 @@ s3://deafrica-landsat-dev/status-report/<satellite_date.csv.gz>
 
 import csv
 import gzip
+import json
 import time
 from datetime import datetime
 from pathlib import Path
@@ -84,21 +85,21 @@ def get_and_filter_keys_from_files(file_path: Path):
             for row in csv.DictReader(csv_file)
             if (
                 # Filter to skip all LANDSAT_4
-                row.get("Satellite") is not None
-                and row["Satellite"] != "LANDSAT_4"
-                and row["Satellite"] != "4"
-                # Filter to get just day
-                and (
-                    row.get("Day/Night Indicator") is not None
-                    and row["Day/Night Indicator"].upper() == "DAY"
-                )
-                # Filter to get just from Africa
-                and (
-                    row.get("WRS Path") is not None
-                    and row.get("WRS Row") is not None
-                    and int(f"{row['WRS Path'].zfill(3)}{row['WRS Row'].zfill(3)}")
-                    in africa_pathrows
-                )
+                    row.get("Satellite") is not None
+                    and row["Satellite"] != "LANDSAT_4"
+                    and row["Satellite"] != "4"
+                    # Filter to get just day
+                    and (
+                            row.get("Day/Night Indicator") is not None
+                            and row["Day/Night Indicator"].upper() == "DAY"
+                    )
+                    # Filter to get just from Africa
+                    and (
+                            row.get("WRS Path") is not None
+                            and row.get("WRS Row") is not None
+                            and int(f"{row['WRS Path'].zfill(3)}{row['WRS Row'].zfill(3)}")
+                            in africa_pathrows
+                    )
             )
         )
 
@@ -133,11 +134,11 @@ def get_and_filter_keys(landsat: str) -> set:
 
 
 def generate_buckets_diff(
-    bucket_name: str,
-    satellite_name: str,
-    file_name: str,
-    update_stac: bool = False,
-    notification_url: str = None,
+        bucket_name: str,
+        satellite_name: str,
+        file_name: str,
+        update_stac: bool = False,
+        notification_url: str = None,
 ):
     """
     Compare USGS bulk files and Africa inventory bucket detecting differences
@@ -181,7 +182,6 @@ def generate_buckets_diff(
     log.info(f"BULK FILE number of objects {len(source_paths)}")
     log.info(f"BULK 10 First {list(source_paths)[0:10]}")
 
-    orphan_output_filename = "No orphan scenes were found"
     output_filename = "No missing scenes were found"
 
     if update_stac:
@@ -211,45 +211,35 @@ def generate_buckets_diff(
 
     landsat_s3 = s3_client(region_name="af-south-1")
 
-    if len(missing_scenes) > 0:
-        output_filename = (
-            f"{satellite_name}_{date_string}.txt.gz"
-            if not update_stac
-            else f"{satellite_name}_{date_string}_update.txt.gz"
+    if len(missing_scenes) > 0 or len(orphaned_scenes) > 0:
+        output_filename = f"{satellite_name}_{date_string}_gap_report.json"
+        log.info(
+            f"Report file will be saved in {landsat_status_report_path / output_filename}"
+        )
+        missing_orphan_scenes_json = json.dumps(
+            {
+                "orphan": missing_scenes,
+                "missing": orphaned_scenes
+            }
         )
 
-        log.info(
-            f"Missing scenes file will be saved in {landsat_status_report_path / output_filename}"
-        )
         s3_dump(
-            data=gzip.compress(str.encode("\n".join(missing_scenes))),
+            data=missing_orphan_scenes_json,
             url=str(landsat_status_report_path / output_filename),
             s3=landsat_s3,
-            ContentType="application/gzip",
+            ContentType="application/json",
         )
 
-        log.info(f"Number of missing scenes: {len(missing_scenes)}")
-
-    if len(orphaned_scenes) > 0:
-        log.info(
-            f"Orphan scenes file will be saved in {landsat_status_report_path / output_filename}"
-        )
-        orphan_output_filename = f"{satellite_name}_{date_string}_orphaned.txt.gz"
-        s3_dump(
-            data=gzip.compress(str.encode("\n".join(orphaned_scenes))),
-            url=str(landsat_status_report_path / orphan_output_filename),
-            s3=landsat_s3,
-            ContentType="application/gzip",
-        )
-
-        log.info(f"Number of orphaned scenes: {len(orphaned_scenes)}")
-
+    report_output = (
+        str(landsat_status_report_url / output_filename)
+        if len(missing_scenes) > 0 or len(orphaned_scenes) > 0
+        else output_filename
+    )
     message = dedent(
         f"*{satellite_name.upper()} GAP REPORT - {environment}*\n "
         f"Missing Scenes: {len(missing_scenes)}\n"
         f"Orphan Scenes: {len(orphaned_scenes)}\n"
-        f"Missing Scenes: {str(landsat_status_report_url / output_filename)}\n"
-        f"Orphan Scenes {str(landsat_status_report_url / orphan_output_filename)}\n"
+        f"Report: {report_output}\n"
     )
 
     log.info(message)
@@ -284,7 +274,7 @@ def generate_buckets_diff(
 @slack_url
 @click.command("landsat-gap-report")
 def cli(
-    bucket_name: str, satellite: str, update_stac: bool = False, slack_url: str = None
+        bucket_name: str, satellite: str, update_stac: bool = False, slack_url: str = None
 ):
     """
     Publish missing scenes
