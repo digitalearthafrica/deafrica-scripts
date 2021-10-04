@@ -128,7 +128,7 @@ def generate_buckets_diff(
         log.info(f"File will be saved in {s2_status_report_path}{output_filename}")
 
         missing_orphan_scenes_json = json.dumps(
-            {"orphan": list(missing_scenes), "missing": list(orphaned_keys)}
+            {"orphan": list(orphaned_keys), "missing": list(missing_scenes)}
         )
 
         s3_dump(
