@@ -36,7 +36,7 @@ def test_one_full(remote_file):
 @pytest.fixture
 def remote_file(httpserver):
     in_file = "chirps-v2.0.2018.09.tif.gz"
-    local_file = TEST_DATA_DIR / in_file
+    local_file = TEST_DATA_DIR / "chirps" / in_file
     test_url = URL_TEMPLATE.format(in_file=in_file)
     httpserver.expect_request(test_url).respond_with_data(open(local_file, "rb").read())
     yield httpserver.url_for(test_url)

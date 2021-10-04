@@ -8,6 +8,7 @@ s3://deafrica-landsat-dev/status-report/<satellite_date.csv.gz>
 
 import csv
 import gzip
+import json
 import time
 from datetime import datetime
 from pathlib import Path
@@ -181,7 +182,6 @@ def generate_buckets_diff(
     log.info(f"BULK FILE number of objects {len(source_paths)}")
     log.info(f"BULK 10 First {list(source_paths)[0:10]}")
 
-    orphan_output_filename = "No orphan scenes were found"
     output_filename = "No missing scenes were found"
 
     if update_stac:
@@ -211,45 +211,37 @@ def generate_buckets_diff(
 
     landsat_s3 = s3_client(region_name="af-south-1")
 
-    if len(missing_scenes) > 0:
+    if len(missing_scenes) > 0 or len(orphaned_scenes) > 0:
         output_filename = (
-            f"{satellite_name}_{date_string}.txt.gz"
+            f"{satellite_name}_{date_string}_gap_report.json"
             if not update_stac
-            else f"{satellite_name}_{date_string}_update.txt.gz"
+            else URL(f"{date_string}_gap_report_update.json")
         )
 
         log.info(
-            f"Missing scenes file will be saved in {landsat_status_report_path / output_filename}"
+            f"Report file will be saved in {landsat_status_report_path / output_filename}"
         )
+        missing_orphan_scenes_json = json.dumps(
+            {"orphan": missing_scenes, "missing": orphaned_scenes}
+        )
+
         s3_dump(
-            data=gzip.compress(str.encode("\n".join(missing_scenes))),
+            data=missing_orphan_scenes_json,
             url=str(landsat_status_report_path / output_filename),
             s3=landsat_s3,
-            ContentType="application/gzip",
+            ContentType="application/json",
         )
 
-        log.info(f"Number of missing scenes: {len(missing_scenes)}")
-
-    if len(orphaned_scenes) > 0:
-        log.info(
-            f"Orphan scenes file will be saved in {landsat_status_report_path / output_filename}"
-        )
-        orphan_output_filename = f"{satellite_name}_{date_string}_orphaned.txt.gz"
-        s3_dump(
-            data=gzip.compress(str.encode("\n".join(orphaned_scenes))),
-            url=str(landsat_status_report_path / orphan_output_filename),
-            s3=landsat_s3,
-            ContentType="application/gzip",
-        )
-
-        log.info(f"Number of orphaned scenes: {len(orphaned_scenes)}")
-
+    report_output = (
+        str(landsat_status_report_url / output_filename)
+        if len(missing_scenes) > 0 or len(orphaned_scenes) > 0
+        else output_filename
+    )
     message = dedent(
         f"*{satellite_name.upper()} GAP REPORT - {environment}*\n "
         f"Missing Scenes: {len(missing_scenes)}\n"
         f"Orphan Scenes: {len(orphaned_scenes)}\n"
-        f"Missing Scenes: {str(landsat_status_report_url / output_filename)}\n"
-        f"Orphan Scenes {str(landsat_status_report_url / orphan_output_filename)}\n"
+        f"Report: {report_output}\n"
     )
 
     log.info(message)

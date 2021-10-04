@@ -4,13 +4,23 @@ from moto import mock_s3, mock_sqs
 from odc.aws.queue import publish_message
 from urlpath import URL
 
-from tools.tests.conftest import REGION, TEST_BUCKET_NAME
 from tools.monitoring.check_dead_queues import check_deadletter_queues
+from tools.tests.conftest import REGION, TEST_BUCKET_NAME, TEST_DATA_DIR
 from tools.utils import (
     find_latest_report,
-    read_report,
+    read_report_missing_scenes,
     split_list_equally,
 )
+
+
+@pytest.fixture
+def s3_s2_report_file():
+    return URL("status-report") / "2021-08-17_gap_report_update.json"
+
+
+@pytest.fixture
+def local_report_update_file():
+    return TEST_DATA_DIR / "sentinel_2" / "2021-08-17_gap_report_update.json"
 
 
 @mock_sqs
@@ -106,11 +116,11 @@ def test_read_report(monkeypatch, local_report_update_file, s3_s2_report_file: U
     )
     s3_path = f"s3://{TEST_BUCKET_NAME}/{s3_s2_report_file.path}"
 
-    values = read_report(report_path=s3_path)
+    values = read_report_missing_scenes(report_path=s3_path)
     assert len(values) == 8
 
     # Test with limit
-    values = read_report(report_path=s3_path, limit=2)
+    values = read_report_missing_scenes(report_path=s3_path, limit=2)
     assert len(values) == 2
 
 

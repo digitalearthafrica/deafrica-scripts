@@ -1,4 +1,3 @@
-from pathlib import Path
 from unittest.mock import patch
 
 import boto3
@@ -13,18 +12,23 @@ from tools.monitoring.s2_gap_report import (
 from tools.tests.conftest import (
     COGS_REGION,
     INVENTORY_BUCKET_NAME,
+    INVENTORY_MANIFEST_FILE,
+    INVENTORY_DATA_FILE,
     INVENTORY_FOLDER,
     INVENTORY_BUCKET_SOURCE_NAME,
     REGION,
     REPORT_FOLDER,
+    TEST_DATA_DIR,
 )
+
+DATA_FOLDER = "sentinel_2"
+INVENTORY_MANIFEST_FILE = TEST_DATA_DIR / DATA_FOLDER / INVENTORY_MANIFEST_FILE
+INVENTORY_DATA_FILE = TEST_DATA_DIR / DATA_FOLDER / INVENTORY_DATA_FILE
 
 
 @mock_s3
 def test_get_and_filter_cogs_keys(
-    inventory_s2_data_file: Path,
     s3_inventory_data_file: URL,
-    inventory_s2_manifest_file,
     s3_inventory_manifest_file: URL,
 ):
     s3_client = boto3.client("s3", region_name=COGS_REGION)
@@ -37,14 +41,14 @@ def test_get_and_filter_cogs_keys(
 
     # Upload inventory manifest
     s3_client.upload_file(
-        str(inventory_s2_manifest_file),
+        str(INVENTORY_MANIFEST_FILE),
         INVENTORY_BUCKET_NAME,
         str(s3_inventory_manifest_file),
     )
 
     # Upload inventory data
     s3_client.upload_file(
-        str(inventory_s2_data_file),
+        str(INVENTORY_DATA_FILE),
         INVENTORY_BUCKET_NAME,
         str(s3_inventory_data_file),
     )
@@ -64,9 +68,7 @@ def test_get_and_filter_cogs_keys(
 
 @mock_s3
 def test_generate_buckets_diff(
-    inventory_s2_data_file: Path,
     s3_inventory_data_file: URL,
-    inventory_s2_manifest_file,
     s3_inventory_manifest_file: URL,
 ):
     s3_client_cogs = boto3.client("s3", region_name=COGS_REGION)
@@ -79,14 +81,14 @@ def test_generate_buckets_diff(
 
     # Upload inventory manifest
     s3_client_cogs.upload_file(
-        str(inventory_s2_manifest_file),
+        str(INVENTORY_MANIFEST_FILE),
         INVENTORY_BUCKET_SOURCE_NAME,
         str(s3_inventory_manifest_file),
     )
 
     # Upload inventory data
     s3_client_cogs.upload_file(
-        str(inventory_s2_data_file),
+        str(INVENTORY_DATA_FILE),
         INVENTORY_BUCKET_SOURCE_NAME,
         str(s3_inventory_data_file),
     )
@@ -103,14 +105,14 @@ def test_generate_buckets_diff(
 
     # Upload inventory manifest
     s3_client.upload_file(
-        str(inventory_s2_manifest_file),
+        str(INVENTORY_MANIFEST_FILE),
         INVENTORY_BUCKET_NAME,
         str(s3_inventory_manifest_file),
     )
 
     # Upload inventory data
     s3_client.upload_file(
-        str(inventory_s2_data_file),
+        str(INVENTORY_DATA_FILE),
         INVENTORY_BUCKET_NAME,
         str(s3_inventory_data_file),
     )

@@ -1,0 +1,12 @@
+{
+   "missing":[
+      "s3://test-bucket/0/fake_stac.json",
+      "s3://test-bucket/1/fake_stac.json",
+      "s3://test-bucket/2/fake_stac.json",
+      "s3://test-bucket/3/fake_stac.json",
+      "s3://test-bucket/4/fake_stac.json",
+      "s3://test-bucket/5/fake_stac.json",
+      "s3://test-bucket/6/fake_stac.json",
+      "s3://test-bucket/7/fake_stac.json"
+   ]
+}

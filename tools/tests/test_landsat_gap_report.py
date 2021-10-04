@@ -1,4 +1,3 @@
-from pathlib import Path
 from unittest.mock import patch, PropertyMock
 
 import boto3
@@ -14,21 +13,28 @@ from tools.monitoring.landsat_gap_report import (
 from tools.tests.conftest import (
     REGION,
     INVENTORY_BUCKET_NAME,
+    INVENTORY_MANIFEST_FILE,
+    INVENTORY_DATA_FILE,
     INVENTORY_FOLDER,
     TEST_BUCKET_NAME,
+    TEST_DATA_DIR,
 )
 
+DATA_FOLDER = "landsat"
+FAKE_LANDSAT_8_BULK_FILE = "fake_landsat_8_bulk_file.csv.gz"
+FAKE_LANDSAT_BULK_FILE = TEST_DATA_DIR / DATA_FOLDER / FAKE_LANDSAT_8_BULK_FILE
+INVENTORY_MANIFEST_FILE = TEST_DATA_DIR / DATA_FOLDER / INVENTORY_MANIFEST_FILE
+INVENTORY_DATA_FILE = TEST_DATA_DIR / DATA_FOLDER / INVENTORY_DATA_FILE
 
-def test_get_and_filter_keys_from_files(fake_landsat_bulk_file: Path):
-    keys = get_and_filter_keys_from_files(fake_landsat_bulk_file)
+
+def test_get_and_filter_keys_from_files():
+    keys = get_and_filter_keys_from_files(FAKE_LANDSAT_BULK_FILE)
     assert len(keys) == 20
 
 
 @mock_s3
 def test_get_and_filter_keys(
-    inventory_landsat_manifest_file: Path,
     s3_inventory_data_file: URL,
-    inventory_landsat_data_file: Path,
     s3_inventory_manifest_file: URL,
 ):
     s3_client = boto3.client("s3", region_name=REGION)
@@ -41,14 +47,14 @@ def test_get_and_filter_keys(
 
     # Upload inventory manifest
     s3_client.upload_file(
-        str(inventory_landsat_manifest_file),
+        str(INVENTORY_MANIFEST_FILE),
         INVENTORY_BUCKET_NAME,
         str(s3_inventory_manifest_file),
     )
 
     # Upload inventory data
     s3_client.upload_file(
-        str(inventory_landsat_data_file),
+        str(INVENTORY_DATA_FILE),
         INVENTORY_BUCKET_NAME,
         str(s3_inventory_data_file),
     )
@@ -68,11 +74,7 @@ def test_get_and_filter_keys(
 
 @mock_s3
 def test_landsat_gap_report_cli(
-    inventory_landsat_manifest_file: Path,
-    s3_inventory_data_file: URL,
-    inventory_landsat_data_file: Path,
-    s3_inventory_manifest_file: URL,
-    fake_landsat_bulk_file: Path,
+    s3_inventory_data_file: URL, s3_inventory_manifest_file: URL
 ):
     s3_client = boto3.client("s3", region_name=REGION)
     s3_client.create_bucket(
@@ -84,14 +86,14 @@ def test_landsat_gap_report_cli(
 
     # Upload inventory manifest
     s3_client.upload_file(
-        str(inventory_landsat_manifest_file),
+        str(INVENTORY_MANIFEST_FILE),
         INVENTORY_BUCKET_NAME,
         str(s3_inventory_manifest_file),
     )
 
     # Upload inventory data
     s3_client.upload_file(
-        str(inventory_landsat_data_file),
+        str(INVENTORY_DATA_FILE),
         INVENTORY_BUCKET_NAME,
         str(s3_inventory_data_file),
     )
@@ -115,9 +117,8 @@ def test_landsat_gap_report_cli(
     ), patch(
         "tools.monitoring.landsat_gap_report.download_file_to_tmp",
         new_callable=PropertyMock,
-        return_value=fake_landsat_bulk_file,
+        return_value=FAKE_LANDSAT_BULK_FILE,
     ):
-
         runner = CliRunner()
         runner.invoke(
             cli,
@@ -128,6 +129,5 @@ def test_landsat_gap_report_cli(
         )
 
         bucket_objs = list(boto3.resource("s3").Bucket(TEST_BUCKET_NAME).objects.all())
-        assert len(bucket_objs) == 2
+        assert len(bucket_objs) == 1
         assert "landsat_5" in bucket_objs[0].key
-        assert "orphaned" in bucket_objs[1].key
