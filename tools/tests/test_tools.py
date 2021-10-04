@@ -4,13 +4,23 @@ from moto import mock_s3, mock_sqs
 from odc.aws.queue import publish_message
 from urlpath import URL
 
-from tools.tests.conftest import REGION, TEST_BUCKET_NAME
 from tools.monitoring.check_dead_queues import check_deadletter_queues
+from tools.tests.conftest import REGION, TEST_BUCKET_NAME, TEST_DATA_DIR
 from tools.utils import (
     find_latest_report,
     read_report_missing_scenes,
     split_list_equally,
 )
+
+
+@pytest.fixture
+def s3_s2_report_file():
+    return URL("status-report") / "2021-08-17_gap_report_update.json"
+
+
+@pytest.fixture
+def local_report_update_file():
+    return TEST_DATA_DIR / "sentinel_2" / "2021-08-17_gap_report_update.json"
 
 
 @mock_sqs
@@ -53,7 +63,7 @@ def test_get_no_msg_dead_queues(monkeypatch):
 
 @mock_s3
 def test_find_latest_report(
-    monkeypatch, local_report_update_file, s3_s2_report_file: URL
+        monkeypatch, local_report_update_file, s3_s2_report_file: URL
 ):
     s3_client = boto3.client("s3", region_name=REGION)
     s3_client.create_bucket(
