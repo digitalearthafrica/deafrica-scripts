@@ -222,7 +222,7 @@ def generate_buckets_diff(
             f"Report file will be saved in {landsat_status_report_path / output_filename}"
         )
         missing_orphan_scenes_json = json.dumps(
-            {"orphan": missing_scenes, "missing": orphaned_scenes}
+            {"orphan": orphaned_scenes, "missing": missing_scenes}
         )
 
         s3_dump(
