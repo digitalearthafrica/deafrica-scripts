@@ -85,21 +85,21 @@ def get_and_filter_keys_from_files(file_path: Path):
             for row in csv.DictReader(csv_file)
             if (
                 # Filter to skip all LANDSAT_4
-                    row.get("Satellite") is not None
-                    and row["Satellite"] != "LANDSAT_4"
-                    and row["Satellite"] != "4"
-                    # Filter to get just day
-                    and (
-                            row.get("Day/Night Indicator") is not None
-                            and row["Day/Night Indicator"].upper() == "DAY"
-                    )
-                    # Filter to get just from Africa
-                    and (
-                            row.get("WRS Path") is not None
-                            and row.get("WRS Row") is not None
-                            and int(f"{row['WRS Path'].zfill(3)}{row['WRS Row'].zfill(3)}")
-                            in africa_pathrows
-                    )
+                row.get("Satellite") is not None
+                and row["Satellite"] != "LANDSAT_4"
+                and row["Satellite"] != "4"
+                # Filter to get just day
+                and (
+                    row.get("Day/Night Indicator") is not None
+                    and row["Day/Night Indicator"].upper() == "DAY"
+                )
+                # Filter to get just from Africa
+                and (
+                    row.get("WRS Path") is not None
+                    and row.get("WRS Row") is not None
+                    and int(f"{row['WRS Path'].zfill(3)}{row['WRS Row'].zfill(3)}")
+                    in africa_pathrows
+                )
             )
         )
 
@@ -134,11 +134,11 @@ def get_and_filter_keys(landsat: str) -> set:
 
 
 def generate_buckets_diff(
-        bucket_name: str,
-        satellite_name: str,
-        file_name: str,
-        update_stac: bool = False,
-        notification_url: str = None,
+    bucket_name: str,
+    satellite_name: str,
+    file_name: str,
+    update_stac: bool = False,
+    notification_url: str = None,
 ):
     """
     Compare USGS bulk files and Africa inventory bucket detecting differences
@@ -222,10 +222,7 @@ def generate_buckets_diff(
             f"Report file will be saved in {landsat_status_report_path / output_filename}"
         )
         missing_orphan_scenes_json = json.dumps(
-            {
-                "orphan": missing_scenes,
-                "missing": orphaned_scenes
-            }
+            {"orphan": missing_scenes, "missing": orphaned_scenes}
         )
 
         s3_dump(
@@ -279,7 +276,7 @@ def generate_buckets_diff(
 @slack_url
 @click.command("landsat-gap-report")
 def cli(
-        bucket_name: str, satellite: str, update_stac: bool = False, slack_url: str = None
+    bucket_name: str, satellite: str, update_stac: bool = False, slack_url: str = None
 ):
     """
     Publish missing scenes

@@ -13,7 +13,7 @@ from odc.aws.queue import get_queue, publish_messages
 
 from tools.utils import (
     find_latest_report,
-    read_report,
+    read_report_missing_scenes,
     split_list_equally,
     send_slack_notification,
     setup_logging,
@@ -141,7 +141,7 @@ def send_messages(
     log.info(f"Limited: {int(limit) if limit else 'No limit'}")
     log.info(f"Number of workers: {max_workers}")
 
-    files = read_report(report_path=latest_report, limit=limit)
+    files = read_report_missing_scenes(report_path=latest_report, limit=limit)
 
     log.info(f"Number of scenes found {len(files)}")
     log.info(f"Example scenes: {files[0:10]}")

@@ -128,10 +128,7 @@ def generate_buckets_diff(
         log.info(f"File will be saved in {s2_status_report_path}{output_filename}")
 
         missing_orphan_scenes_json = json.dumps(
-            {
-                "orphan": missing_scenes,
-                "missing": orphaned_keys
-            }
+            {"orphan": missing_scenes, "missing": orphaned_keys}
         )
 
         s3_dump(
@@ -158,9 +155,7 @@ def generate_buckets_diff(
 
     if not update_stac and (len(missing_scenes) > 200 or len(orphaned_keys) > 200):
         if notification_url is not None:
-            send_slack_notification(
-                notification_url, "S2 Gap Report", message
-            )
+            send_slack_notification(notification_url, "S2 Gap Report", message)
         raise Exception(f"More than 200 scenes were found \n {message}")
 
 

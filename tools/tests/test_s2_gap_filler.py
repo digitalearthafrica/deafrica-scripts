@@ -1,4 +1,5 @@
 import gzip
+import json
 from pathlib import Path
 from random import randrange
 from unittest.mock import patch
@@ -15,18 +16,20 @@ from tools.tests.conftest import (
     SQS_QUEUE_NAME,
     COGS_REGION,
     TEST_BUCKET_NAME,
-    FAKE_STAC_FILE,
+    TEST_DATA_DIR,
 )
+
+DATA_FOLDER = "sentinel_2"
+S2_JSON_FILE = "2021-08-17_gap_report_update.json"
+S2_FAKE_STAC_FILE = "fake_stac.json"
+S3_S2_REPORT_FILE = URL("status-report") / S2_JSON_FILE
+LOCAL_REPORT_UPDATE_FILE = TEST_DATA_DIR / DATA_FOLDER / S2_JSON_FILE
+FAKE_STAC_FILE_PATH = TEST_DATA_DIR / DATA_FOLDER / S2_FAKE_STAC_FILE
 
 
 @mock_s3
 @mock_sqs
-def test_publish_message_s2_gap_filler(
-    local_report_update_file,
-    fake_stac_file: Path,
-    s3_report_path: URL,
-    s3_s2_report_file: URL,
-):
+def test_publish_message_s2_gap_filler(s3_report_path: URL):
     sqs_client = boto3.client("sqs", region_name=REGION)
     sqs_client.create_queue(QueueName=SQS_QUEUE_NAME)
 
@@ -39,24 +42,21 @@ def test_publish_message_s2_gap_filler(
     )
 
     s3_client.upload_file(
-        str(local_report_update_file),
+        str(LOCAL_REPORT_UPDATE_FILE),
         TEST_BUCKET_NAME,
-        str(s3_s2_report_file),
+        str(S3_S2_REPORT_FILE),
     )
 
-    files = [
-        scene_path.strip()
-        for scene_path in gzip.open(open(str(local_report_update_file), "rb"))
-        .read()
-        .decode("utf-8")
-        .split("\n")
-        if scene_path
-    ]
+    missing_dict = json.loads(open(str(LOCAL_REPORT_UPDATE_FILE), "rb").read())
 
-    for i in range(len(files)):
+    files = [scene_path.strip() for scene_path in missing_dict["missing"] if scene_path]
+
+    [
         s3_client.upload_file(
-            str(fake_stac_file), TEST_BUCKET_NAME, f"{i}/{FAKE_STAC_FILE}"
+            str(FAKE_STAC_FILE_PATH), TEST_BUCKET_NAME, f"{i}/{S2_FAKE_STAC_FILE}"
         )
+        for i in range(len(files))
+    ]
 
     with patch.object(s2_gap_filler, "S3_BUCKET_PATH", str(s3_report_path)):
         s2_gap_filler.send_messages(
@@ -74,12 +74,7 @@ def test_publish_message_s2_gap_filler(
 
 @mock_s3
 @mock_sqs
-def test_s2_gap_filler_cli(
-    local_report_update_file,
-    fake_stac_file: Path,
-    s3_s2_report_file: URL,
-    s3_report_path: URL,
-):
+def test_s2_gap_filler_cli(s3_report_path: URL):
     """
     Test for random numbers of limits (between 1-10) for a random numbers of workers workers (between 1-30).
     """
@@ -95,24 +90,21 @@ def test_s2_gap_filler_cli(
     )
 
     s3_client.upload_file(
-        str(local_report_update_file),
+        str(LOCAL_REPORT_UPDATE_FILE),
         TEST_BUCKET_NAME,
-        str(s3_s2_report_file),
+        str(S3_S2_REPORT_FILE),
     )
 
-    files = [
-        scene_path.strip()
-        for scene_path in gzip.open(open(str(local_report_update_file), "rb"))
-        .read()
-        .decode("utf-8")
-        .split("\n")
-        if scene_path
-    ]
+    missing_dict = json.loads(open(str(LOCAL_REPORT_UPDATE_FILE), "rb").read())
 
-    for i in range(len(files)):
+    files = [scene_path.strip() for scene_path in missing_dict["missing"] if scene_path]
+
+    [
         s3_client.upload_file(
-            str(fake_stac_file), TEST_BUCKET_NAME, f"{i}/{FAKE_STAC_FILE}"
+            str(FAKE_STAC_FILE_PATH), TEST_BUCKET_NAME, f"{i}/{S2_FAKE_STAC_FILE}"
         )
+        for i in range(len(files))
+    ]
 
     with patch.object(s2_gap_filler, "S3_BUCKET_PATH", str(s3_report_path)):
         runner = CliRunner()

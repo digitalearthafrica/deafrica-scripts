@@ -1,4 +1,5 @@
 import gzip
+import json
 import logging
 import math
 import time
@@ -73,20 +74,20 @@ def find_latest_report(
     return report_files[-1]
 
 
-def read_report(report_path: str, limit=None):
+def read_report_missing_scenes(report_path: str, limit=None):
     """
     read the gap report
     """
 
     s3 = s3_client(region_name="af-south-1")
-    missing_scene_file_gzip = s3_fetch(url=report_path, s3=s3)
+    report_json = s3_fetch(url=report_path, s3=s3)
+    report_dict = json.loads(report_json)
+
+    if report_dict.get("missing", None) is None:
+        raise Exception("Missing scenes not found")
 
     missing_scene_paths = [
-        scene_path.strip()
-        for scene_path in gzip.decompress(missing_scene_file_gzip)
-        .decode("utf-8")
-        .split("\n")
-        if scene_path
+        scene_path.strip() for scene_path in report_dict["missing"] if scene_path
     ]
 
     if limit:

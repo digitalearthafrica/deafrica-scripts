@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -14,16 +15,26 @@ from tools.monitoring.landsat_gap_filler import (
     post_messages,
     fill_the_gap,
 )
-from tools.tests.conftest import SQS_QUEUE_NAME, REGION, TEST_BUCKET_NAME
+from tools.tests.conftest import (
+    SQS_QUEUE_NAME,
+    REGION,
+    TEST_BUCKET_NAME,
+    TEST_DATA_DIR,
+    REPORT_FOLDER,
+)
+
+DATA_FOLDER = "landsat"
+FAKE_LANDSAT_GAP_REPORT = "landsat_5_2021-08-16_gap_report_update.json"
+LANDSAT_GAP_REPORT = TEST_DATA_DIR / DATA_FOLDER / FAKE_LANDSAT_GAP_REPORT
+S3_LANDSAT_GAP_REPORT = URL(REPORT_FOLDER) / FAKE_LANDSAT_GAP_REPORT
 
 
-def test_build_messages(landsat_gap_report: Path):
-    missing_scene_paths = set(
-        pd.read_csv(
-            landsat_gap_report,
-            header=None,
-        ).values.ravel()
-    )
+def test_build_messages():
+
+    missing_dict = json.loads(open(str(LANDSAT_GAP_REPORT), "rb").read())
+    missing_scene_paths = [
+        scene_path.strip() for scene_path in missing_dict["missing"] if scene_path
+    ]
     returned_list = build_messages(missing_scene_paths, False)
 
     assert len(returned_list["message_list"]) == 28
@@ -35,16 +46,14 @@ def test_build_messages(landsat_gap_report: Path):
 
 
 @mock_sqs
-def test_post_messages(landsat_gap_report: Path):
+def test_post_messages():
     resource = boto3.resource("sqs")
     resource.create_queue(QueueName=SQS_QUEUE_NAME)
 
-    missing_scene_paths = set(
-        pd.read_csv(
-            landsat_gap_report,
-            header=None,
-        ).values.ravel()
-    )
+    missing_dict = json.loads(open(str(LANDSAT_GAP_REPORT), "rb").read())
+    missing_scene_paths = [
+        scene_path.strip() for scene_path in missing_dict["missing"] if scene_path
+    ]
     messages_to_send = build_messages(missing_scene_paths, False)
 
     post_messages(
@@ -54,9 +63,7 @@ def test_post_messages(landsat_gap_report: Path):
 
 @mock_sqs
 @mock_s3
-def test_generate_buckets_diff(
-    landsat_gap_report: Path, s3_report_path: URL, s3_landsat_gap_report: URL
-):
+def test_generate_buckets_diff(s3_report_path: URL):
     sqs_client = boto3.client("sqs", region_name=REGION)
     sqs_client.create_queue(QueueName=SQS_QUEUE_NAME)
 
@@ -70,9 +77,9 @@ def test_generate_buckets_diff(
 
     # Upload fake gap report
     s3_client.upload_file(
-        str(landsat_gap_report),
+        str(LANDSAT_GAP_REPORT),
         TEST_BUCKET_NAME,
-        str(s3_landsat_gap_report),
+        str(S3_LANDSAT_GAP_REPORT),
     )
 
     print(list(boto3.resource("s3").Bucket(TEST_BUCKET_NAME).objects.all()))
@@ -86,9 +93,7 @@ def test_generate_buckets_diff(
 
 @mock_sqs
 @mock_s3
-def test_exceptions(
-    landsat_gap_report: Path, s3_report_path: URL, s3_landsat_gap_report: URL
-):
+def test_exceptions(s3_report_path: URL):
     sqs_client = boto3.client("sqs", region_name=REGION)
     sqs_client.create_queue(QueueName=SQS_QUEUE_NAME)
 
@@ -102,9 +107,9 @@ def test_exceptions(
 
     # Upload fake gap report
     s3_client.upload_file(
-        str(landsat_gap_report),
+        str(LANDSAT_GAP_REPORT),
         TEST_BUCKET_NAME,
-        str(s3_landsat_gap_report),
+        str(S3_LANDSAT_GAP_REPORT),
     )
 
     print(list(boto3.resource("s3").Bucket(TEST_BUCKET_NAME).objects.all()))

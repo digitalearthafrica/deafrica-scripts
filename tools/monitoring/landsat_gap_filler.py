@@ -13,7 +13,7 @@ from odc.aws.queue import publish_messages, get_queue
 
 from tools.utils import (
     find_latest_report,
-    read_report,
+    read_report_missing_scenes,
     send_slack_notification,
     setup_logging,
     slack_url,
@@ -117,7 +117,7 @@ def fill_the_gap(
     environment = "DEV" if "dev" in sync_queue_name else "PDS"
 
     latest_report = find_latest_report(
-        report_folder_path=S3_BUCKET_PATH, contains=landsat, not_contains="orphaned"
+        report_folder_path=S3_BUCKET_PATH, contains=landsat
     )
 
     if not latest_report:
@@ -130,7 +130,9 @@ def fill_the_gap(
 
     log.info("Reading missing scenes from the report")
 
-    missing_scene_paths = read_report(report_path=latest_report, limit=scenes_limit)
+    missing_scene_paths = read_report_missing_scenes(
+        report_path=latest_report, limit=scenes_limit
+    )
 
     log.info(f"Number of scenes found {len(missing_scene_paths)}")
     log.info(f"Example scenes: {missing_scene_paths[0:10]}")

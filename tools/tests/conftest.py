@@ -8,10 +8,7 @@ TEST_BUCKET_NAME = "test-bucket"
 SQS_QUEUE_NAME = "test-queue"
 SQS_DEADLETTER_QUEUE_NAME = "test-queue-deadletter"
 TEST_DATA_DIR = Path(__file__).absolute().parent / "data"
-REPORT_FILE = "2021-08-17_update.txt.gz"
-FAKE_STAC_FILE = "fake_stac.json"
 FAKE_LANDSAT_8_BULK_FILE = "fake_landsat_8_bulk_file.csv.gz"
-FAKE_LANDSAT_GAP_REPORT = "landsat_5_2021-08-16.txt.gz"
 REPORT_FOLDER = "status-report"
 COGS_REGION = "us-west-2"
 
@@ -26,21 +23,6 @@ INVENTORY_MANIFEST_FILE = "manifest.json"
 @pytest.fixture(autouse=True)
 def setup_env(monkeypatch):
     monkeypatch.setenv("AWS_DEFAULT_REGION", REGION)
-
-
-@pytest.fixture
-def local_report_update_file():
-    return TEST_DATA_DIR / REPORT_FILE
-
-
-@pytest.fixture
-def fake_stac_file():
-    return TEST_DATA_DIR / FAKE_STAC_FILE
-
-
-@pytest.fixture
-def s3_s2_report_file():
-    return URL(REPORT_FOLDER) / REPORT_FILE
 
 
 @pytest.fixture
@@ -91,13 +73,3 @@ def inventory_landsat_manifest_file():
 @pytest.fixture
 def inventory_landsat_data_file():
     return TEST_DATA_DIR / "inventory_landsat" / INVENTORY_DATA_FILE
-
-
-@pytest.fixture
-def landsat_gap_report():
-    return TEST_DATA_DIR / FAKE_LANDSAT_GAP_REPORT
-
-
-@pytest.fixture
-def s3_landsat_gap_report():
-    return URL(REPORT_FOLDER) / FAKE_LANDSAT_GAP_REPORT
