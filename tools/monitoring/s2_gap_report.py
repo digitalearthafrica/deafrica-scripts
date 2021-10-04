@@ -1,6 +1,5 @@
-import gzip
+import json
 import re
-import sys
 from datetime import datetime
 from textwrap import dedent
 
@@ -88,7 +87,6 @@ def generate_buckets_diff(
     # Retrieve keys from inventory bucket
     source_keys = get_and_filter_cogs_keys()
 
-    orphan_output_filename = "No orphan scenes were found"
     output_filename = "No missing scenes were found"
 
     if update_stac:
@@ -119,52 +117,51 @@ def generate_buckets_diff(
         orphaned_keys = destination_keys.difference(source_keys)
 
     s2_s3 = s3_client(region_name=SENTINEL_2_REGION)
-    if len(missing_scenes) > 0:
 
+    if len(missing_scenes) > 0 or len(orphaned_keys) > 0:
         output_filename = (
-            URL(f"{date_string}.txt.gz")
+            f"{date_string}_gap_report.json"
             if not update_stac
-            else URL(f"{date_string}_update.txt.gz")
+            else URL(f"{date_string}_gap_report_update.json")
         )
 
         log.info(f"File will be saved in {s2_status_report_path}{output_filename}")
+
+        missing_orphan_scenes_json = json.dumps(
+            {
+                "orphan": missing_scenes,
+                "missing": orphaned_keys
+            }
+        )
+
         s3_dump(
-            data=gzip.compress(str.encode("\n".join(missing_scenes))),
+            data=missing_orphan_scenes_json,
             url=str(URL(s2_status_report_path) / output_filename),
             s3=s2_s3,
-            ContentType="application/gzip",
+            ContentType="application/json",
         )
 
-        log.info(f"10 first missing_scenes {list(missing_scenes)[0:10]}")
-
-    if len(orphaned_keys) > 0:
-        orphan_output_filename = URL(f"{date_string}_orphaned.txt")
-        s3_dump(
-            data=gzip.compress(str.encode("\n".join(orphaned_keys))),
-            url=str(URL(s2_status_report_path) / orphan_output_filename),
-            s3=s2_s3,
-            ContentType="application/gzip",
-        )
-
-        log.info(f"10 first orphaned_keys {list(orphaned_keys)[0:10]}")
+    report_output = (
+        str(s2_status_report_path / output_filename)
+        if len(missing_scenes) > 0 or len(orphaned_keys) > 0
+        else output_filename
+    )
 
     message = dedent(
         f"*SENTINEL 2 GAP REPORT - {environment}*\n"
         f"Missing Scenes: {len(missing_scenes)}\n"
         f"Orphan Scenes: {len(orphaned_keys)}\n"
-        f"Missing Scenes report Saved: {str(URL(s2_status_report_path) / output_filename)}\n"
-        f"Orphan Scenes report Saved: {str(URL(s2_status_report_path) / orphan_output_filename)}\n"
+        f"Report: {report_output}\n"
     )
-
-    if notification_url is not None and (
-        len(missing_scenes) > 0 or len(orphaned_keys) > 0
-    ):
-        send_slack_notification(notification_url, "S2 Gap Report", message)
 
     log.info(message)
 
     if not update_stac and (len(missing_scenes) > 200 or len(orphaned_keys) > 200):
-        sys.exit(1)
+        if notification_url is not None:
+            send_slack_notification(
+                notification_url, "S2 Gap Report", message
+            )
+        raise Exception(f"More than 200 scenes were found \n {message}")
 
 
 @click.argument(

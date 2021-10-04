@@ -212,7 +212,12 @@ def generate_buckets_diff(
     landsat_s3 = s3_client(region_name="af-south-1")
 
     if len(missing_scenes) > 0 or len(orphaned_scenes) > 0:
-        output_filename = f"{satellite_name}_{date_string}_gap_report.json"
+        output_filename = (
+            f"{satellite_name}_{date_string}_gap_report.json"
+            if not update_stac
+            else URL(f"{date_string}_gap_report_update.json")
+        )
+
         log.info(
             f"Report file will be saved in {landsat_status_report_path / output_filename}"
         )
