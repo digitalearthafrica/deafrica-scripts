@@ -1,6 +1,4 @@
-import gzip
 import json
-from pathlib import Path
 from random import randrange
 from unittest.mock import patch
 

@@ -1,9 +1,7 @@
 import json
-from pathlib import Path
 from unittest.mock import patch
 
 import boto3
-import pandas as pd
 import pytest
 from moto import mock_sqs, mock_s3
 from odc.aws.queue import get_queue
