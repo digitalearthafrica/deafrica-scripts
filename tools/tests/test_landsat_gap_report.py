@@ -34,8 +34,8 @@ def test_get_and_filter_keys_from_files():
 
 @mock_s3
 def test_get_and_filter_keys(
-        s3_inventory_data_file: URL,
-        s3_inventory_manifest_file: URL,
+    s3_inventory_data_file: URL,
+    s3_inventory_manifest_file: URL,
 ):
     s3_client = boto3.client("s3", region_name=REGION)
     s3_client.create_bucket(
@@ -66,7 +66,7 @@ def test_get_and_filter_keys(
     )
 
     with patch(
-            "tools.monitoring.landsat_gap_report.LANDSAT_INVENTORY_PATH", s3_inventory_path
+        "tools.monitoring.landsat_gap_report.LANDSAT_INVENTORY_PATH", s3_inventory_path
     ):
         keys = get_and_filter_keys("landsat_5")
         assert len(keys) == 1
@@ -74,8 +74,7 @@ def test_get_and_filter_keys(
 
 @mock_s3
 def test_landsat_gap_report_cli(
-        s3_inventory_data_file: URL,
-        s3_inventory_manifest_file: URL
+    s3_inventory_data_file: URL, s3_inventory_manifest_file: URL
 ):
     s3_client = boto3.client("s3", region_name=REGION)
     s3_client.create_bucket(
@@ -114,7 +113,7 @@ def test_landsat_gap_report_cli(
     )
 
     with patch(
-            "tools.monitoring.landsat_gap_report.LANDSAT_INVENTORY_PATH", s3_inventory_path
+        "tools.monitoring.landsat_gap_report.LANDSAT_INVENTORY_PATH", s3_inventory_path
     ), patch(
         "tools.monitoring.landsat_gap_report.download_file_to_tmp",
         new_callable=PropertyMock,
