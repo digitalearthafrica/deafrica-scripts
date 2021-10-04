@@ -128,7 +128,7 @@ def fill_the_gap(
         log.info("FORCED UPDATE FLAGGED!")
         update_stac = True
 
-    log.info("Reading missing scenes from the report")
+    log.info(f"Reading missing scenes from the report {latest_report}")
 
     missing_scene_paths = read_report_missing_scenes(
         report_path=latest_report, limit=scenes_limit
