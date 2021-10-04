@@ -63,7 +63,7 @@ def test_get_no_msg_dead_queues(monkeypatch):
 
 @mock_s3
 def test_find_latest_report(
-        monkeypatch, local_report_update_file, s3_s2_report_file: URL
+    monkeypatch, local_report_update_file, s3_s2_report_file: URL
 ):
     s3_client = boto3.client("s3", region_name=REGION)
     s3_client.create_bucket(
