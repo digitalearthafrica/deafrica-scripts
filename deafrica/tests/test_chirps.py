@@ -1,8 +1,8 @@
 import boto3
 import moto
 import pytest
-from tools.data.chirps import URL_TEMPLATE, download_and_cog_chirps
-from tools.tests.conftest import TEST_DATA_DIR
+from deafrica.data.chirps import URL_TEMPLATE, download_and_cog_chirps
+from deafrica.tests.conftest import TEST_DATA_DIR
 
 
 @moto.mock_s3

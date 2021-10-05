@@ -20,7 +20,7 @@ from odc.aws import s3_dump, s3_client
 from odc.aws.inventory import list_inventory
 from urlpath import URL
 
-from tools.utils import (
+from deafrica.utils import (
     slack_url,
     update_stac,
     send_slack_notification,

@@ -7,13 +7,13 @@ from moto import mock_sqs, mock_s3
 from odc.aws.queue import get_queue
 from urlpath import URL
 
-from tools.monitoring import landsat_gap_filler
-from tools.monitoring.landsat_gap_filler import (
+from deafrica.monitoring import landsat_gap_filler
+from deafrica.monitoring.landsat_gap_filler import (
     build_messages,
     post_messages,
     fill_the_gap,
 )
-from tools.tests.conftest import (
+from deafrica.tests.conftest import (
     SQS_QUEUE_NAME,
     REGION,
     TEST_BUCKET_NAME,

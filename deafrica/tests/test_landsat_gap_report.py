@@ -5,12 +5,12 @@ from click.testing import CliRunner
 from moto import mock_s3
 from urlpath import URL
 
-from tools.monitoring.landsat_gap_report import (
+from deafrica.monitoring.landsat_gap_report import (
     get_and_filter_keys_from_files,
     get_and_filter_keys,
     cli,
 )
-from tools.tests.conftest import (
+from deafrica.tests.conftest import (
     REGION,
     INVENTORY_BUCKET_NAME,
     INVENTORY_MANIFEST_FILE,
@@ -66,7 +66,7 @@ def test_get_and_filter_keys(
     )
 
     with patch(
-        "tools.monitoring.landsat_gap_report.LANDSAT_INVENTORY_PATH", s3_inventory_path
+        "deafrica.monitoring.landsat_gap_report.LANDSAT_INVENTORY_PATH", s3_inventory_path
     ):
         keys = get_and_filter_keys("landsat_5")
         assert len(keys) == 1
@@ -113,9 +113,9 @@ def test_landsat_gap_report_cli(
     )
 
     with patch(
-        "tools.monitoring.landsat_gap_report.LANDSAT_INVENTORY_PATH", s3_inventory_path
+        "deafrica.monitoring.landsat_gap_report.LANDSAT_INVENTORY_PATH", s3_inventory_path
     ), patch(
-        "tools.monitoring.landsat_gap_report.download_file_to_tmp",
+        "deafrica.monitoring.landsat_gap_report.download_file_to_tmp",
         new_callable=PropertyMock,
         return_value=FAKE_LANDSAT_BULK_FILE,
     ):

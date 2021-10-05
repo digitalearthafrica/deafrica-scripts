@@ -11,7 +11,7 @@ from typing import Optional
 import click
 from odc.aws.queue import publish_messages, get_queue
 
-from tools.utils import (
+from deafrica.utils import (
     find_latest_report,
     read_report_missing_scenes,
     send_slack_notification,

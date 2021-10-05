@@ -11,7 +11,7 @@ import click
 from odc.aws import s3_fetch, s3_client
 from odc.aws.queue import get_queue, publish_messages
 
-from tools.utils import (
+from deafrica.utils import (
     find_latest_report,
     read_report_missing_scenes,
     split_list_equally,

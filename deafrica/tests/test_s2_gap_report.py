@@ -4,12 +4,12 @@ import boto3
 from moto import mock_s3
 from urlpath import URL
 
-from tools.monitoring import s2_gap_report
-from tools.monitoring.s2_gap_report import (
+from deafrica.monitoring import s2_gap_report
+from deafrica.monitoring.s2_gap_report import (
     get_and_filter_cogs_keys,
     generate_buckets_diff,
 )
-from tools.tests.conftest import (
+from deafrica.tests.conftest import (
     COGS_REGION,
     INVENTORY_BUCKET_NAME,
     INVENTORY_MANIFEST_FILE,

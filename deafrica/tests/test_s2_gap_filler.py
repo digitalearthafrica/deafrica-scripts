@@ -8,8 +8,8 @@ from moto import mock_s3, mock_sqs
 from odc.aws.queue import get_queue
 from urlpath import URL
 
-from tools.monitoring import s2_gap_filler
-from tools.tests.conftest import (
+from deafrica.monitoring import s2_gap_filler
+from deafrica.tests.conftest import (
     REGION,
     SQS_QUEUE_NAME,
     COGS_REGION,
