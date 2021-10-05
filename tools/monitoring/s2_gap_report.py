@@ -171,7 +171,12 @@ def generate_buckets_diff(
 @slack_url
 @click.option("--version", is_flag=True, default=False)
 @click.command("s2-gap-report")
-def cli(bucket_name: str, update_stac: bool = False, slack_url: str = None, version: bool = False):
+def cli(
+    bucket_name: str,
+    update_stac: bool = False,
+    slack_url: str = None,
+    version: bool = False,
+):
     """
     Publish missing scenes
     """
