@@ -20,6 +20,8 @@ WORKDIR /code
 
 COPY . /code/
 
+RUN echo "__version__ = '$(python /code/setup.py --version | sed s/+/./g)'" > /code/tools/_version.py
+
 RUN pip install /code
 
 CMD ["python", "--version"]
