@@ -90,7 +90,6 @@ jobs:
           git fetch --all --tags
           pip install setuptools-scm
           echo "VERSION=$(python setup.py --version | sed s/+/./g)" >> $GITHUB_ENV
-          echo "__version__ = '$(python setup.py --version | sed s/+/./g)'" > tools/_version.py
 
       - name: Build and push
         uses: docker/build-push-action@v2
