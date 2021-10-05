@@ -11,7 +11,7 @@ from rasterio.io import MemoryFile
 from rio_cogeo import cog_translate
 from rio_cogeo.profiles import cog_profiles
 from rio_stac import create_stac_item
-from tools.utils import setup_logging
+from deafrica.utils import setup_logging
 
 URL_TEMPLATE = (
     "https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_monthly/tifs/{in_file}"
