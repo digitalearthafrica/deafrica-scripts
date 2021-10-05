@@ -5,7 +5,6 @@ from deafrica.data.chirps import URL_TEMPLATE, download_and_cog_chirps
 from deafrica.tests.conftest import TEST_DATA_DIR
 
 
-@pytest.mark.xfail(reason="Rasterio isn't able to retrieve file from URL")
 @moto.mock_s3
 def test_one_full(remote_file):
     TEST_BUCKET_NAME = "test-bucket"
