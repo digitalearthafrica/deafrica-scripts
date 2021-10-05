@@ -11,6 +11,7 @@ import click
 from odc.aws import s3_fetch, s3_client
 from odc.aws.queue import get_queue, publish_messages
 
+from deafrica import __version__
 from deafrica.utils import (
     find_latest_report,
     read_report_missing_scenes,
@@ -211,12 +212,14 @@ def send_messages(
     default=None,
 )
 @slack_url
+@click.option("--version", is_flag=True, default=False)
 def cli(
     idx: int,
     max_workers: int = 2,
     sync_queue_name: str = "deafrica-pds-sentinel-2-sync-scene",
     limit: int = None,
     slack_url: str = None,
+    version: bool = False,
 ):
     """
     Publish missing scenes
@@ -232,6 +235,8 @@ def cli(
 
     slack_url: (str) Slack notification channel hook URL
     """
+    if version:
+        click.echo(__version__)
 
     if limit is not None:
         try:

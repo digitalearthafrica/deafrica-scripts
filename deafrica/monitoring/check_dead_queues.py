@@ -1,13 +1,13 @@
 import logging
 import sys
 from textwrap import dedent
+from typing import Optional
 
 import click as click
 from odc.aws.queue import get_queues
 
+from deafrica import __version__
 from deafrica.utils import send_slack_notification, setup_logging
-
-from typing import Optional
 
 
 def check_deadletter_queues(
@@ -48,10 +48,15 @@ def check_deadletter_queues(
 @click.option(
     "--slack-url", default=None, help="Slack url to use to send a notification"
 )
-def cli(slack_url):
+@click.option("--version", is_flag=True, default=False)
+def cli(slack_url, version: bool = False):
     """
     Check all dead queues which the user is allowed to
     """
+
+    if version:
+        click.echo(__version__)
+
     log = setup_logging()
     check_deadletter_queues(slack_url=slack_url, log=log)
 

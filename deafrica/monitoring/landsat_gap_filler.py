@@ -11,6 +11,7 @@ from typing import Optional
 import click
 from odc.aws.queue import publish_messages, get_queue
 
+from deafrica import __version__
 from deafrica.utils import (
     find_latest_report,
     read_report_missing_scenes,
@@ -182,16 +183,21 @@ def fill_the_gap(
 )
 @limit
 @slack_url
+@click.option("--version", is_flag=True, default=False)
 @click.command("landsat-gap-filler")
 def cli(
     satellite: str,
     sync_queue_name: str = "sync_queue_name",
     limit: int = None,
     slack_url: str = None,
+    version: bool = False,
 ):
     """
     Publish missing scenes
     """
+
+    if version:
+        click.echo(__version__)
 
     if limit is not None:
         try:

@@ -20,6 +20,7 @@ from odc.aws import s3_dump, s3_client
 from odc.aws.inventory import list_inventory
 from urlpath import URL
 
+from deafrica import __version__
 from deafrica.utils import (
     slack_url,
     update_stac,
@@ -274,13 +275,21 @@ def generate_buckets_diff(
 )
 @update_stac
 @slack_url
+@click.option("--version", is_flag=True, default=False)
 @click.command("landsat-gap-report")
 def cli(
-    bucket_name: str, satellite: str, update_stac: bool = False, slack_url: str = None
+    bucket_name: str,
+    satellite: str,
+    update_stac: bool = False,
+    slack_url: str = None,
+    version: bool = False,
 ):
     """
     Publish missing scenes
     """
+
+    if version:
+        click.echo(__version__)
 
     generate_buckets_diff(
         bucket_name=bucket_name,
