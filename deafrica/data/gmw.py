@@ -1,18 +1,25 @@
-import asyncio
+import json
 import os
-import subprocess
 import sys
+from datetime import datetime
+from subprocess import check_output, STDOUT, CalledProcessError
 
 import click
-import geopandas as gpd
-import numpy as np
-import xarray as xr
-from affine import Affine
-from datacube.utils.cog import write_cog
-from datacube.utils.geometry import assign_crs
-from rasterio.features import rasterize
-from shapely.geometry import box
+import pystac
+from odc.aws import s3_dump
+from odc.index import odc_uuid
+from pystac import Item
+from pystac.utils import datetime_to_str
+from rio_stac import create_stac_item
 from urlpath import URL
+
+from deafrica.utils import setup_logging
+
+SOURCE_URL_PATH = URL(f"https://wcmc.io/")
+FILE_NAME = "GMW_{year}"
+
+# Set log level to info
+log = setup_logging()
 
 
 def download_and_unzip_gmw(year):
@@ -20,8 +27,8 @@ def download_and_unzip_gmw(year):
     import shutil
     from zipfile import ZipFile
 
-    local_filename = f"GMW_{year}"
-    url = URL(f"https://wcmc.io/") / local_filename
+    local_filename = FILE_NAME.format(year=year)
+    url = SOURCE_URL_PATH / local_filename
 
     with requests.get(url, stream=True, allow_redirects=True) as r:
         with open(local_filename, "wb") as f:
@@ -29,99 +36,95 @@ def download_and_unzip_gmw(year):
 
     with ZipFile(local_filename) as z:
         z.extractall()
-        shapename = [f for f in z.namelist() if f.endswith(".shp")][0]
-    return shapename
+
+    return [f for f in z.namelist() if f.endswith(".shp")][0]
 
 
-async def read_africa_extent(path: str):
-    return gpd.read_file(path)
+def create_item_and_dump(cog_file: str, s3_dst: str, year) -> Item:
+    out_path = URL(f"{s3_dst}/{year}/")
+    file_name = cog_file.replace("tif", "")
+
+    log.info("Item base creation")
+    item = create_stac_item(
+        file_name,
+        id=str(odc_uuid("chirps", "2.0", [file_name])),
+        with_proj=True,
+        input_datetime=datetime(int(year), 12, 31),
+        properties={
+            "odc:processing_datetime": datetime_to_str(datetime.now()),
+            "odc:product": "rainfall_chirps_monthly",
+            "start_datetime": f"{year}-01-01T00:00:00Z",
+            "end_datetime": f"{year}-12-31T23:59:59Z",
+        },
+    )
+
+    log.info("links creation")
+    item.set_self_href(out_path / f"gmw_{year}_stac-item.json")
+    item.add_links(
+        [
+            pystac.Link(
+                target=SOURCE_URL_PATH / FILE_NAME.format(year=year),
+                title="Source file",
+                rel=pystac.RelType.DERIVED_FROM,
+                media_type="application/zip",
+            )
+        ]
+    )
+
+    log.info("assets creation")
+    del item.assets["asset"]
+
+    item.assets["rainfall"] = pystac.Asset(
+        href=out_path / file_name,
+        title="gmw-v1.0",
+        media_type=pystac.MediaType.COG,
+        roles=["data"],
+    )
+
+    log.info(f"Item created {item.to_dict()}")
+
+    log.info("Dump the data to S3")
+    out_data = out_path / cog_file
+    s3_dump(file_name, out_data, ACL="bucket-owner-full-control")
+    log.info(f"File written to {out_data}")
+
+    log.info("Write STAC to S3")
+    s3_dump(
+        json.dumps(item.to_dict(), indent=2),
+        item.self_href,
+        ContentType="application/json",
+        ACL="bucket-owner-full-control",
+    )
+    log.info(f"STAC written to {item.self_href}")
 
 
-async def download_gmw(year: str, s3_dst: str, crs="EPSG:6933", res=10):
-    # crs_code = crs.split(":")[1]
-    # dea_filename = f"deafrica_gmw_{year}_{crs_code}_{res}m.tif"
-    # if os.path.exists(dea_filename):
-    #     print(f"{dea_filename} already exists")
-    #     return
+def download_gmw(year: str, s3_dst: str, crs="EPSG:6933", res=10):
+    log.info(f"Starting GMW downloader for year {year}")
 
-    # download extents if needed
+    log.info(f"download extents if needed")
     gmw_shp = f"GMW_001_GlobalMangroveWatch_{year}/01_Data/GMW_{year}_v2.shp"
     if not os.path.exists(gmw_shp):
         gmw_shp = download_and_unzip_gmw(year=year)
 
-    # extract extents over Africa
-    task1 = asyncio.create_task(read_africa_extent(gmw_shp))
-    task2 = asyncio.create_task(
-        read_africa_extent("https://github.com/digitalearthafrica/deafrica-extent/raw/master/africa-extent.json")
-    )
-    gmw = await task1
-    deafrica_extent = await task2
+    try:
+        output_file = gmw_shp.replace(".shp", ".tif")
+        cmd = f"gdal_rasterize -a_nodata 0 -ot Byte -a pxlval -of GTiff -tr 0.001 0.001 {gmw_shp} {output_file} -te -26.359944882003788 -47.96476498374171 64.4936701740102 38.34459242512347"
+        check_output(cmd, stderr=STDOUT, shell=True)
 
-    deafrica_extent = deafrica_extent.to_crs(gmw.crs)
+        # create cloud optimised geotif
+        cloud_optimised_file = f"deafrica_gmw_{year}.tif"
+        cmd = (
+            f"rio cogeo create --overview-level 0 {output_file} {cloud_optimised_file}"
+        )
+        check_output(cmd, stderr=STDOUT, shell=True)
 
-    # find everything within deafrica_extent
-    gmw_africa = gpd.sjoin(gmw, deafrica_extent, op="intersects")
-    # include additional in the sqaure bounding box
-    bound = box(*gmw_africa.total_bounds).buffer(0.001)
-    deafrica_extent_square = gpd.GeoDataFrame(
-        gpd.GeoSeries(bound), columns=["geometry"], crs=gmw_africa.crs
-    )
-    gmw_africa = gpd.sjoin(gmw, deafrica_extent_square, op="intersects")
+    except CalledProcessError as ex:
+        raise ex
 
-    # output raster setting
-    gmw_africa = gmw_africa.to_crs(crs)
-    bounds = gmw_africa.total_bounds
-    bounds = np.hstack([np.floor(bounds[:2] / 10) * 10, np.ceil(bounds[2:] / 10) * 10])
+    create_item_and_dump(cog_file=cloud_optimised_file, s3_dst=s3_dst, year=year)
 
-    # transform = Affine(res, 0.0, bounds[0], 0.0, -1*res, bounds[3])
-    out_shape = int((bounds[3] - bounds[1]) / res), int((bounds[2] - bounds[0]) / res)
-
-    # rasterize in tiles
-    tile_size = 50000
-    ny = np.ceil(out_shape[0] / tile_size).astype(int)
-    nx = np.ceil(out_shape[1] / tile_size).astype(int)
-
-    for iy in np.arange(ny):
-        for ix in np.arange(nx):
-            y0 = bounds[3] - iy * tile_size * res
-            x0 = bounds[0] + ix * tile_size * res
-            y1 = np.max([bounds[1], bounds[3] - (iy + 1) * tile_size * res])
-            x1 = np.min([bounds[2], bounds[0] + (ix + 1) * tile_size * res])
-
-            transform = Affine(res, 0.0, x0, 0.0, -1 * res, y0)  # pixel ul
-            sub_shape = np.abs((y1 - y0) / res).astype(int), np.abs(
-                (x1 - x0) / res
-            ).astype(int)
-
-            arr = rasterize(
-                shapes=gmw_africa.geometry,
-                out_shape=sub_shape,
-                transform=transform,
-                fill=0,
-                all_touched=True,
-                default_value=1,
-                dtype=np.uint8,
-            )
-
-            xarr = xr.DataArray(
-                arr,
-                # pixel center
-                coords={
-                    "y": y0 - np.arange(sub_shape[0]) * res - res / 2,
-                    "x": x0 + np.arange(sub_shape[1]) * res + res / 2,
-                },
-                dims=("y", "x"),
-                name="gmw",
-            )
-
-            xarr = assign_crs(xarr, str(crs))
-            cog = write_cog(xarr, f"gmw_africa_{year}_{ix}_{iy}.tif", overwrite=True)
-
-    cmd = f"gdalbuildvrt gmw_africa_{year}.vrt gmw_africa_{year}_*_*.tif"
-    r = subprocess.call(cmd, shell=True)
-
-    cmd = f"rio cogeo create --overview-level 0 gmw_africa_{year}.vrt deafrica_gmw_{year}.tif"
-    r = subprocess.call(cmd, shell=True)
+    # All done!
+    log.info(f"Completed work on {s3_dst}/{year}")
 
 
 @click.command("download-gmw")
@@ -146,4 +149,4 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Select a year to download.")
     else:
-        asyncio.run(download_gmw(sys.argv[1], "s3://deafrica-data-dev-af/gmw_yealy/"))
+        download_gmw(sys.argv[1], "s3://deafrica-data-dev-af/gmw_yealy/")
