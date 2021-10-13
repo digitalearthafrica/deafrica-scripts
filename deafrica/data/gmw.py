@@ -2,6 +2,7 @@ import json
 import os
 import sys
 from datetime import datetime
+from pathlib import Path
 from subprocess import check_output, STDOUT, CalledProcessError
 
 import click
@@ -15,6 +16,7 @@ from urlpath import URL
 
 from deafrica.utils import setup_logging
 
+LOCAL_DIR = Path(__file__).absolute().parent
 SOURCE_URL_PATH = URL(f"https://wcmc.io/")
 FILE_NAME = "GMW_{year}"
 
@@ -22,12 +24,11 @@ FILE_NAME = "GMW_{year}"
 log = setup_logging()
 
 
-def download_and_unzip_gmw(year):
+def download_and_unzip_gmw(local_filename: str) -> str:
     import requests
     import shutil
     from zipfile import ZipFile
 
-    local_filename = FILE_NAME.format(year=year)
     url = SOURCE_URL_PATH / local_filename
 
     with requests.get(url, stream=True, allow_redirects=True) as r:
@@ -97,14 +98,21 @@ def create_item_and_dump(cog_file: str, s3_dst: str, year) -> Item:
     )
     log.info(f"STAC written to {item.self_href}")
 
+    return item
 
-def download_gmw(year: str, s3_dst: str, crs="EPSG:6933", res=10):
+
+def gmw_download_stac_cog(year: str, s3_dst: str) -> None:
+    """
+    Mangrove download, COG and STAC process
+
+    """
     log.info(f"Starting GMW downloader for year {year}")
 
     log.info(f"download extents if needed")
     gmw_shp = f"GMW_001_GlobalMangroveWatch_{year}/01_Data/GMW_{year}_v2.shp"
+    local_filename = FILE_NAME.format(year=year)
     if not os.path.exists(gmw_shp):
-        gmw_shp = download_and_unzip_gmw(year=year)
+        gmw_shp = download_and_unzip_gmw(local_filename=local_filename)
 
     try:
         output_file = gmw_shp.replace(".shp", ".tif")
@@ -122,6 +130,16 @@ def download_gmw(year: str, s3_dst: str, crs="EPSG:6933", res=10):
         raise ex
 
     create_item_and_dump(cog_file=cloud_optimised_file, s3_dst=s3_dst, year=year)
+
+    log.info("Write all files zipped to S3")
+    out_zip_data = URL(s3_dst) / year / f"{local_filename}.zip"
+    s3_dump(
+        open(LOCAL_DIR / local_filename),
+        out_zip_data,
+        ContentType="application/zip",
+        ACL="bucket-owner-full-control",
+    )
+    log.info(f"ZIP written to {out_zip_data}")
 
     # All done!
     log.info(f"Completed work on {s3_dst}/{year}")
@@ -142,11 +160,11 @@ def cli(year, s3_dst):
     • GMW 2016
     """
 
-    download_gmw(year=year, s3_dst=s3_dst)
+    gmw_download_stac_cog(year=year, s3_dst=s3_dst)
 
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Select a year to download.")
     else:
-        download_gmw(sys.argv[1], "s3://deafrica-data-dev-af/gmw_yealy/")
+        gmw_download_stac_cog(sys.argv[1], "s3://deafrica-data-dev-af/gmw_yealy/")
