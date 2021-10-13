@@ -1,4 +1,3 @@
-import gzip
 import json
 import logging
 import math
