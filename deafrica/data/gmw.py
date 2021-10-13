@@ -41,7 +41,7 @@ def download_and_unzip_gmw(local_filename: str) -> str:
     return [f for f in z.namelist() if f.endswith(".shp")][0]
 
 
-def create_item_and_dump(cog_file: str, s3_dst: str, year) -> Item:
+def create_and_upload_stac(cog_file: str, s3_dst: str, year) -> Item:
     out_path = URL(f"{s3_dst}/{year}/")
     file_name = cog_file.replace("tif", "")
 
@@ -129,7 +129,7 @@ def gmw_download_stac_cog(year: str, s3_dst: str) -> None:
     except CalledProcessError as ex:
         raise ex
 
-    create_item_and_dump(cog_file=cloud_optimised_file, s3_dst=s3_dst, year=year)
+    create_and_upload_stac(cog_file=cloud_optimised_file, s3_dst=s3_dst, year=year)
 
     log.info("Write all files zipped to S3")
     out_zip_data = URL(s3_dst) / year / f"{local_filename}.zip"
