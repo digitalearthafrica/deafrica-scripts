@@ -16,7 +16,8 @@ from urlpath import URL
 
 from deafrica.utils import setup_logging
 
-LOCAL_DIR = Path(__file__).absolute().parent
+VALID_YEARS = ["1996", "2007", "2008", "2009", "2010", "2015", "2016"]
+LOCAL_DIR = Path(os.getcwd())
 SOURCE_URL_PATH = URL(f"https://wcmc.io/")
 FILE_NAME = "GMW_{year}"
 
@@ -41,14 +42,13 @@ def download_and_unzip_gmw(local_filename: str) -> str:
     return [f for f in z.namelist() if f.endswith(".shp")][0]
 
 
-def create_and_upload_stac(cog_file: str, s3_dst: str, year) -> Item:
+def create_and_upload_stac(cog_file: Path, s3_dst: str, year) -> Item:
     out_path = URL(f"{s3_dst}/{year}/")
-    file_name = cog_file.replace("tif", "")
 
     log.info("Item base creation")
     item = create_stac_item(
-        file_name,
-        id=str(odc_uuid("gmw", "2.0", [file_name])),
+        str(cog_file),
+        id=str(odc_uuid("gmw", "2.0", [cog_file.name.replace("tif", "")])),
         with_proj=True,
         input_datetime=datetime(int(year), 12, 31),
         properties={
@@ -60,11 +60,11 @@ def create_and_upload_stac(cog_file: str, s3_dst: str, year) -> Item:
     )
 
     log.info("links creation")
-    item.set_self_href(out_path / f"gmw_{year}_stac-item.json")
+    item.set_self_href(str(out_path / f"gmw_{year}_stac-item.json"))
     item.add_links(
         [
             pystac.Link(
-                target=SOURCE_URL_PATH / FILE_NAME.format(year=year),
+                target=str(SOURCE_URL_PATH / FILE_NAME.format(year=year)),
                 title="Source file",
                 rel=pystac.RelType.DERIVED_FROM,
                 media_type="application/zip",
@@ -75,8 +75,9 @@ def create_and_upload_stac(cog_file: str, s3_dst: str, year) -> Item:
     log.info("assets creation")
     del item.assets["asset"]
 
-    item.assets["rainfall"] = pystac.Asset(
-        href=out_path / file_name,
+    out_data = out_path / cog_file.name
+    item.assets["mangrove "] = pystac.Asset(
+        href=str(out_data),
         title="gmw-v1.0",
         media_type=pystac.MediaType.COG,
         roles=["data"],
@@ -85,11 +86,10 @@ def create_and_upload_stac(cog_file: str, s3_dst: str, year) -> Item:
     log.info(f"Item created {item.to_dict()}")
 
     log.info("Dump the data to S3")
-    out_data = out_path / cog_file
-    s3_dump(file_name, out_data, ACL="bucket-owner-full-control")
+    s3_dump(str(cog_file), str(out_data), ACL="bucket-owner-full-control")
     log.info(f"File written to {out_data}")
 
-    log.info("Write STAC to S3")
+    log.info(f"Write STAC to S3")
     s3_dump(
         json.dumps(item.to_dict(), indent=2),
         item.self_href,
@@ -106,6 +106,12 @@ def gmw_download_stac_cog(year: str, s3_dst: str) -> None:
     Mangrove download, COG and STAC process
 
     """
+
+    if year not in VALID_YEARS:
+        raise ValueError(
+            f"Informed year {year} not valid, please choose among {VALID_YEARS}"
+        )
+
     log.info(f"Starting GMW downloader for year {year}")
 
     log.info(f"download extents if needed")
@@ -114,13 +120,26 @@ def gmw_download_stac_cog(year: str, s3_dst: str) -> None:
     if not os.path.exists(gmw_shp):
         gmw_shp = download_and_unzip_gmw(local_filename=local_filename)
 
+    local_extracted_file_path = LOCAL_DIR / gmw_shp
     try:
-        output_file = gmw_shp.replace(".shp", ".tif")
-        cmd = f"gdal_rasterize -a_nodata 0 -ot Byte -a pxlval -of GTiff -tr 0.001 0.001 {gmw_shp} {output_file} -te -26.359944882003788 -47.96476498374171 64.4936701740102 38.34459242512347"
+        output_file = LOCAL_DIR / gmw_shp.replace(".shp", ".tif")
+        log.info(f"Output TIF file is {output_file}")
+        log.info(f"Extracted SHP file is {local_extracted_file_path}")
+        cmd = (
+            f"gdal_rasterize "
+            f"-a_nodata 0 "
+            f"-ot Byte "
+            f"-a pxlval "
+            f"-of GTiff "
+            f"-tr 0.001 0.001 "
+            f"{local_extracted_file_path} "
+            f"{output_file} "
+            f"-te -26.359944882003788 -47.96476498374171 64.4936701740102 38.34459242512347"
+        )
         check_output(cmd, stderr=STDOUT, shell=True)
 
         # create cloud optimised geotif
-        cloud_optimised_file = f"deafrica_gmw_{year}.tif"
+        cloud_optimised_file = LOCAL_DIR / f"deafrica_gmw_{year}.tif"
         cmd = (
             f"rio cogeo create --overview-level 0 {output_file} {cloud_optimised_file}"
         )
@@ -146,18 +165,18 @@ def gmw_download_stac_cog(year: str, s3_dst: str) -> None:
 
 
 @click.command("download-gmw")
-@click.option("--year", default="2020")
+@click.option("--year", required=True)
 @click.option("--s3_dst", default="s3://deafrica-data-dev-af/gmw_yealy/")
 def cli(year, s3_dst):
     """
     Available years are
-    • GMW 1996
-    • GMW 2007
-    • GMW 2008
-    • GMW 2009
-    • GMW 2010
-    • GMW 2015
-    • GMW 2016
+    • 1996
+    • 2007
+    • 2008
+    • 2009
+    • 2010
+    • 2015
+    • 2016
     """
 
     gmw_download_stac_cog(year=year, s3_dst=s3_dst)
