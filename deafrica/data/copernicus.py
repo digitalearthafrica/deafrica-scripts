@@ -63,6 +63,9 @@ def build_file_list(year: str):
 
 def download_and_cog_copernicus(year: str, s3_dst: str, overwrite: bool = False):
 
+    if int(year) > 2019 or int(year) < 2015:
+        raise ValueError("Chosen year not valid, please choose a year from 2015 to 2019.")
+
     for file_path in build_file_list(year):
 
         s3_dst = URL(s3_dst)
@@ -82,7 +85,7 @@ def download_and_cog_copernicus(year: str, s3_dst: str, overwrite: bool = False)
             with MemoryFile() as mem_dst:
                 # Creating the COG, with a memory cache and no download. Shiny.
                 cog_translate(
-                    file_path,
+                    str(file_path),
                     mem_dst.name,
                     cog_profiles.get("deflate"),
                     in_memory=True,
@@ -103,18 +106,18 @@ def download_and_cog_copernicus(year: str, s3_dst: str, overwrite: bool = False)
                 )
                 item.set_self_href(out_stac)
                 # Manually redo the asset
-                # del item.assets["asset"]
-                # item.assets["rainfall"] = pystac.Asset(
-                #     href=out_data,
-                #     title="CHIRPS-v2.0",
-                #     media_type=pystac.MediaType.COG,
-                #     roles=["data"],
-                # )
+                del item.assets["asset"]
+                item.assets["copernicus"] = pystac.Asset(
+                    href=str(out_data),
+                    title="copernicus-v1.0",
+                    media_type=pystac.MediaType.COG,
+                    roles=["data"],
+                )
                 # Let's add a link to the source
                 item.add_links(
                     [
                         pystac.Link(
-                            target=file_path,
+                            target=str(file_path),
                             title="Source file",
                             rel=pystac.RelType.DERIVED_FROM,
                             media_type="application/gzip",
@@ -124,12 +127,12 @@ def download_and_cog_copernicus(year: str, s3_dst: str, overwrite: bool = False)
 
                 # Dump the data to S3
                 mem_dst.seek(0)
-                s3_dump(mem_dst, out_data, ACL="bucket-owner-full-control")
+                s3_dump(mem_dst, str(out_data), ACL="bucket-owner-full-control")
                 log.info(f"File written to {out_data}")
                 # Write STAC to S3
                 s3_dump(
                     json.dumps(item.to_dict(), indent=2),
-                    out_stac,
+                    str(out_stac),
                     ContentType="application/json",
                     ACL="bucket-owner-full-control",
                 )
@@ -148,7 +151,7 @@ def download_and_cog_copernicus(year: str, s3_dst: str, overwrite: bool = False)
 @click.option("--overwrite", is_flag=True, default=False)
 def cli(year, s3_dst, overwrite):
     """
-    Available years are 2015-2019.
+    Available years are from 2015 to 2019.
     """
 
     download_and_cog_copernicus(year=year, s3_dst=s3_dst, overwrite=overwrite)
