@@ -48,12 +48,12 @@ def create_and_upload_stac(cog_file: str, s3_dst: str, year) -> Item:
     log.info("Item base creation")
     item = create_stac_item(
         file_name,
-        id=str(odc_uuid("chirps", "2.0", [file_name])),
+        id=str(odc_uuid("gmw", "2.0", [file_name])),
         with_proj=True,
         input_datetime=datetime(int(year), 12, 31),
         properties={
             "odc:processing_datetime": datetime_to_str(datetime.now()),
-            "odc:product": "rainfall_chirps_monthly",
+            "odc:product": "gmw_yearly",
             "start_datetime": f"{year}-01-01T00:00:00Z",
             "end_datetime": f"{year}-12-31T23:59:59Z",
         },
