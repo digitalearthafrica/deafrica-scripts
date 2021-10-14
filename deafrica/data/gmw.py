@@ -140,8 +140,8 @@ def gmw_download_stac_cog(year: str, s3_dst: str) -> None:
         )
         check_output(cmd, stderr=STDOUT, shell=True)
 
-        io_timer(file_path=output_file, log=log)
-
+        # io_timer(file_path=output_file, log=log)
+        time.sleep(3)
         log.info(f"File {output_file} rasterized successfully")
 
         # create cloud optimised geotif
@@ -151,8 +151,8 @@ def gmw_download_stac_cog(year: str, s3_dst: str) -> None:
         )
         check_output(cmd, stderr=STDOUT, shell=True)
 
-        io_timer(file_path=cloud_optimised_file)
-
+        # io_timer(file_path=cloud_optimised_file)
+        time.sleep(3)
         log.info(f"File {cloud_optimised_file} cloud optimised successfully")
 
     except CalledProcessError as ex:
