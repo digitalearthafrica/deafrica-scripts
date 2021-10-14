@@ -30,7 +30,9 @@ def get_orphans():
         orphan_file for orphan_file in report_files if "landsat_7" in orphan_file
     ][-1]
     orphan_landsat5 = [
-        orphan_file for orphan_file in report_files if "landsat_5" in orphan_file and "json" in orphan_file
+        orphan_file
+        for orphan_file in report_files
+        if "landsat_5" in orphan_file and "json" in orphan_file
     ][-1]
 
     list_orphan_paths = []
@@ -42,7 +44,7 @@ def get_orphans():
             range=None,
         )
 
-        dict_file = json.loads(file.decode('utf8').replace("'", '"'))
+        dict_file = json.loads(file.decode("utf8").replace("'", '"'))
         list_orphan_paths.extend(set(dict_file.get("orphan")))
 
     return list_orphan_paths
