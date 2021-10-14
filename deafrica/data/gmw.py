@@ -75,7 +75,9 @@ def create_and_upload_stac(cog_file: Path, s3_dst: str, year) -> Item:
 
     log.info("assets creation")
     out_data = out_path / cog_file.name
-    item.assets["asset"] = pystac.Asset(
+    # Remove asset created by create_stac_item and add our own
+    del item.assets["asset"]
+    item.assets["mangrove"] = pystac.Asset(
         href=str(out_data),
         title="gmw-v1.0",
         media_type=pystac.MediaType.COG,
