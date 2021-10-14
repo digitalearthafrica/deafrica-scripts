@@ -1,4 +1,4 @@
-import gzip
+import json
 import os
 
 from odc.aws import s3_fetch, s3_client, s3_ls_dir, s3_ls
@@ -13,21 +13,13 @@ S3_BUCKET_PATH = "s3://deafrica-landsat/status-report/"
 
 def get_orphans():
     s3 = s3_client(
-        profile=None,
-        creds=None,
         region_name="af-south-1",
-        session=None,
-        aws_unsigned=True,
         use_ssl=True,
         cache=False,
     )
 
     print("Finding Orphans")
-    report_files = [
-        report
-        for report in s3_ls_dir(uri=S3_BUCKET_PATH, s3=s3)
-        if "orphaned.txt.gz" in report
-    ]
+    report_files = list(s3_ls_dir(uri=S3_BUCKET_PATH, s3=s3))
 
     report_files.sort()
 
@@ -38,27 +30,22 @@ def get_orphans():
         orphan_file for orphan_file in report_files if "landsat_7" in orphan_file
     ][-1]
     orphan_landsat5 = [
-        orphan_file for orphan_file in report_files if "Landsat_5" in orphan_file
+        orphan_file
+        for orphan_file in report_files
+        if "landsat_5" in orphan_file and "json" in orphan_file
     ][-1]
 
     list_orphan_paths = []
     for orphan in [orphan_landsat7, orphan_landsat5, orphan_landsat8]:
         print(f"Finding {orphan}")
-        orphans_gzip_file = s3_fetch(
+        file = s3_fetch(
             url=orphan,
             s3=s3,
             range=None,
         )
 
-        list_orphan_paths.extend(
-            set(
-                scene_path
-                for scene_path in gzip.decompress(orphans_gzip_file)
-                .decode("utf-8")
-                .split("\n")
-                if scene_path
-            )
-        )
+        dict_file = json.loads(file.decode("utf8").replace("'", '"'))
+        list_orphan_paths.extend(set(dict_file.get("orphan")))
 
     return list_orphan_paths
 
