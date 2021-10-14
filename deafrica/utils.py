@@ -1,9 +1,11 @@
 import json
 import logging
 import math
+import os
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 from urllib.parse import urlparse
 
 import click
@@ -206,6 +208,19 @@ def test_http_return(returned):
             f"-status_code: {status_code} \n"
             f"-reason: {reason} \n"
         )
+
+
+def io_timer(file_path: Path, log: Optional[logging.Logger] = None):
+    """
+    Function to check if file exist.
+    """
+    # give extra time to output write the file in disk
+    count = 0
+    while not os.path.exists(file_path) and count < 4:
+        if log:
+            log.info(f"Wait OS write file in disk {count}s")
+        time.sleep(1)
+        count += 1
 
 
 # A whole bunch of generic Click options

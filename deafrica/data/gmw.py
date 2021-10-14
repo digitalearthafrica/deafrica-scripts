@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from subprocess import check_output, STDOUT, CalledProcessError
@@ -14,7 +15,7 @@ from pystac.utils import datetime_to_str
 from rio_stac import create_stac_item
 from urlpath import URL
 
-from deafrica.utils import setup_logging
+from deafrica.utils import setup_logging, io_timer
 
 VALID_YEARS = ["1996", "2007", "2008", "2009", "2010", "2015", "2016"]
 LOCAL_DIR = Path(os.getcwd())
@@ -73,10 +74,10 @@ def create_and_upload_stac(cog_file: Path, s3_dst: str, year) -> Item:
     )
 
     log.info("assets creation")
-    del item.assets["asset"]
-
     out_data = out_path / cog_file.name
-    item.assets["mangrove "] = pystac.Asset(
+    # Remove asset created by create_stac_item and add our own
+    del item.assets["asset"]
+    item.assets["mangrove"] = pystac.Asset(
         href=str(out_data),
         title="gmw-v1.0",
         media_type=pystac.MediaType.COG,
@@ -125,6 +126,7 @@ def gmw_download_stac_cog(year: str, s3_dst: str) -> None:
         output_file = LOCAL_DIR / gmw_shp.replace(".shp", ".tif")
         log.info(f"Output TIF file is {output_file}")
         log.info(f"Extracted SHP file is {local_extracted_file_path}")
+        log.info(f"Start gdal_rasterize")
         cmd = (
             f"gdal_rasterize "
             f"-a_nodata 0 "
@@ -138,6 +140,10 @@ def gmw_download_stac_cog(year: str, s3_dst: str) -> None:
         )
         check_output(cmd, stderr=STDOUT, shell=True)
 
+        io_timer(file_path=output_file, log=log)
+
+        log.info(f"File {output_file} rasterized successfully")
+
         # create cloud optimised geotif
         cloud_optimised_file = LOCAL_DIR / f"deafrica_gmw_{year}.tif"
         cmd = (
@@ -145,20 +151,14 @@ def gmw_download_stac_cog(year: str, s3_dst: str) -> None:
         )
         check_output(cmd, stderr=STDOUT, shell=True)
 
+        io_timer(file_path=cloud_optimised_file)
+
+        log.info(f"File {cloud_optimised_file} cloud optimised successfully")
+
     except CalledProcessError as ex:
         raise ex
 
     create_and_upload_stac(cog_file=cloud_optimised_file, s3_dst=s3_dst, year=year)
-
-    log.info("Write all files zipped to S3")
-    out_zip_data = URL(s3_dst) / year / f"{local_filename}.zip"
-    s3_dump(
-        open(LOCAL_DIR / local_filename),
-        out_zip_data,
-        ContentType="application/zip",
-        ACL="bucket-owner-full-control",
-    )
-    log.info(f"ZIP written to {out_zip_data}")
 
     # All done!
     log.info(f"Completed work on {s3_dst}/{year}")
