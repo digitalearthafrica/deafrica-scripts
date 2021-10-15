@@ -1,11 +1,9 @@
 import json
 import logging
 import math
-import os
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 from urllib.parse import urlparse
 
 import click
@@ -50,7 +48,7 @@ def send_slack_notification(url: str, title: str, message: str):
 
 
 def find_latest_report(
-    report_folder_path: str, contains: str = None, not_contains: str = None
+        report_folder_path: str, contains: str = None, not_contains: str = None
 ) -> str:
     """
     Function to find the latest gap report
@@ -106,7 +104,7 @@ def split_list_equally(list_to_split: list, num_inter_lists: int):
 
     max_list_items = math.ceil(len(list_to_split) / num_inter_lists)
     return [
-        list_to_split[i : i + max_list_items]
+        list_to_split[i: i + max_list_items]
         for i in range(0, len(list_to_split), max_list_items)
     ]
 
@@ -208,19 +206,6 @@ def test_http_return(returned):
             f"-status_code: {status_code} \n"
             f"-reason: {reason} \n"
         )
-
-
-def io_timer(file_path: Path, log: Optional[logging.Logger] = None):
-    """
-    Function to check if file exist.
-    """
-    # give extra time to output write the file in disk
-    count = 0
-    while not os.path.exists(file_path) and count < 4:
-        if log:
-            log.info(f"Wait OS write file in disk {count}s")
-        time.sleep(1)
-        count += 1
 
 
 # A whole bunch of generic Click options
