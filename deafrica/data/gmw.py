@@ -1,7 +1,6 @@
 import json
 import os
 import sys
-import time
 from datetime import datetime
 from pathlib import Path
 from subprocess import check_output, STDOUT, CalledProcessError
@@ -15,7 +14,7 @@ from pystac.utils import datetime_to_str
 from rio_stac import create_stac_item
 from urlpath import URL
 
-from deafrica.utils import setup_logging, io_timer
+from deafrica.utils import setup_logging
 
 VALID_YEARS = ["1996", "2007", "2008", "2009", "2010", "2015", "2016"]
 LOCAL_DIR = Path(os.getcwd())
@@ -85,6 +84,7 @@ def create_and_upload_stac(cog_file: Path, s3_dst: str, year) -> Item:
     )
 
     log.info(f"Item created {item.to_dict()}")
+    log.info(f"Item validated {item.validate()}")
 
     log.info("Dump the data to S3")
     s3_dump(str(cog_file), str(out_data), ACL="bucket-owner-full-control")
@@ -140,8 +140,6 @@ def gmw_download_stac_cog(year: str, s3_dst: str) -> None:
         )
         check_output(cmd, stderr=STDOUT, shell=True)
 
-        # io_timer(file_path=output_file, log=log)
-        time.sleep(3)
         log.info(f"File {output_file} rasterized successfully")
 
         # create cloud optimised geotif
@@ -151,8 +149,6 @@ def gmw_download_stac_cog(year: str, s3_dst: str) -> None:
         )
         check_output(cmd, stderr=STDOUT, shell=True)
 
-        # io_timer(file_path=cloud_optimised_file)
-        time.sleep(3)
         log.info(f"File {cloud_optimised_file} cloud optimised successfully")
 
     except CalledProcessError as ex:
