@@ -43,7 +43,7 @@ FILES = [
 # Set log level to info
 log = setup_logging()
 
-log.info("Starting CHIRPS downloader")
+log.info("Starting Copernicus downloader")
 
 
 def build_file_list(year: str):
@@ -56,15 +56,20 @@ def build_file_list(year: str):
     codes = DICT_CODE_YEAR[year]
     for link in FILES:
         # Eg. https://zenodo.org/record/3518038/files/PROBAV_LC100_global_v3.0.1_2018-conso_Bare-CoverFraction-layer_EPSG-4326.tif
-        yield URL("https://zenodo.org/record/") / codes.get(
-            "id"
-        ) / "files" / link.format(year=year, code=codes.get("code"))
+        yield (
+            URL("https://zenodo.org/record/")
+            / codes.get("id")
+            / "files"
+            / link.format(year=year, code=codes.get("code"))
+        )
 
 
 def download_and_cog_copernicus(year: str, s3_dst: str, overwrite: bool = False):
 
     if int(year) > 2019 or int(year) < 2015:
-        raise ValueError("Chosen year not valid, please choose a year from 2015 to 2019.")
+        raise ValueError(
+            "Chosen year not valid, please choose a year from 2015 to 2019."
+        )
 
     for file_path in build_file_list(year):
 
@@ -91,7 +96,7 @@ def download_and_cog_copernicus(year: str, s3_dst: str, overwrite: bool = False)
                     in_memory=True,
                     nodata=-9999,
                 )
-                # Creating the STAC document with appropriate date range
+
                 item = create_stac_item(
                     mem_dst,
                     id=str(odc_uuid("copernicus", "1.0", [file_path.name])),
@@ -99,7 +104,7 @@ def download_and_cog_copernicus(year: str, s3_dst: str, overwrite: bool = False)
                     input_datetime=datetime(int(year), 1, 15),
                     properties={
                         "odc:processing_datetime": datetime_to_str(datetime.now()),
-                        "odc:product": "rainfall_chirps_monthly",
+                        "odc:product": "copernicus_yearly",
                         "start_datetime": f"{year}-{1}-01T00:00:00Z",
                         "end_datetime": f"{year}-{12}-{31}T23:59:59Z",
                     },
