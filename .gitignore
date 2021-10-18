@@ -2,3 +2,4 @@
 __pycache__
 /.idea/*
 deafrica.egg-info
+deafrica/_version.py
