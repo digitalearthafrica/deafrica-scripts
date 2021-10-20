@@ -115,7 +115,7 @@ def download_and_cog_chirps(
         message = f"Failed to handle {in_file} with error {e}"
 
         if slack_url is not None:
-            send_slack_notification(slack_url, "S2 Gap Filler", message)
+            send_slack_notification(slack_url, "Chirps Rainfall Monthly", message)
         log.exception(message)
 
         exit(1)
