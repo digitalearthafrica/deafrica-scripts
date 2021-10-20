@@ -29,7 +29,11 @@ log.info("Starting CHIRPS downloader")
 
 
 def download_and_cog_chirps(
-    year: str, month: str, s3_dst: str, overwrite: bool = False, slack_url: str = None,
+    year: str,
+    month: str,
+    s3_dst: str,
+    overwrite: bool = False,
+    slack_url: str = None,
 ):
     # Set up file strings
     in_file = f"chirps-v2.0.{year}.{month}.tif.gz"
@@ -144,7 +148,13 @@ def cli(year, month, s3_dst, overwrite, slack_url: str = None):
     Available years are 1981-2021.
     """
 
-    download_and_cog_chirps(year=year, month=month, s3_dst=s3_dst, overwrite=overwrite, slack_url=slack_url,)
+    download_and_cog_chirps(
+        year=year,
+        month=month,
+        s3_dst=s3_dst,
+        overwrite=overwrite,
+        slack_url=slack_url,
+    )
 
 
 # years = [str(i) for i in range(1981, 2022)]
