@@ -127,7 +127,7 @@ def download_and_cog_chirps(
 @click.option("--s3_dst", default="s3://deafrica-data-dev-af/rainfall_chirps_monthy/")
 @click.option("--overwrite", is_flag=True, default=False)
 @slack_url
-def cli(year, month, s3_dst, overwrite, slack_url: str = None):
+def cli(year, month, s3_dst, overwrite, slack_url):
     """
     Download CHIRPS Africa monthly tifs, COG, copy to
     S3 bucket.
