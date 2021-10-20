@@ -11,7 +11,12 @@ from rasterio.io import MemoryFile
 from rio_cogeo import cog_translate
 from rio_cogeo.profiles import cog_profiles
 from rio_stac import create_stac_item
-from deafrica.utils import setup_logging
+from deafrica.utils import (
+    setup_logging,
+    slack_url,
+    send_slack_notification,
+)
+
 
 URL_TEMPLATE = (
     "https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_monthly/tifs/{in_file}"
@@ -24,7 +29,7 @@ log.info("Starting CHIRPS downloader")
 
 
 def download_and_cog_chirps(
-    year: str, month: str, s3_dst: str, overwrite: bool = False
+    year: str, month: str, s3_dst: str, overwrite: bool = False, slack_url: str = None,
 ):
     # Set up file strings
     in_file = f"chirps-v2.0.{year}.{month}.tif.gz"
@@ -103,7 +108,12 @@ def download_and_cog_chirps(
             log.info(f"Completed work on {in_file}")
 
     except Exception as e:
-        log.exception(f"Failed to handle {in_file} with error {e}")
+        message = f"Failed to handle {in_file} with error {e}"
+
+        if slack_url is not None:
+            send_slack_notification(slack_url, "S2 Gap Filler", message)
+        log.exception(message)
+
         exit(1)
 
 
@@ -112,7 +122,8 @@ def download_and_cog_chirps(
 @click.option("--month", default="01")
 @click.option("--s3_dst", default="s3://deafrica-data-dev-af/rainfall_chirps_monthy/")
 @click.option("--overwrite", is_flag=True, default=False)
-def cli(year, month, s3_dst, overwrite):
+@slack_url
+def cli(year, month, s3_dst, overwrite, slack_url: str = None):
     """
     Download CHIRPS Africa monthly tifs, COG, copy to
     S3 bucket.
@@ -133,7 +144,7 @@ def cli(year, month, s3_dst, overwrite):
     Available years are 1981-2021.
     """
 
-    download_and_cog_chirps(year=year, month=month, s3_dst=s3_dst, overwrite=overwrite)
+    download_and_cog_chirps(year=year, month=month, s3_dst=s3_dst, overwrite=overwrite, slack_url=slack_url,)
 
 
 # years = [str(i) for i in range(1981, 2022)]
