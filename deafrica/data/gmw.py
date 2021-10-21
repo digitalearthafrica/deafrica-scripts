@@ -13,8 +13,11 @@ from pystac import Item
 from pystac.utils import datetime_to_str
 from rio_stac import create_stac_item
 from urlpath import URL
-
-from deafrica.utils import setup_logging
+from deafrica.utils import (
+    setup_logging,
+    slack_url,
+    send_slack_notification,
+)
 
 VALID_YEARS = ["1996", "2007", "2008", "2009", "2010", "2015", "2016"]
 LOCAL_DIR = Path(os.getcwd())
@@ -102,27 +105,30 @@ def create_and_upload_stac(cog_file: Path, s3_dst: str, year) -> Item:
     return item
 
 
-def gmw_download_stac_cog(year: str, s3_dst: str) -> None:
+def gmw_download_stac_cog(year: str, s3_dst: str, slack_url: str = None) -> None:
     """
     Mangrove download, COG and STAC process
 
     """
 
-    if year not in VALID_YEARS:
-        raise ValueError(
-            f"Informed year {year} not valid, please choose among {VALID_YEARS}"
-        )
+    gmw_shp = ""
 
-    log.info(f"Starting GMW downloader for year {year}")
-
-    log.info(f"download extents if needed")
-    gmw_shp = f"GMW_001_GlobalMangroveWatch_{year}/01_Data/GMW_{year}_v2.shp"
-    local_filename = FILE_NAME.format(year=year)
-    if not os.path.exists(gmw_shp):
-        gmw_shp = download_and_unzip_gmw(local_filename=local_filename)
-
-    local_extracted_file_path = LOCAL_DIR / gmw_shp
     try:
+        if year not in VALID_YEARS:
+            raise ValueError(
+                f"Informed year {year} not valid, please choose among {VALID_YEARS}"
+            )
+
+        log.info(f"Starting GMW downloader for year {year}")
+
+        log.info(f"download extents if needed")
+        gmw_shp = f"GMW_001_GlobalMangroveWatch_{year}/01_Data/GMW_{year}_v2.shp"
+        local_filename = FILE_NAME.format(year=year)
+        if not os.path.exists(gmw_shp):
+            gmw_shp = download_and_unzip_gmw(local_filename=local_filename)
+
+        local_extracted_file_path = LOCAL_DIR / gmw_shp
+
         output_file = LOCAL_DIR / gmw_shp.replace(".shp", ".tif")
         log.info(f"Output TIF file is {output_file}")
         log.info(f"Extracted SHP file is {local_extracted_file_path}")
@@ -151,19 +157,25 @@ def gmw_download_stac_cog(year: str, s3_dst: str) -> None:
 
         log.info(f"File {cloud_optimised_file} cloud optimised successfully")
 
-    except CalledProcessError as ex:
-        raise ex
+        create_and_upload_stac(cog_file=cloud_optimised_file, s3_dst=s3_dst, year=year)
 
-    create_and_upload_stac(cog_file=cloud_optimised_file, s3_dst=s3_dst, year=year)
+        # All done!
+        log.info(f"Completed work on {s3_dst}/{year}")
 
-    # All done!
-    log.info(f"Completed work on {s3_dst}/{year}")
+    except Exception as e:
+        message = f"Failed to handle GMW {gmw_shp} with error {e}"
+
+        if slack_url is not None:
+            send_slack_notification(slack_url, "GMW Yearly", message)
+
+        exit(1)
 
 
 @click.command("download-gmw")
 @click.option("--year", required=True)
 @click.option("--s3_dst", default="s3://deafrica-data-dev-af/gmw_yealy/")
-def cli(year, s3_dst):
+@slack_url
+def cli(year, s3_dst, slack_url):
     """
     Available years are
     • 1996
@@ -175,7 +187,7 @@ def cli(year, s3_dst):
     • 2016
     """
 
-    gmw_download_stac_cog(year=year, s3_dst=s3_dst)
+    gmw_download_stac_cog(year=year, s3_dst=s3_dst, slack_url=slack_url)
 
 
 if __name__ == "__main__":
