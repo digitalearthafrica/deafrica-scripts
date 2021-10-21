@@ -89,16 +89,21 @@ def create_and_upload_stac(cog_file: Path, s3_dst: str, year) -> Item:
     log.info(f"Item created {item.to_dict()}")
     log.info(f"Item validated {item.validate()}")
 
-    log.info("Dump the data to S3")
-    s3_dump(str(cog_file), str(out_data), ACL="bucket-owner-full-control")
+    log.info(f"Dump the data to S3 {str(cog_file)}")
+    s3_dump(
+        data=open(str(cog_file), "rb").read(),
+        url=str(out_data),
+        ACL="bucket-owner-full-control",
+        ContentType="image/tiff"
+    )
     log.info(f"File written to {out_data}")
 
     log.info(f"Write STAC to S3")
     s3_dump(
-        json.dumps(item.to_dict(), indent=2),
-        item.self_href,
-        ContentType="application/json",
+        data=json.dumps(item.to_dict(), indent=2),
+        url=item.self_href,
         ACL="bucket-owner-full-control",
+        ContentType="application/json",
     )
     log.info(f"STAC written to {item.self_href}")
 
@@ -167,6 +172,7 @@ def gmw_download_stac_cog(year: str, s3_dst: str, slack_url: str = None) -> None
 
         if slack_url is not None:
             send_slack_notification(slack_url, "GMW Yearly", message)
+        log.exception(message)
 
         exit(1)
 
