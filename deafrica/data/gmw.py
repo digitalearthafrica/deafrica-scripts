@@ -94,7 +94,7 @@ def create_and_upload_stac(cog_file: Path, s3_dst: str, year) -> Item:
         data=open(str(cog_file), "rb").read(),
         url=str(out_data),
         ACL="bucket-owner-full-control",
-        ContentType="image/tiff"
+        ContentType="image/tiff",
     )
     log.info(f"File written to {out_data}")
 
@@ -194,10 +194,3 @@ def cli(year, s3_dst, slack_url):
     """
 
     gmw_download_stac_cog(year=year, s3_dst=s3_dst, slack_url=slack_url)
-
-
-if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Select a year to download.")
-    else:
-        gmw_download_stac_cog(sys.argv[1], "s3://deafrica-data-dev-af/gmw_yealy/")
