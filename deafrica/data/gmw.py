@@ -56,7 +56,7 @@ def create_and_upload_stac(cog_file: Path, s3_dst: str, year) -> Item:
         input_datetime=datetime(int(year), 12, 31),
         properties={
             "odc:processing_datetime": datetime_to_str(datetime.now()),
-            "odc:product": "gmw_yearly",
+            "odc:product": "gmw",
             "start_datetime": f"{year}-01-01T00:00:00Z",
             "end_datetime": f"{year}-12-31T23:59:59Z",
         },
