@@ -179,7 +179,7 @@ def gmw_download_stac_cog(year: str, s3_dst: str, slack_url: str = None) -> None
 
 @click.command("download-gmw")
 @click.option("--year", required=True)
-@click.option("--s3_dst", default="s3://deafrica-data-dev-af/gmw_yealy/")
+@click.option("--s3_dst", default="s3://deafrica-data-dev-af/gmw_yearly/")
 @slack_url
 def cli(year, s3_dst, slack_url):
     """
