@@ -1,16 +1,14 @@
 import json
 import os
-import sys
 from datetime import datetime
 from pathlib import Path
-from subprocess import check_output, STDOUT, CalledProcessError
+from subprocess import check_output, STDOUT
 
 import click
 import pystac
 from odc.aws import s3_dump
 from odc.index import odc_uuid
 from pystac import Item
-from pystac.utils import datetime_to_str
 from rio_stac import create_stac_item
 from urlpath import URL
 from deafrica.utils import (
@@ -21,7 +19,7 @@ from deafrica.utils import (
 
 VALID_YEARS = ["1996", "2007", "2008", "2009", "2010", "2015", "2016"]
 LOCAL_DIR = Path(os.getcwd())
-SOURCE_URL_PATH = URL(f"https://wcmc.io/")
+SOURCE_URL_PATH = URL("https://wcmc.io/")
 FILE_NAME = "GMW_{year}"
 
 # Set log level to info
@@ -55,7 +53,6 @@ def create_and_upload_stac(cog_file: Path, s3_dst: str, year) -> Item:
         with_proj=True,
         input_datetime=datetime(int(year), 12, 31),
         properties={
-            "odc:processing_datetime": datetime_to_str(datetime.now()),
             "odc:product": "gmw",
             "start_datetime": f"{year}-01-01T00:00:00Z",
             "end_datetime": f"{year}-12-31T23:59:59Z",
@@ -75,7 +72,6 @@ def create_and_upload_stac(cog_file: Path, s3_dst: str, year) -> Item:
         ]
     )
 
-    log.info("assets creation")
     out_data = out_path / cog_file.name
     # Remove asset created by create_stac_item and add our own
     del item.assets["asset"]
@@ -98,7 +94,7 @@ def create_and_upload_stac(cog_file: Path, s3_dst: str, year) -> Item:
     )
     log.info(f"File written to {out_data}")
 
-    log.info(f"Write STAC to S3")
+    log.info("Write STAC to S3")
     s3_dump(
         data=json.dumps(item.to_dict(), indent=2),
         url=item.self_href,
@@ -121,12 +117,12 @@ def gmw_download_stac_cog(year: str, s3_dst: str, slack_url: str = None) -> None
     try:
         if year not in VALID_YEARS:
             raise ValueError(
-                f"Informed year {year} not valid, please choose among {VALID_YEARS}"
+                f"Chosen year {year} is not valid, please choose from one of {VALID_YEARS}"
             )
 
         log.info(f"Starting GMW downloader for year {year}")
 
-        log.info(f"download extents if needed")
+        log.info("download extents if needed")
         gmw_shp = f"GMW_001_GlobalMangroveWatch_{year}/01_Data/GMW_{year}_v2.shp"
         local_filename = FILE_NAME.format(year=year)
         if not os.path.exists(gmw_shp):
@@ -137,23 +133,22 @@ def gmw_download_stac_cog(year: str, s3_dst: str, slack_url: str = None) -> None
         output_file = LOCAL_DIR / gmw_shp.replace(".shp", ".tif")
         log.info(f"Output TIF file is {output_file}")
         log.info(f"Extracted SHP file is {local_extracted_file_path}")
-        log.info(f"Start gdal_rasterize")
+        log.info("Start gdal_rasterize")
         cmd = (
-            f"gdal_rasterize "
-            f"-a_nodata 0 "
-            f"-ot Byte "
-            f"-a pxlval "
-            f"-of GTiff "
-            f"-tr 0.001 0.001 "
-            f"{local_extracted_file_path} "
-            f"{output_file} "
-            f"-te -26.359944882003788 -47.96476498374171 64.4936701740102 38.34459242512347"
+            "gdal_rasterize "
+            "-a_nodata 0 "
+            "-ot Byte "
+            "-a pxlval "
+            "-of GTiff "
+            "-tr 0.0002 0.0002 "
+            f"{local_extracted_file_path} {output_file} "
+            "-te -26.36 -47.97 64.50 38.35"
         )
         check_output(cmd, stderr=STDOUT, shell=True)
 
         log.info(f"File {output_file} rasterized successfully")
 
-        # create cloud optimised geotif
+        # Create cloud optimised GeoTIFF
         cloud_optimised_file = LOCAL_DIR / f"deafrica_gmw_{year}.tif"
         cmd = (
             f"rio cogeo create --overview-level 0 {output_file} {cloud_optimised_file}"
