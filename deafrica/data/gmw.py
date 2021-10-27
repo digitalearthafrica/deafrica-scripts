@@ -166,7 +166,7 @@ def gmw_download_stac_cog(year: str, s3_dst: str, slack_url: str = None) -> None
         message = f"Failed to handle GMW {gmw_shp} with error {e}"
 
         if slack_url is not None:
-            send_slack_notification(slack_url, "GMW Yearly", message)
+            send_slack_notification(slack_url, "GMW", message)
         log.exception(message)
 
         exit(1)
@@ -174,7 +174,7 @@ def gmw_download_stac_cog(year: str, s3_dst: str, slack_url: str = None) -> None
 
 @click.command("download-gmw")
 @click.option("--year", required=True)
-@click.option("--s3_dst", default="s3://deafrica-data-dev-af/gmw_yearly/")
+@click.option("--s3_dst", default="s3://deafrica-data-dev-af/gmw/")
 @slack_url
 def cli(year, s3_dst, slack_url):
     """
