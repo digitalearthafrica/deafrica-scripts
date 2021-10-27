@@ -151,7 +151,7 @@ def gmw_download_stac_cog(year: str, s3_dst: str, slack_url: str = None) -> None
         # Create cloud optimised GeoTIFF
         cloud_optimised_file = LOCAL_DIR / f"deafrica_gmw_{year}.tif"
         cmd = (
-            f"rio cogeo create --overview-level 0 {output_file} {cloud_optimised_file}"
+            f"rio cogeo create {output_file} {cloud_optimised_file}"
         )
         check_output(cmd, stderr=STDOUT, shell=True)
 
