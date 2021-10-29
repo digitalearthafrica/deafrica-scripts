@@ -42,6 +42,7 @@ def create_mosaic(
             NUM_THREADS="ALL_CPUS",
             bigtiff="YES",
             SPARSE_OK=True,
+            ACL="bucket-owner-full-control"
         ).compute()
         assets[bands[0]] = pystac.Asset(
             media_type=pystac.MediaType.COG, href=s3_output_file, roles=["data"]
@@ -55,11 +56,11 @@ def create_mosaic(
                 data[band].squeeze("time"),
                 out_file,
                 blocksize=1024,
-                zstd_level=4,
                 overview_resampling="average",
                 NUM_THREADS="ALL_CPUS",
                 bigtiff="YES",
                 SPARSE_OK=True,
+                ACL="bucket-owner-full-control"
             ).compute()
             assets[band] = pystac.Asset(
                 media_type=pystac.MediaType.COG, href=out_file, roles=["data"]
