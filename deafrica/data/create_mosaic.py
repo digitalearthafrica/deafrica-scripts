@@ -10,11 +10,6 @@ from odc.aws import s3_dump
 from rio_stac import create_stac_item
 
 
-def create_asset(href):
-    asset = pystac.Asset(media_type=pystac.MediaType.COG, href=href, roles=["data"])
-    return asset
-
-
 def create_mosaic(
     dc: Datacube,
     product: str,
@@ -48,7 +43,9 @@ def create_mosaic(
             bigtiff="YES",
             SPARSE_OK=True,
         ).compute()
-        assets[bands[0]] = create_asset(s3_output_file)
+        assets[bands[0]] = pystac.Asset(
+            media_type=pystac.MediaType.COG, href=s3_output_file, roles=["data"]
+        )
     else:
         log.info("Working on creating multiple tif files")
         for band in bands:
@@ -64,7 +61,9 @@ def create_mosaic(
                 bigtiff="YES",
                 SPARSE_OK=True,
             ).compute()
-            assets[band] = create_asset(out_file)
+            assets[band] = pystac.Asset(
+                media_type=pystac.MediaType.COG, href=out_file, roles=["data"]
+            )
 
     out_stac_file = s3_output_file.replace(".tif", ".stac-item.json")
     log.info("Creating STAC item")
