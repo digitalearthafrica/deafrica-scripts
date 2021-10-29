@@ -98,7 +98,7 @@ def create_mosaic(
 @click.option(
     "--s3-output-file",
     type=str,
-    default="s3://deafrica-data-dev-af/alex-test-mosaics/test_120m_red.tif",
+    default="s3://example-bucket/example-path/example_file_name.tif",
 )
 @click.option("--split-bands", is_flag=True, default=False)
 def cli(product, out_product, year, bands, resolution, s3_output_file, split_bands):
