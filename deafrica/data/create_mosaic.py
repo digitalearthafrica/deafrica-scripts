@@ -133,4 +133,6 @@ def cli(product, out_product, year, bands, resolution, s3_output_file, split_ban
     if out_product is None:
         out_product = f"{product}_{resolution}"
 
-    create_mosaic(dc, product, out_product, year, bands, s3_output_file, split_bands, resolution)
+    create_mosaic(
+        dc, product, out_product, year, bands, s3_output_file, split_bands, resolution
+    )
