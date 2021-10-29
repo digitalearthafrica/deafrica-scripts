@@ -7,41 +7,43 @@
 affine==2.3.0
     # via
     #   datacube
+    #   odc-algo
     #   odc-stac
     #   rasterio
 attrs==21.2.0
     # via
     #   jsonschema
+    #   morecantile
     #   rasterio
-boto3==1.18.40
+boto3==1.19.6
     # via
+    #   deafrica (setup.py)
     #   odc-cloud
-    #   tools (setup.py)
-botocore==1.21.40
+botocore==1.22.6
     # via
     #   boto3
     #   odc-cloud
     #   s3transfer
-cachetools==4.2.2
+cachetools==4.2.4
     # via datacube
-certifi==2021.5.30
+certifi==2021.10.8
     # via
     #   pyproj
     #   rasterio
     #   requests
-cftime==1.5.0
+cftime==1.5.1
     # via netcdf4
-charset-normalizer==2.0.4
+charset-normalizer==2.0.7
     # via requests
-click==8.0.1
+click==8.0.3
     # via
     #   click-plugins
     #   cligj
     #   datacube
+    #   deafrica (setup.py)
     #   distributed
     #   rasterio
     #   rio-cogeo
-    #   tools (setup.py)
 click-plugins==1.1.1
     # via rasterio
 cligj==0.7.2
@@ -51,23 +53,36 @@ cloudpickle==2.0.0
     #   dask
     #   datacube
     #   distributed
-dask==2021.09.0
+cycler==0.11.0
+    # via matplotlib
+dask[array]==2021.10.0
     # via
+    #   dask-image
     #   datacube
     #   distributed
-datacube==1.8.5
-    # via odc-stac
-distributed==2021.9.0
-    # via datacube
-fsspec==2021.8.1
+    #   odc-algo
+dask-image==0.6.0
+    # via odc-algo
+datacube==1.8.6
+    # via
+    #   deafrica (setup.py)
+    #   odc-algo
+    #   odc-stac
+distributed==2021.10.0
+    # via
+    #   datacube
+    #   odc-algo
+fsspec==2021.10.1
     # via dask
-greenlet==1.1.1
+greenlet==1.1.2
     # via sqlalchemy
 heapdict==1.0.1
     # via zict
-idna==3.2
+idna==3.3
     # via requests
-jinja2==3.0.1
+imageio==2.10.1
+    # via scikit-image
+jinja2==3.0.2
     # via
     #   distributed
     #   odc-stac
@@ -75,48 +90,77 @@ jmespath==0.10.0
     # via
     #   boto3
     #   botocore
-jsonschema==3.2.0
+jsonschema==4.1.2
     # via datacube
+kiwisolver==1.3.2
+    # via matplotlib
 lark-parser==0.12.0
     # via datacube
 locket==0.2.1
     # via partd
 markupsafe==2.0.1
     # via jinja2
-morecantile==2.1.4
+matplotlib==3.4.3
+    # via scikit-image
+morecantile==3.0.0
     # via rio-cogeo
 msgpack==1.0.2
     # via distributed
 netcdf4==1.5.7
     # via datacube
-numpy==1.21.2
+networkx==2.6.3
+    # via scikit-image
+numexpr==2.7.3
+    # via odc-algo
+numpy==1.21.3
     # via
     #   cftime
     #   dask
+    #   dask-image
     #   datacube
+    #   imageio
+    #   matplotlib
     #   netcdf4
+    #   numexpr
+    #   odc-algo
     #   odc-stac
     #   pandas
+    #   pims
+    #   pywavelets
     #   rasterio
     #   rio-cogeo
+    #   scikit-image
+    #   scipy
     #   snuggs
+    #   tifffile
     #   xarray
-odc-cloud==0.2.0a0
-    # via tools (setup.py)
-odc-io==0.2.0a0
-    # via odc-stac
-odc-stac==0.2.0a4
-    # via tools (setup.py)
+odc-algo==0.2.0a4
+    # via deafrica (setup.py)
+odc-cloud==0.2.0a1
+    # via deafrica (setup.py)
+odc-stac==0.2.2
+    # via
+    #   deafrica (setup.py)
+    #   odc-algo
 packaging==21.0
-    # via dask
-pandas==1.3.3
+    # via
+    #   dask
+    #   setuptools-scm
+pandas==1.3.4
     # via
     #   datacube
+    #   deafrica (setup.py)
     #   odc-stac
-    #   tools (setup.py)
     #   xarray
 partd==1.2.0
     # via dask
+pillow==8.4.0
+    # via
+    #   imageio
+    #   matplotlib
+    #   scikit-image
+pims==0.5
+    # via dask-image
 psutil==5.8.0
     # via distributed
 psycopg2==2.9.1
@@ -125,83 +169,108 @@ pydantic==1.8.2
     # via
     #   morecantile
     #   rio-cogeo
-pyparsing==2.4.7
+pyparsing==3.0.3
     # via
+    #   matplotlib
     #   packaging
     #   snuggs
-pyproj==3.2.0
-    # via datacube
+pyproj==3.2.1
+    # via
+    #   datacube
+    #   morecantile
 pyrsistent==0.18.0
     # via jsonschema
-pystac==1.0.1
+pystac==1.1.0
     # via
+    #   deafrica (setup.py)
     #   odc-stac
     #   rio-stac
-    #   tools (setup.py)
 python-dateutil==2.8.2
     # via
     #   botocore
     #   datacube
+    #   matplotlib
     #   pandas
     #   pystac
-pytz==2021.1
+pytz==2021.3
     # via pandas
-pyyaml==5.4.1
+pywavelets==1.1.1
+    # via scikit-image
+pyyaml==6.0
     # via
     #   dask
     #   datacube
     #   distributed
-rasterio==1.2.8
+rasterio==1.2.10
     # via
     #   datacube
-    #   morecantile
+    #   deafrica (setup.py)
+    #   odc-algo
     #   rio-cogeo
     #   rio-stac
-    #   tools (setup.py)
 requests==2.26.0
     # via
-    #   tools (setup.py)
+    #   deafrica (setup.py)
     #   urlpath
-rio-cogeo==2.3.1
-    # via tools (setup.py)
-rio-stac==0.3.0
-    # via tools (setup.py)
+rio-cogeo==3.0.1
+    # via deafrica (setup.py)
+rio-stac==0.3.1
+    # via deafrica (setup.py)
 s3transfer==0.5.0
     # via boto3
-shapely==1.7.1
+scikit-image==0.18.3
+    # via odc-algo
+scipy==1.7.1
+    # via
+    #   dask-image
+    #   scikit-image
+setuptools-scm==6.3.2
+    # via deafrica (setup.py)
+shapely==1.8.0
     # via datacube
 six==1.16.0
     # via
-    #   jsonschema
+    #   pims
     #   python-dateutil
+slicerator==1.0.0
+    # via pims
 snuggs==1.4.7
     # via rasterio
 sortedcontainers==2.4.0
     # via distributed
-sqlalchemy==1.4.23
+sqlalchemy==1.4.26
     # via datacube
 tblib==1.7.0
     # via distributed
+tifffile==2021.10.12
+    # via scikit-image
+tomli==1.2.2
+    # via setuptools-scm
 toolz==0.11.1
     # via
     #   dask
     #   datacube
     #   distributed
+    #   odc-algo
     #   odc-stac
     #   partd
 tornado==6.1
     # via distributed
 typing-extensions==3.10.0.2
     # via pydantic
-urllib3==1.26.6
+urllib3==1.26.7
     # via
     #   botocore
     #   requests
 urlpath==1.1.7
-    # via tools (setup.py)
+    # via deafrica (setup.py)
 xarray==0.19.0
     # via
     #   datacube
+    #   odc-algo
     #   odc-stac
 zict==2.0.0
     # via distributed
+
+# The following packages are considered to be unsafe in a requirements file:
+# setuptools
