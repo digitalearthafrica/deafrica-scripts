@@ -113,11 +113,11 @@ def cli(product, out_product, year, bands, resolution, s3_output_file, split_ban
 
         create-mosaic \
             --product gm_ls8_annual \
-                --year 2013 \
-                --bands red,green,blue \
-                --resolution 120 \
-                --s3-output-file s3://deafrica-data-dev-af/alex-test-mosaics/test_120_split/test_120m.tif \
-                --split-bands
+            --year 2013 \
+            --bands red,green,blue \
+            --resolution 120 \
+            --s3-output-file s3://deafrica-data-dev-af/alex-test-mosaics/test_120_split/test_120m.tif \
+            --split-bands
     """
     dc = Datacube()
 
