@@ -19,7 +19,7 @@ def _save_opinionated_cog(data, out_file):
         NUM_THREADS="ALL_CPUS",
         bigtiff="YES",
         SPARSE_OK=True,
-        ACL="bucket-owner-full-control",
+        ACL="bucket-owner-full-control"
     ).compute()
 
 
@@ -47,16 +47,10 @@ def create_mosaic(
     assets = {}
     if not split_bands:
         log.info(f"Writing: {s3_output_file}")
-        save_cog(
+        _save_opinionated_cog(
             data.squeeze("time").to_stacked_array("bands", ["x", "y"]),
-            s3_output_file,
-            blocksize=1024,
-            overview_resampling="average",
-            NUM_THREADS="ALL_CPUS",
-            bigtiff="YES",
-            SPARSE_OK=True,
-            ACL="bucket-owner-full-control"
-        ).compute()
+            s3_output_file
+        )
         assets[bands[0]] = pystac.Asset(
             media_type=pystac.MediaType.COG, href=s3_output_file, roles=["data"]
         )
@@ -65,16 +59,10 @@ def create_mosaic(
         for band in bands:
             out_file = s3_output_file.replace(".tif", f"_{band}.tif")
             log.info(f"Writing: {out_file}")
-            save_cog(
+            _save_opinionated_cog(
                 data[band].squeeze("time"),
-                out_file,
-                blocksize=1024,
-                overview_resampling="average",
-                NUM_THREADS="ALL_CPUS",
-                bigtiff="YES",
-                SPARSE_OK=True,
-                ACL="bucket-owner-full-control"
-            ).compute()
+                out_file
+            )
             assets[band] = pystac.Asset(
                 media_type=pystac.MediaType.COG, href=out_file, roles=["data"]
             )
