@@ -5,13 +5,20 @@ from typing import Tuple
 import click
 import pystac
 from datacube import Datacube
+from datacube.utils.dask import start_local_dask
 from deafrica.utils import setup_logging
 from odc.algo import save_cog
-from odc.aws import s3_dump, s3_client
+from odc.aws import s3_client, s3_dump
+from pystac.asset import Asset
 from rio_stac import create_stac_item
 
 
-def _save_opinionated_cog(data, out_file):
+def _save_opinionated_cog(data, out_file, band=None) -> Tuple[Asset, str]:
+    if band is not None:
+        data = data[band].squeeze("time")
+    else:
+        data = data.squeeze("time").to_stacked_array("bands", ["x", "y"])
+
     cog = save_cog(
         data,
         out_file,
@@ -23,9 +30,11 @@ def _save_opinionated_cog(data, out_file):
         ACL="bucket-owner-full-control",
     )
     cog.compute()
-    cog.release()
 
-    return pystac.Asset(media_type=pystac.MediaType.COG, href=out_file, roles=["data"])
+    return (
+        pystac.Asset(media_type=pystac.MediaType.COG, href=out_file, roles=["data"]),
+        band,
+    )
 
 
 def _get_path(s3_output_root, out_product, time_str, ext, band=None):
@@ -51,41 +60,42 @@ def create_mosaic(
     log = setup_logging()
     log.info(f"Creating mosaic for {product} over {time}")
 
+    client = start_local_dask()
+
     assets = {}
+    data = dc.load(
+        product=product,
+        time=time,
+        resolution=(-resolution, resolution),
+        dask_chunks={"x": 2048, "y": 2048},
+        measurements=bands,
+    )
+
+    # This is a bad idea, we run out of memory
+    # data.persist()
 
     if not split_bands:
-        all_data = dc.load(
-            product=product,
-            time=time,
-            resolution=(-resolution, resolution),
-            dask_chunks={"x": 2048, "y": 2048},
-            measurements=bands,
-        )
+        log.info("Creating a single tif file")
         out_file = _get_path(s3_output_root, out_product, time_str, "tif")
-        log.info(f"Writing: {out_file}")
-        asset = _save_opinionated_cog(
-            all_data.squeeze("time").to_stacked_array("bands", ["x", "y"]),
+        asset, _ = _save_opinionated_cog(
+            data,
             out_file,
         )
         assets[bands[0]] = asset
-        del all_data
+        log.info(f"Finished writing: {asset.href}")
     else:
-        log.info("Working on creating multiple tif files")
+        log.info("Creating multiple tif files")
+
         for band in bands:
-            data = dc.load(
-                product=product,
-                time=time,
-                resolution=(-resolution, resolution),
-                dask_chunks={"x": 2048, "y": 2048},
-                measurements=[band],
-            )
             out_file = _get_path(
                 s3_output_root, out_product, time_str, "tif", band=band
             )
-            log.info(f"Writing: {out_file}")
-            asset = _save_opinionated_cog(data[band].squeeze("time"), out_file)
+            asset, band = _save_opinionated_cog(data=data, out_file=out_file, band=band)
             assets[band] = asset
-            del data
+            log.info(f"Finished writing: {asset.href}")
+
+            # Aggressively heavy handed, but we get memory leaks otherwise
+            client.restart()
 
     out_stac_file = _get_path(s3_output_root, out_product, time_str, "stac-item.json")
     item = create_stac_item(
