@@ -79,7 +79,9 @@ def create_mosaic(
                 dask_chunks={"x": 2048, "y": 2048},
                 measurements=[band],
             )
-            out_file = _get_path(s3_output_root, out_product, time_str, "tif", band=band)
+            out_file = _get_path(
+                s3_output_root, out_product, time_str, "tif", band=band
+            )
             log.info(f"Writing: {out_file}")
             asset = _save_opinionated_cog(data[band].squeeze("time"), out_file)
             assets[band] = asset
