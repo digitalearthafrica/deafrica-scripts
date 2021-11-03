@@ -22,6 +22,8 @@ def _save_opinionated_cog(data, out_file):
         ACL="bucket-owner-full-control",
     ).compute()
 
+    return pystac.Asset(media_type=pystac.MediaType.COG, href=out_file, roles=["data"])
+
 
 def create_mosaic(
     dc: Datacube,
@@ -36,7 +38,8 @@ def create_mosaic(
     log = setup_logging()
     log.info(f"Creating mosaic for {product} over {year}")
 
-    data = dc.load(
+    assets = {}
+    all_data = dc.load(
         product=product,
         time=year,
         resolution=(-resolution, resolution),
@@ -44,24 +47,23 @@ def create_mosaic(
         measurements=bands,
     )
 
-    assets = {}
     if not split_bands:
         log.info(f"Writing: {s3_output_file}")
-        _save_opinionated_cog(
-            data.squeeze("time").to_stacked_array("bands", ["x", "y"]), s3_output_file
+        asset = _save_opinionated_cog(
+            all_data.squeeze("time").to_stacked_array("bands", ["x", "y"]),
+            s3_output_file,
         )
-        assets[bands[0]] = pystac.Asset(
-            media_type=pystac.MediaType.COG, href=s3_output_file, roles=["data"]
-        )
+        assets[bands[0]] = asset
+        del all_data
     else:
         log.info("Working on creating multiple tif files")
         for band in bands:
+            some_data = all_data[band]
             out_file = s3_output_file.replace(".tif", f"_{band}.tif")
             log.info(f"Writing: {out_file}")
-            _save_opinionated_cog(data[band].squeeze("time"), out_file)
-            assets[band] = pystac.Asset(
-                media_type=pystac.MediaType.COG, href=out_file, roles=["data"]
-            )
+            asset = _save_opinionated_cog(some_data.squeeze("time"), out_file)
+            assets[band] = asset
+            del some_data
 
     out_stac_file = s3_output_file.replace(".tif", ".stac-item.json")
     log.info("Creating STAC item")
