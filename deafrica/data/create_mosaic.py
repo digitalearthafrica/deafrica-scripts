@@ -22,9 +22,7 @@ def _save_opinionated_cog(data, out_file):
         ACL="bucket-owner-full-control",
     ).compute()
 
-    return pystac.Asset(
-        media_type=pystac.MediaType.COG, href=out_file, roles=["data"]
-    )
+    return pystac.Asset(media_type=pystac.MediaType.COG, href=out_file, roles=["data"])
 
 
 def create_mosaic(
@@ -52,7 +50,8 @@ def create_mosaic(
     if not split_bands:
         log.info(f"Writing: {s3_output_file}")
         asset = _save_opinionated_cog(
-            all_data.squeeze("time").to_stacked_array("bands", ["x", "y"]), s3_output_file
+            all_data.squeeze("time").to_stacked_array("bands", ["x", "y"]),
+            s3_output_file,
         )
         assets[bands[0]] = asset
         del all_data
