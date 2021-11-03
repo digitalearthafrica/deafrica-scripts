@@ -7,7 +7,7 @@ import pystac
 from datacube import Datacube
 from deafrica.utils import setup_logging
 from odc.algo import save_cog
-from odc.aws import s3_dump
+from odc.aws import s3_dump, s3_client
 from rio_stac import create_stac_item
 
 
@@ -102,11 +102,13 @@ def create_mosaic(
     item.set_self_href(out_stac_file)
 
     log.info(f"Writing STAC: {out_stac_file}")
+    client = s3_client(aws_unsigned=False)
     s3_dump(
         data=json.dumps(item.to_dict(), indent=2),
         url=item.self_href,
         ACL="bucket-owner-full-control",
         ContentType="application/json",
+        s3=client,
     )
 
 
