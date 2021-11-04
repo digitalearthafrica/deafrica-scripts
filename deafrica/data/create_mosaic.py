@@ -8,28 +8,31 @@ from datacube import Datacube
 from datacube.utils.dask import start_local_dask
 from deafrica.utils import setup_logging
 from odc.algo import save_cog
-from odc.aws import s3_client, s3_dump
+from odc.aws import s3_client, s3_dump, s3_head_object
 from pystac.asset import Asset
 from rio_stac import create_stac_item
 
 
-def _save_opinionated_cog(data, out_file, band=None) -> Tuple[Asset, str]:
+def _save_opinionated_cog(
+    data, out_file, band=None, skip_writing=False
+) -> Tuple[Asset, str]:
     if band is not None:
         data = data[band].squeeze("time")
     else:
         data = data.squeeze("time").to_stacked_array("bands", ["x", "y"])
 
-    cog = save_cog(
-        data,
-        out_file,
-        blocksize=1024,
-        overview_resampling="average",
-        NUM_THREADS="ALL_CPUS",
-        bigtiff="YES",
-        SPARSE_OK=True,
-        ACL="bucket-owner-full-control",
-    )
-    cog.compute()
+    if not skip_writing:
+        cog = save_cog(
+            data,
+            out_file,
+            blocksize=1024,
+            overview_resampling="average",
+            NUM_THREADS="ALL_CPUS",
+            bigtiff="YES",
+            SPARSE_OK=True,
+            ACL="bucket-owner-full-control",
+        )
+        cog.compute()
 
     return (
         pystac.Asset(media_type=pystac.MediaType.COG, href=out_file, roles=["data"]),
@@ -56,6 +59,7 @@ def create_mosaic(
     s3_output_root: str,
     split_bands: bool = False,
     resolution: int = 120,
+    overwrite: bool = False,
 ):
     log = setup_logging()
     log.info(f"Creating mosaic for {product} over {time}")
@@ -77,12 +81,18 @@ def create_mosaic(
     if not split_bands:
         log.info("Creating a single tif file")
         out_file = _get_path(s3_output_root, out_product, time_str, "tif")
+        exists = s3_head_object(out_file) is not None
+        skip_writing = not (not exists or overwrite)
         asset, _ = _save_opinionated_cog(
             data,
             out_file,
+            skip_writing=skip_writing,
         )
         assets[bands[0]] = asset
-        log.info(f"Finished writing: {asset.href}")
+        if skip_writing:
+            log.info(f"File exists, and overwrite is False. Not writing {out_file}")
+        else:
+            log.info(f"Finished writing: {asset.href}")
     else:
         log.info("Creating multiple tif files")
 
@@ -90,12 +100,22 @@ def create_mosaic(
             out_file = _get_path(
                 s3_output_root, out_product, time_str, "tif", band=band
             )
-            asset, band = _save_opinionated_cog(data=data, out_file=out_file, band=band)
-            assets[band] = asset
-            log.info(f"Finished writing: {asset.href}")
+            exists = s3_head_object(out_file) is not None
+            skip_writing = not (not exists or overwrite)
 
-            # Aggressively heavy handed, but we get memory leaks otherwise
-            client.restart()
+            asset, band = _save_opinionated_cog(
+                data=data,
+                out_file=out_file,
+                band=band,
+                skip_writing=skip_writing,
+            )
+            assets[band] = asset
+            if skip_writing:
+                log.info(f"File exists, and overwrite is False. Not writing {out_file}")
+            else:
+                log.info(f"Finished writing: {asset.href}")
+                # Aggressively heavy handed, but we get memory leaks otherwise
+                client.restart()
 
     out_stac_file = _get_path(s3_output_root, out_product, time_str, "stac-item.json")
     item = create_stac_item(
@@ -135,6 +155,7 @@ def create_mosaic(
     default="s3://example-bucket/",
 )
 @click.option("--split-bands", is_flag=True, default=False)
+@click.option("--overwrite", is_flag=True, default=False)
 def cli(
     product,
     out_product,
@@ -144,6 +165,7 @@ def cli(
     resolution,
     s3_output_root,
     split_bands,
+    overwrite,
 ):
     """
     Create a mosaic of a given product and time period including a STAC item.
@@ -202,4 +224,5 @@ def cli(
         s3_output_root.rstrip("/"),
         split_bands,
         resolution,
+        overwrite,
     )
