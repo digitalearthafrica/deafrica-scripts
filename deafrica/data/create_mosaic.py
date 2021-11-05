@@ -90,7 +90,9 @@ def create_mosaic(
                 skip_writing=skip_writing,
             )
         except ValueError:
-            log.exception("Failed to create COG, please check that you only have one timestep in the period.")
+            log.exception(
+                "Failed to create COG, please check that you only have one timestep in the period."
+            )
             exit(1)
         assets[bands[0]] = asset
         if skip_writing:
@@ -115,7 +117,9 @@ def create_mosaic(
                     skip_writing=skip_writing,
                 )
             except ValueError:
-                log.exception("Failed to create COG, please check that you only have one timestep in the period.")
+                log.exception(
+                    "Failed to create COG, please check that you only have one timestep in the period."
+                )
                 exit(1)
             assets[band] = asset
             if skip_writing:
