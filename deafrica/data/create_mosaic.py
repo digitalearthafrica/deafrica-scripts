@@ -83,11 +83,15 @@ def create_mosaic(
         out_file = _get_path(s3_output_root, out_product, time_str, "tif")
         exists = s3_head_object(out_file) is not None
         skip_writing = not (not exists or overwrite)
-        asset, _ = _save_opinionated_cog(
-            data,
-            out_file,
-            skip_writing=skip_writing,
-        )
+        try:
+            asset, _ = _save_opinionated_cog(
+                data,
+                out_file,
+                skip_writing=skip_writing,
+            )
+        except ValueError:
+            log.exception("Failed to create COG, please check that you only have one timestep in the period.")
+            exit(1)
         assets[bands[0]] = asset
         if skip_writing:
             log.info(f"File exists, and overwrite is False. Not writing {out_file}")
@@ -103,12 +107,16 @@ def create_mosaic(
             exists = s3_head_object(out_file) is not None
             skip_writing = not (not exists or overwrite)
 
-            asset, band = _save_opinionated_cog(
-                data=data,
-                out_file=out_file,
-                band=band,
-                skip_writing=skip_writing,
-            )
+            try:
+                asset, band = _save_opinionated_cog(
+                    data=data,
+                    out_file=out_file,
+                    band=band,
+                    skip_writing=skip_writing,
+                )
+            except ValueError:
+                log.exception("Failed to create COG, please check that you only have one timestep in the period.")
+                exit(1)
             assets[band] = asset
             if skip_writing:
                 log.info(f"File exists, and overwrite is False. Not writing {out_file}")
@@ -197,13 +205,14 @@ def cli(
 
     if period not in ["P1Y", "P6M"]:
         print(f"Time period {period} not supported, please use one of P1Y or P6M")
+        exit(1)
 
     time_str = f"{time_start}--{period}"
     if period == "P1Y":
         time = (f"{time_start}-01-01", f"{time_start}-12-31")
     elif period == "P6M":
         year, start_month = [int(s) for s in time_start.split("-")]
-        end_month = start_month + 6
+        end_month = start_month + 5
         end_month_n_days = monthrange(year, end_month)[1]
 
         time = (
