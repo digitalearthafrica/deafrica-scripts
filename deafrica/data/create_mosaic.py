@@ -107,7 +107,7 @@ def create_mosaic(
             exists = s3_head_object(out_file) is not None
             skip_writing = not (not exists or overwrite)
 
-            try: 
+            try:
                 asset, band = _save_opinionated_cog(
                     data=data,
                     out_file=out_file,
