@@ -83,11 +83,15 @@ def create_mosaic(
         out_file = _get_path(s3_output_root, out_product, time_str, "tif")
         exists = s3_head_object(out_file) is not None
         skip_writing = not (not exists or overwrite)
-        asset, _ = _save_opinionated_cog(
-            data,
-            out_file,
-            skip_writing=skip_writing,
-        )
+        try:
+            asset, _ = _save_opinionated_cog(
+                data,
+                out_file,
+                skip_writing=skip_writing,
+            )
+        except ValueError:
+            log.exception("Failed to create COG, please check that you only have one timestep in the period.")
+            exit(1)
         assets[bands[0]] = asset
         if skip_writing:
             log.info(f"File exists, and overwrite is False. Not writing {out_file}")
@@ -103,12 +107,16 @@ def create_mosaic(
             exists = s3_head_object(out_file) is not None
             skip_writing = not (not exists or overwrite)
 
-            asset, band = _save_opinionated_cog(
-                data=data,
-                out_file=out_file,
-                band=band,
-                skip_writing=skip_writing,
-            )
+            try: 
+                asset, band = _save_opinionated_cog(
+                    data=data,
+                    out_file=out_file,
+                    band=band,
+                    skip_writing=skip_writing,
+                )
+            except ValueError:
+                log.exception("Failed to create COG, please check that you only have one timestep in the period.")
+                exit(1)
             assets[band] = asset
             if skip_writing:
                 log.info(f"File exists, and overwrite is False. Not writing {out_file}")
