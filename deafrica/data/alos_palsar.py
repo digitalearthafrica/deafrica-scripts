@@ -152,10 +152,10 @@ def combine_cog(PATH, OUTPATH, tile, year, log):
             vrt_path,
             cog_filename,
             cog_profiles.get("deflate"),
-            config={"GDAL_TIFF_OVR_BLOCKSIZE": "512"},
+            config={"GDAL_TIFF_OVR_BLOCKSIZE": "512", "CHECK_DISK_FREE_SPACE": False},
             overview_level=5,
             overview_resampling=resampling,
-            nodata=0,
+            nodata=0
         )
 
         output_cogs.append(cog_filename)
