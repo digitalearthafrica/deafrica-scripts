@@ -13,7 +13,7 @@ from typing import Tuple
 import click
 import rasterio
 from deafrica.utils import setup_logging
-from odc.aws import s3_dump
+from odc.aws import s3_dump, s3_head_object
 from odc.index import odc_uuid
 from osgeo import gdal
 from rio_cogeo.cogeo import cog_translate
@@ -155,7 +155,7 @@ def combine_cog(PATH, OUTPATH, tile, year, log):
             config={"GDAL_TIFF_OVR_BLOCKSIZE": "512", "CHECK_DISK_FREE_SPACE": False},
             overview_level=5,
             overview_resampling=resampling,
-            nodata=0
+            nodata=0,
         )
 
         output_cogs.append(cog_filename)
@@ -187,34 +187,32 @@ def get_coords(bounds):
     }
 
 
-def write_yaml(outdir, year, tile, log):
+def write_yaml(outdir, file_key, year, log):
     log.info("Writing yaml.")
-    yaml_filename = os.path.join(outdir, "{}_{}.yaml".format(tile, year))
+    yaml_filename = f"{outdir}/{file_key}.yaml"
     if int(year) > 2010:
-        datasetpath = os.path.join(
-            outdir, "{}_{}_sl_HH_F02DAR.tif".format(tile, year[-2:])
-        )
+        datasetpath = os.path.join(outdir, f"{file_key}_sl_HH_F02DAR.tif")
     else:
-        datasetpath = os.path.join(outdir, "{}_{}_sl_HH.tif".format(tile, year[-2:]))
+        datasetpath = os.path.join(outdir, f"{file_key}_sl_HH.tif")
     dataset = rasterio.open(datasetpath)
     bounds = dataset.bounds
     geo_ref_points = get_ref_points(bounds)
     coords = get_coords(bounds)
     creation_date = datetime.datetime.today().strftime("%Y-%m-%dT%H:%M:%S")
     if int(year) > 2010:
-        hhpath = "{}_{}_sl_HH_F02DAR.tif".format(tile, year[-2:])
-        hvpath = "{}_{}_sl_HV_F02DAR.tif".format(tile, year[-2:])
-        lincipath = "{}_{}_sl_linci_F02DAR.tif".format(tile, year[-2:])
-        maskpath = "{}_{}_sl_mask_F02DAR.tif".format(tile, year[-2:])
-        datepath = "{}_{}_sl_date_F02DAR.tif".format(tile, year[-2:])
+        hhpath = f"{file_key}_sl_HH_F02DAR.tif"
+        hvpath = f"{file_key}_sl_HV_F02DAR.tif"
+        lincipath = f"{file_key}_sl_linci_F02DAR.tif"
+        maskpath = f"{file_key}_sl_mask_F02DAR.tif"
+        datepath = f"{file_key}_sl_date_F02DAR.tif"
         launch_date = "2014-05-24"
         shortname = "alos"
     else:
-        hhpath = "{}_{}_sl_HH.tif".format(tile, year[-2:])
-        hvpath = "{}_{}_sl_HV.tif".format(tile, year[-2:])
-        lincipath = "{}_{}_sl_linci.tif".format(tile, year[-2:])
-        maskpath = "{}_{}_sl_mask.tif".format(tile, year[-2:])
-        datepath = "{}_{}_sl_date.tif".format(tile, year[-2:])
+        hhpath = f"{file_key}_sl_HH.tif"
+        hvpath = f"{file_key}_sl_HV.tif"
+        lincipath = f"{file_key}_sl_linci.tif"
+        maskpath = f"{file_key}_sl_mask.tif"
+        datepath = f"{file_key}_sl_date.tif"
         if int(year) > 2000:
             launch_date = "2006-01-24"
             shortname = "alos"
@@ -243,7 +241,7 @@ def write_yaml(outdir, year, tile, log):
             "date": {"path": datepath},
         }
     metadata_doc = {
-        "id": str(odc_uuid(shortname, "1", [], year=year, tile=tile)),
+        "id": str(odc_uuid(shortname, "1", [], year=year, tile=file_key.split("_")[0])),
         "creation_dt": creation_date,
         "product_type": "gamma0",
         "platform": {"code": platform},
@@ -298,20 +296,31 @@ def upload_to_s3(s3_destination, files, log):
         )
 
 
-def run_one(tile_string: str, workdir: Path, s3_destination: str, log: Logger):
+def check_already_done(s3_destination, file_key, log):
+    log.info(f"Checking if {s3_destination}/{file_key}.yaml exists")
+    return s3_head_object(f"S3://{s3_destination}/{file_key}.yaml") is not None
+
+
+def run_one(tile_string: str, base_dir: Path, s3_destination: str, log: Logger):
     year = tile_string.split("/")[0]
     tile = tile_string.split("/")[1]
 
-    outdir = workdir / "out"
+    workdir = base_dir / tile_string / "wrk"
+    outdir = base_dir / tile_string / "out"
 
     s3_destination = f"{s3_destination}/{year}/{tile}"
+    file_key = f"{tile}_{year[-2:]}"
+
+    if check_already_done(s3_destination, file_key, log):
+        log.info(f"{s3_destination}/{file_key}.yaml already exists, skipping")
+        return
 
     try:
         log.info(f"Starting up process for tile {tile_string}")
         make_directories([workdir, outdir], log)
         download_files(workdir, year, tile, log)
         list_of_cogs = combine_cog(workdir, outdir, tile, year, log)
-        metadata_file = write_yaml(outdir, year, tile, log)
+        metadata_file = write_yaml(outdir, file_key, year, log)
         upload_to_s3(s3_destination, list_of_cogs + [metadata_file], log)
         delete_directories([workdir, outdir], log)
     except Exception:
