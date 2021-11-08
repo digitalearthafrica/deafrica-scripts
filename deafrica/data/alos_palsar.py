@@ -97,11 +97,12 @@ def download_files(workdir, year, tile, log):
             subprocess.check_call(["wget", "-q", ftp_location], cwd=workdir)
         else:
             log.info("Skipping download, file already exists")
-        log.info("Untarring file")
-        subprocess.check_call(["tar", "-xf", filename], cwd=workdir)
     except subprocess.CalledProcessError:
         log.warning("File failed to download... skipping")
         exit(0)
+
+    log.info("Untarring file")
+    subprocess.check_call(["tar", "-xf", filename, "--no-same-owner"], cwd=workdir)
 
 
 def combine_cog(PATH, OUTPATH, tile, year, log):
