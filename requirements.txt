@@ -216,6 +216,10 @@ rio-cogeo==3.0.1
     # via deafrica (setup.py)
 rio-stac==0.3.1
     # via deafrica (setup.py)
+ruamel.yaml==0.17.17
+    # via deafrica (setup.py)
+ruamel.yaml.clib==0.2.6
+    # via ruamel.yaml
 s3transfer==0.5.0
     # via boto3
 scikit-image==0.18.3

@@ -309,7 +309,7 @@ def run_one(tile_string: str, workdir: Path, s3_destination: str, log: Logger):
         download_files(workdir, year, tile, log)
         list_of_cogs = combine_cog(workdir, outdir, tile, year, log)
         metadata_file = write_yaml(outdir, year, tile, log)
-        upload_to_s3(outdir, s3_destination, path, list_of_cogs + [metadata_file], log)
+        upload_to_s3(s3_destination, path, list_of_cogs + [metadata_file], log)
         delete_directories([workdir, outdir], log)
     except Exception:
         log.exception(f"Job failed for tile {tile_string}")
