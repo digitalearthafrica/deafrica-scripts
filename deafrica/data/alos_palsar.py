@@ -6,19 +6,19 @@ import os
 import shutil
 import subprocess
 import sys
+from logging import Logger
 from pathlib import Path
 from typing import Tuple
 
-import boto3
 import click
 import rasterio
+from deafrica.utils import setup_logging
+from odc.aws import s3_dump
 from odc.index import odc_uuid
 from osgeo import gdal
 from rio_cogeo.cogeo import cog_translate
 from rio_cogeo.profiles import cog_profiles
 from ruamel.yaml import YAML
-from deafrica.utils import setup_logging
-from logging import Logger
 
 NS = [
     "N40",
@@ -100,7 +100,8 @@ def download_files(workdir, year, tile, log):
         log.info("Untarring file")
         subprocess.check_call(["tar", "-xf", filename], cwd=workdir)
     except subprocess.CalledProcessError:
-        log.exception("File failed to download...")
+        log.warning("File failed to download... skipping")
+        exit(0)
 
 
 def combine_cog(PATH, OUTPATH, tile, year, log):
@@ -278,30 +279,32 @@ def write_yaml(outdir, year, tile, log):
     return yaml_filename
 
 
-def upload_to_s3(s3_bucket, path, files, log):
-    log.info("Commencing S3 upload")
-    s3r = boto3.resource("s3")
-    if s3_bucket:
-        log.info("Uploading to {}".format(s3_bucket))
-        # Upload data
-        for out_file in files:
-            data = open(out_file, "rb")
-            key = "{}/{}".format(path, os.path.basename(out_file))
-            log.info("Uploading file {} to S3://{}/{}".format(out_file, s3_bucket, key))
-            s3r.Bucket(s3_bucket).put_object(
-                Key=key, Body=data, acl="bucket-owner-full-control"
-            )
-    else:
-        log.warning("Not uploading to S3, because the bucket isn't set.")
+def upload_to_s3(s3_destination, files, log):
+    log.info(f"Uploading to {s3_destination}")
+    # Upload data
+    for out_file in files:
+        out_name = os.path.basename(out_file)
+        dest = f"S3://{s3_destination}/{out_name}"
+        log.info(f"Uploading file to {dest}")
+        if "yaml" in out_name:
+            content_type = "text/yaml"
+        else:
+            content_type = "image/tiff"
+        s3_dump(
+            data=open(out_file, "rb").read(),
+            url=dest,
+            ACL="bucket-owner-full-control",
+            ContentType=content_type,
+        )
 
 
 def run_one(tile_string: str, workdir: Path, s3_destination: str, log: Logger):
     year = tile_string.split("/")[0]
     tile = tile_string.split("/")[1]
 
-    path = tile_string
-
     outdir = workdir / "out"
+
+    s3_destination = f"{s3_destination}/{year}/{tile}"
 
     try:
         log.info(f"Starting up process for tile {tile_string}")
@@ -309,10 +312,11 @@ def run_one(tile_string: str, workdir: Path, s3_destination: str, log: Logger):
         download_files(workdir, year, tile, log)
         list_of_cogs = combine_cog(workdir, outdir, tile, year, log)
         metadata_file = write_yaml(outdir, year, tile, log)
-        upload_to_s3(s3_destination, path, list_of_cogs + [metadata_file], log)
+        upload_to_s3(s3_destination, list_of_cogs + [metadata_file], log)
         delete_directories([workdir, outdir], log)
     except Exception:
         log.exception(f"Job failed for tile {tile_string}")
+        exit(1)
 
 
 @click.command("download-alos-palsar")
@@ -338,7 +342,7 @@ def cli(tile_string, workdir, s3_bucket, s3_path):
     """
     log = setup_logging()
 
-    s3_destination = s3_bucket.rstrip("/") + "/" + s3_path.rstrip("/")
+    s3_destination = s3_bucket.rstrip("/").lstrip("s3://") + "/" + s3_path.rstrip("/")
 
     run_one(tile_string, Path(workdir), s3_destination, log)
 
