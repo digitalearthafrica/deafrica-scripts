@@ -12,6 +12,9 @@ RUN apt-get update \
     libpq-dev python3-dev \
     # For SSL
     ca-certificates \
+    # For ALOS downloader
+    wget \
+    # Tidy up
     && apt-get autoclean && \
     apt-get autoremove && \
     rm -rf /var/lib/{apt,dpkg,cache,log}
