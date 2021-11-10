@@ -20,6 +20,9 @@ from rio_cogeo.cogeo import cog_translate
 from rio_cogeo.profiles import cog_profiles
 from ruamel.yaml import YAML
 
+from rio_stac import create_stac_item
+import pystac
+
 NS = [
     "N40",
     "N35",
@@ -188,6 +191,93 @@ def get_coords(bounds):
     }
 
 
+def write_stac(
+    s3_destination: str, file_path: str, file_key: str, year: str, log: Logger
+) -> str:
+    region_code = file_key.split("_")[0]
+
+    log.info("Creating STAC file in memory")
+    if int(year) > 2010:
+        hhpath = f"{file_key}_sl_HH_F02DAR.tif"
+        hvpath = f"{file_key}_sl_HV_F02DAR.tif"
+        lincipath = f"{file_key}_sl_linci_F02DAR.tif"
+        maskpath = f"{file_key}_sl_mask_F02DAR.tif"
+        datepath = f"{file_key}_sl_date_F02DAR.tif"
+        launch_date = "2014-05-24"
+        shortname = "alos"
+    else:
+        hhpath = f"{file_key}_sl_HH.tif"
+        hvpath = f"{file_key}_sl_HV.tif"
+        lincipath = f"{file_key}_sl_linci.tif"
+        maskpath = f"{file_key}_sl_mask.tif"
+        datepath = f"{file_key}_sl_date.tif"
+        if int(year) > 2000:
+            launch_date = "2006-01-24"
+            shortname = "alos"
+        else:
+            launch_date = "1992-02-11"
+            shortname = "jers"
+    if shortname == "alos":
+        product_name = "alos_palsar_mosaic"
+        platform = "ALOS/ALOS-2"
+        instrument = "PALSAR/PALSAR-2"
+        cf = "83.0 dB"
+        bandpaths = {
+            "hh": hhpath,
+            "hv": hvpath,
+            "linci": lincipath,
+            "mask": maskpath,
+            "date": datepath,
+        }
+    else:
+        product_name = "jers_sar_mosaic"
+        platform = "JERS-1"
+        instrument = "SAR"
+        cf = "84.66 dB"
+        bandpaths = {
+            "hh": hhpath,
+            "linci": lincipath,
+            "mask": maskpath,
+            "date": datepath,
+        }
+
+    properties = {
+        "odc:product": product_name,
+        "odc:region_code": region_code,
+        "platform": platform,
+        "instruments": [instrument],
+        "cf": cf,
+        "launchdate": launch_date,
+        "start_datetime": f"{year}-01-01T00:00:00Z",
+        "end_datetime": f"{year}-12-31-T23:59:59Z",
+    }
+
+    assets = {}
+    for name, path in bandpaths.items():
+        href = f"s3://{s3_destination}/{path}"
+        assets[name] = pystac.Asset(
+            href, media_type=pystac.MediaType.COG, roles=["data"]
+        )
+
+    item = create_stac_item(
+        file_path,
+        id=str(odc_uuid(shortname, "1", [], year=year, tile=file_key.split("_")[0])),
+        properties=properties,
+        assets=assets,
+        with_proj=True,
+    )
+    item.set_self_href(f"s3://{s3_destination}/{file_path}.stac-item.json")
+
+    print(json.dumps(item.to_dict(), indent=2))
+    s3_dump(
+        json.dumps(item.to_dict(), indent=2),
+        item.self_href,
+        ContentType="application/json",
+        ACL="bucket-owner-full-control",
+    )
+    log.info(f"STAC written to {item.self_href}")
+
+
 def write_yaml(outdir, file_key, year, log):
     log.info("Writing yaml.")
     yaml_filename = f"{outdir}/{file_key}.yaml"
@@ -297,12 +387,13 @@ def upload_to_s3(s3_destination, files, log):
         )
 
 
-def check_already_done(s3_destination, file_key, log):
-    log.info(f"Checking if {s3_destination}/{file_key}.yaml exists")
-    return s3_head_object(f"S3://{s3_destination}/{file_key}.yaml") is not None
-
-
-def run_one(tile_string: str, base_dir: Path, s3_destination: str, log: Logger):
+def run_one(
+    tile_string: str,
+    base_dir: Path,
+    s3_destination: str,
+    update_metadata: bool,
+    log: Logger,
+):
     year = tile_string.split("/")[0]
     tile = tile_string.split("/")[1]
 
@@ -312,17 +403,33 @@ def run_one(tile_string: str, base_dir: Path, s3_destination: str, log: Logger):
     s3_destination = f"{s3_destination}/{year}/{tile}"
     file_key = f"{tile}_{year[-2:]}"
 
-    if check_already_done(s3_destination, file_key, log):
-        log.info(f"{s3_destination}/{file_key}.yaml already exists, skipping")
-        return
+    stac_self_href = f"s3://{s3_destination}/{file_key}.stac-item.json"
 
+    if s3_head_object(stac_self_href) is not None and not update_metadata:
+        log.info(f"{stac_self_href} already exists, skipping")
+        return
+    elif update_metadata:
+        if int(year) > 2010:
+            name = "{}_{}_sl_{}_F02DAR.tif".format(tile, year[-2:], "HH")
+        else:
+            name = "{}_{}_sl_{}.tif".format(tile, year[-2:], "HH")
+        one_file = f"s3://{s3_destination}/{name}"
+
+        if s3_head_object(one_file) is not None:
+            # Data file exists, so we can update metadata
+            log.info(f"{one_file} exists, updating metadata only")
+            write_stac(s3_destination, one_file, file_key, year, log)
+        else:
+            log.info(f"{one_file} does not exist, continuing with data creation.")
+        # Finish here, we don't need to create the data files
+        return
     try:
         log.info(f"Starting up process for tile {tile_string}")
         make_directories([workdir, outdir], log)
         download_files(workdir, year, tile, log)
         list_of_cogs = combine_cog(workdir, outdir, tile, year, log)
-        metadata_file = write_yaml(outdir, file_key, year, log)
-        upload_to_s3(s3_destination, list_of_cogs + [metadata_file], log)
+        upload_to_s3(s3_destination, list_of_cogs, log)
+        write_stac(s3_destination, list_of_cogs[0], file_key, year, log)
         delete_directories([workdir, outdir], log)
     except Exception:
         log.exception(f"Job failed for tile {tile_string}")
@@ -344,7 +451,13 @@ def run_one(tile_string: str, base_dir: Path, s3_destination: str, log: Logger):
 )
 @click.option("--s3-bucket", "-s", required=False, help="The S3 bucket to upload to")
 @click.option("--s3-path", "-p", required=False, help="The S3 path to upload to")
-def cli(tile_string, workdir, s3_bucket, s3_path):
+@click.option(
+    "--update-metadata",
+    "-u",
+    is_flag=True,
+    help="Only update metadata if the data already exists.",
+)
+def cli(tile_string, workdir, s3_bucket, update_metadata, s3_path):
     """
     Example command:
 
@@ -354,7 +467,7 @@ def cli(tile_string, workdir, s3_bucket, s3_path):
 
     s3_destination = s3_bucket.rstrip("/").lstrip("s3://") + "/" + s3_path.rstrip("/")
 
-    run_one(tile_string, Path(workdir), s3_destination, log)
+    run_one(tile_string, Path(workdir), s3_destination, update_metadata, log)
 
 
 @click.command("alos-palsar-dump-tiles")
