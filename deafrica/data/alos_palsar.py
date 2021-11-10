@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import datetime
 import json
 import os
 import shutil
@@ -12,7 +11,6 @@ from typing import Tuple
 
 import click
 import pystac
-import rasterio
 from deafrica.utils import setup_logging
 from odc.aws import s3_dump, s3_head_object
 from odc.index import odc_uuid
@@ -20,7 +18,6 @@ from osgeo import gdal
 from rio_cogeo.cogeo import cog_translate
 from rio_cogeo.profiles import cog_profiles
 from rio_stac import create_stac_item
-from ruamel.yaml import YAML
 
 NS = [
     "N40",
@@ -194,8 +191,9 @@ def write_stac(
     s3_destination: str, file_path: str, file_key: str, year: str, log: Logger
 ) -> str:
     region_code = file_key.split("_")[0]
+    stac_href = f"s3://{s3_destination}/{file_key}.stac-item.json"
+    log.info(f"Creating STAC file in memory, targeting here: {stac_href}")
 
-    log.info("Creating STAC file in memory")
     if int(year) > 2010:
         hhpath = f"{file_key}_sl_HH_F02DAR.tif"
         hvpath = f"{file_key}_sl_HV_F02DAR.tif"
@@ -255,7 +253,7 @@ def write_stac(
     for name, path in bandpaths.items():
         href = f"s3://{s3_destination}/{path}"
         assets[name] = pystac.Asset(
-            href, media_type=pystac.MediaType.COG, roles=["data"]
+            href=href, media_type=pystac.MediaType.COG, roles=["data"]
         )
 
     item = create_stac_item(
@@ -265,7 +263,7 @@ def write_stac(
         assets=assets,
         with_proj=True,
     )
-    item.set_self_href(f"s3://{s3_destination}/{file_key}.stac-item.json")
+    item.set_self_href(stac_href)
 
     s3_dump(
         json.dumps(item.to_dict(), indent=2),
@@ -274,96 +272,6 @@ def write_stac(
         ACL="bucket-owner-full-control",
     )
     log.info(f"STAC written to {item.self_href}")
-
-
-def write_yaml(outdir, file_key, year, log):
-    log.info("Writing yaml.")
-    yaml_filename = f"{outdir}/{file_key}.yaml"
-    if int(year) > 2010:
-        datasetpath = os.path.join(outdir, f"{file_key}_sl_HH_F02DAR.tif")
-    else:
-        datasetpath = os.path.join(outdir, f"{file_key}_sl_HH.tif")
-    dataset = rasterio.open(datasetpath)
-    bounds = dataset.bounds
-    geo_ref_points = get_ref_points(bounds)
-    coords = get_coords(bounds)
-    creation_date = datetime.datetime.today().strftime("%Y-%m-%dT%H:%M:%S")
-    if int(year) > 2010:
-        hhpath = f"{file_key}_sl_HH_F02DAR.tif"
-        hvpath = f"{file_key}_sl_HV_F02DAR.tif"
-        lincipath = f"{file_key}_sl_linci_F02DAR.tif"
-        maskpath = f"{file_key}_sl_mask_F02DAR.tif"
-        datepath = f"{file_key}_sl_date_F02DAR.tif"
-        launch_date = "2014-05-24"
-        shortname = "alos"
-    else:
-        hhpath = f"{file_key}_sl_HH.tif"
-        hvpath = f"{file_key}_sl_HV.tif"
-        lincipath = f"{file_key}_sl_linci.tif"
-        maskpath = f"{file_key}_sl_mask.tif"
-        datepath = f"{file_key}_sl_date.tif"
-        if int(year) > 2000:
-            launch_date = "2006-01-24"
-            shortname = "alos"
-        else:
-            launch_date = "1992-02-11"
-            shortname = "jers"
-    if shortname == "alos":
-        platform = "ALOS/ALOS-2"
-        instrument = "PALSAR/PALSAR-2"
-        cf = "83.0 dB"
-        bandpaths = {
-            "hh": {"path": hhpath},
-            "hv": {"path": hvpath},
-            "linci": {"path": lincipath},
-            "mask": {"path": maskpath},
-            "date": {"path": datepath},
-        }
-    else:
-        platform = "JERS-1"
-        instrument = "SAR"
-        cf = "84.66 dB"
-        bandpaths = {
-            "hh": {"path": hhpath},
-            "linci": {"path": lincipath},
-            "mask": {"path": maskpath},
-            "date": {"path": datepath},
-        }
-    metadata_doc = {
-        "id": str(odc_uuid(shortname, "1", [], year=year, tile=file_key.split("_")[0])),
-        "creation_dt": creation_date,
-        "product_type": "gamma0",
-        "platform": {"code": platform},
-        "instrument": {"name": instrument},
-        "format": {"name": "GeoTIFF"},
-        "extent": {
-            "coord": coords,
-            "from_dt": "{}-01-01T00:00:01".format(year),
-            "center_dt": "{}-06-15T11:00:00".format(year),
-            "to_dt": "{}-12-31T23:59:59".format(year),
-        },
-        "grid_spatial": {
-            "projection": {
-                "geo_ref_points": geo_ref_points,
-                "spatial_reference": "EPSG:4326",
-            }
-        },
-        "image": {
-            "bands": bandpaths,
-        },
-        "lineage": {"source_datasets": {}},
-        "property": {
-            "launchdate": launch_date,
-            "cf": cf,
-        },
-    }
-
-    with open(yaml_filename, "w") as f:
-        yaml = YAML(typ="safe", pure=False)
-        yaml.default_flow_style = False
-        yaml.dump(metadata_doc, f)
-
-    return yaml_filename
 
 
 def upload_to_s3(s3_destination, files, log):
