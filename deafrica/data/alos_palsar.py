@@ -265,7 +265,7 @@ def write_stac(
         assets=assets,
         with_proj=True,
     )
-    item.set_self_href(f"s3://{s3_destination}/{file_path}.stac-item.json")
+    item.set_self_href(f"s3://{s3_destination}/{file_key}.stac-item.json")
 
     s3_dump(
         json.dumps(item.to_dict(), indent=2),
@@ -417,10 +417,12 @@ def run_one(
             # Data file exists, so we can update metadata
             log.info(f"{one_file} exists, updating metadata only")
             write_stac(s3_destination, one_file, file_key, year, log)
+            # Finish here, we don't need to create the data files
+            return
         else:
+            # Nothing to see here, keep on walking!
             log.info(f"{one_file} does not exist, continuing with data creation.")
-        # Finish here, we don't need to create the data files
-        return
+
     try:
         log.info(f"Starting up process for tile {tile_string}")
         make_directories([workdir, outdir], log)
