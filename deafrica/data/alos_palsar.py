@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Tuple
 
 import click
+import pystac
 import rasterio
 from deafrica.utils import setup_logging
 from odc.aws import s3_dump, s3_head_object
@@ -18,10 +19,8 @@ from odc.index import odc_uuid
 from osgeo import gdal
 from rio_cogeo.cogeo import cog_translate
 from rio_cogeo.profiles import cog_profiles
-from ruamel.yaml import YAML
-
 from rio_stac import create_stac_item
-import pystac
+from ruamel.yaml import YAML
 
 NS = [
     "N40",
@@ -268,7 +267,6 @@ def write_stac(
     )
     item.set_self_href(f"s3://{s3_destination}/{file_path}.stac-item.json")
 
-    print(json.dumps(item.to_dict(), indent=2))
     s3_dump(
         json.dumps(item.to_dict(), indent=2),
         item.self_href,
