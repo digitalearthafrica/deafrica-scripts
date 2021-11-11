@@ -246,7 +246,7 @@ def write_stac(
         "cf": cf,
         "launchdate": launch_date,
         "start_datetime": f"{year}-01-01T00:00:00Z",
-        "end_datetime": f"{year}-12-31-T23:59:59Z",
+        "end_datetime": f"{year}-12-31T23:59:59Z",
     }
 
     assets = {}
