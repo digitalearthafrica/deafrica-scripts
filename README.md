@@ -3,7 +3,7 @@
 </h1>
 
 
-## 💻 Tecnologies
+## 💻 Technologies
 
 - [PYTHON 3.9](https://www.python.org/downloads/release/python-390/)
 - [Docker](https://www.docker.com/)
