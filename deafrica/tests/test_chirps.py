@@ -26,7 +26,7 @@ def test_one_full(remote_file):
     s3_monthly_dst = f"s3://{TEST_BUCKET_NAME}"
     s3_daily_dst = f"s3://{TEST_BUCKET_NAME}"
 
-    download_and_cog_chirps(year, month, s3_monthly_dst, s3_daily_dst, overwrite=True, daily=True)
+    download_and_cog_chirps(year, month, day, s3_monthly_dst, s3_daily_dst, overwrite=True, daily=False)
 
     # Check monthly
     out_monthly_data = f"chirps-v2.0_{year}.{month}.tif"
@@ -34,6 +34,8 @@ def test_one_full(remote_file):
 
     assert s3_client.head_object(Bucket=TEST_BUCKET_NAME, Key=out_monthly_data)
     assert s3_client.head_object(Bucket=TEST_BUCKET_NAME, Key=out_monthly_stac)
+
+    download_and_cog_chirps(year, month, day, s3_monthly_dst, s3_daily_dst, overwrite=True, daily=True)
 
     # Check daily
     out_daily_data = f"{year}/chirps-v2.0_{year}.{month}.{day}.tif"
