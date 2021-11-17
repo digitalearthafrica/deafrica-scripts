@@ -133,8 +133,8 @@ def download_and_cog_chirps(
 
             # Dump the data to S3
             mem_dst.seek(0)
-            s3_dump(mem_dst, in_href, ACL="bucket-owner-full-control")
-            log.info(f"File written to {in_href}")
+            s3_dump(mem_dst, out_data, ACL="bucket-owner-full-control")
+            log.info(f"File written to {out_data}")
             # Write STAC to S3
             s3_dump(
                 json.dumps(item.to_dict(), indent=2),
