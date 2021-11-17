@@ -21,16 +21,26 @@ def test_one_full(remote_file):
 
     year = "2018"
     month = "09"
+    day = "01"
 
-    s3_dst = f"s3://{TEST_BUCKET_NAME}"
+    s3_monthly_dst = f"s3://{TEST_BUCKET_NAME}"
+    s3_daily_dst = f"s3://{TEST_BUCKET_NAME}"
 
-    download_and_cog_chirps(year, month, s3_dst, overwrite=True)
+    download_and_cog_chirps(year, month, s3_monthly_dst, s3_daily_dst, overwrite=True, daily=True)
 
-    out_data = f"chirps-v2.0_{year}.{month}.tif"
-    out_stac = f"chirps-v2.0_{year}.{month}.stac-item.json"
+    # Check monthly
+    out_monthly_data = f"chirps-v2.0_{year}.{month}.tif"
+    out_monthly_stac = f"chirps-v2.0_{year}.{month}.stac-item.json"
 
-    assert s3_client.head_object(Bucket=TEST_BUCKET_NAME, Key=out_data)
-    assert s3_client.head_object(Bucket=TEST_BUCKET_NAME, Key=out_stac)
+    assert s3_client.head_object(Bucket=TEST_BUCKET_NAME, Key=out_monthly_data)
+    assert s3_client.head_object(Bucket=TEST_BUCKET_NAME, Key=out_monthly_stac)
+
+    # Check daily
+    out_daily_data = f"{year}/chirps-v2.0_{year}.{month}.{day}.tif"
+    out_daily_stac = f"{year}/chirps-v2.0_{year}.{month}.{day}.stac-item.json"
+
+    assert s3_client.head_object(Bucket=TEST_BUCKET_NAME, Key=out_daily_data)
+    assert s3_client.head_object(Bucket=TEST_BUCKET_NAME, Key=out_daily_stac)
 
 
 @pytest.fixture
