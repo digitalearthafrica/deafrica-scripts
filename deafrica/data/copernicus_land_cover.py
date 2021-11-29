@@ -1,21 +1,19 @@
 import json
-from pathlib import Path
 import shutil
+from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import click
-from odc.aws import s3_dump, s3_head_object
-from rasterio import MemoryFile
-import requests
-from rio_cogeo import cog_profiles, cog_translate
-from urlpath import URL
-
-from deafrica.utils import setup_logging
 import pystac
-from rio_stac import create_stac_item
+import requests
+from deafrica.utils import setup_logging
+from odc.aws import s3_dump, s3_head_object
 from odc.index import odc_uuid
-
 from osgeo import gdal
+from rasterio import MemoryFile
+from rio_cogeo import cog_profiles, cog_translate
+from rio_stac import create_stac_item
+from urlpath import URL
 
 # 2015
 # https://zenodo.org/record/3939038/files/PROBAV_LC100_global_v3.0.1_2015-base_Bare-CoverFraction-layer_EPSG-4326.tif
@@ -33,7 +31,7 @@ YEARS = {
     "2016": ["2016-conso", "3518026"],
     "2017": ["2017-conso", "3518036"],
     "2018": ["2018-conso", "3518038"],
-    "2019": ["2019-nrt", "3939050"]
+    "2019": ["2019-nrt", "3939050"],
 }
 
 FILES = {
@@ -88,11 +86,11 @@ def download_gls(year: str, s3_dst: str, workdir: Path, overwrite: bool = False)
         # Create a temporary directory to work with
         with TemporaryDirectory(prefix=workdir) as tmpdir:
             log.info(f"Working on {file}")
-            url = URL(BASE_URL.format(
-                record_id=YEARS[year][1],
-                year_key=YEARS[year][0],
-                file=file
-            ))
+            url = URL(
+                BASE_URL.format(
+                    record_id=YEARS[year][1], year_key=YEARS[year][0], file=file
+                )
+            )
 
             dest_url = URL(s3_dst) / year / f"gls_{year}_{name}.tif"
 
@@ -118,7 +116,7 @@ def download_gls(year: str, s3_dst: str, workdir: Path, overwrite: bool = False)
                             cog_profiles.get("deflate"),
                             in_memory=True,
                             nodata=255,
-                            overview_resampling=resampling
+                            overview_resampling=resampling,
                         )
                         mem_dst.seek(0)
                         s3_dump(mem_dst, str(dest_url), ACL="bucket-owner-full-control")
@@ -130,9 +128,7 @@ def download_gls(year: str, s3_dst: str, workdir: Path, overwrite: bool = False)
                 log.info(f"{dest_url} exists, skipping")
 
             assets[name] = pystac.Asset(
-                href=str(dest_url),
-                roles=["data"],
-                media_type=pystac.MediaType.COG
+                href=str(dest_url), roles=["data"], media_type=pystac.MediaType.COG
             )
 
     # Write STAC document from the last-written file
@@ -146,7 +142,7 @@ def download_gls(year: str, s3_dst: str, workdir: Path, overwrite: bool = False)
             "odc:product": "gls",
             "start_datetime": f"{year}-01-01T00:00:00Z",
             "end_datetime": f"{year}-12-31T23:59:59Z",
-        }
+        },
     )
     item.add_links(
         [
@@ -178,16 +174,9 @@ def download_gls(year: str, s3_dst: str, workdir: Path, overwrite: bool = False)
     help="The directory to download files to",
 )
 def cli(year, s3_dst, overwrite, workdir):
-    """
+    """ """
 
-    """
-
-    download_gls(
-        year=year,
-        s3_dst=s3_dst,
-        overwrite=overwrite,
-        workdir=workdir
-    )
+    download_gls(year=year, s3_dst=s3_dst, overwrite=overwrite, workdir=workdir)
 
 
 if __name__ == "__main__":
