@@ -77,7 +77,7 @@ def translate_file_deafrica_extent(file_name: Path):
 def download_gls(year: str, s3_dst: str, workdir: Path, overwrite: bool = False):
     log = setup_logging()
     assets = {}
-    out_stac = URL(s3_dst) / year / f"gls_{year}.stac-item.json"
+    out_stac = URL(s3_dst) / year / f"{PRODUCT_NAME}_{year}.stac-item.json"
 
     if s3_head_object(str(out_stac)) is not None and not overwrite:
         log.info(f"{out_stac} exists, skipping")
@@ -94,7 +94,7 @@ def download_gls(year: str, s3_dst: str, workdir: Path, overwrite: bool = False)
                 )
             )
 
-            dest_url = URL(s3_dst) / year / f"gls_{year}_{name}.tif"
+            dest_url = URL(s3_dst) / year / f"{PRODUCT_NAME}_{year}_{name}.tif"
 
             if s3_head_object(str(dest_url)) is None or overwrite:
                 log.info(f"Downloading {url}")
@@ -167,7 +167,7 @@ def download_gls(year: str, s3_dst: str, workdir: Path, overwrite: bool = False)
 
 @click.command("download-gls")
 @click.option("--year", default="2019")
-@click.option("--s3_dst", default="s3://deafrica-data-dev-af/gls/")
+@click.option("--s3_dst", default=f"s3://deafrica-data-dev-af/{PRODUCT_NAME}/")
 @click.option("--overwrite", is_flag=True, default=False)
 @click.option(
     "--workdir",
