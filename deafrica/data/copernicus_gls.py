@@ -55,6 +55,8 @@ FILES = {
 
 DO_NEAREST = set(["classification", "forest_type"])
 
+PRODUCT_NAME = "cgls_landcover"
+
 
 def download_file(url, file_name):
     with requests.get(url, stream=True, allow_redirects=True) as r:
@@ -139,7 +141,7 @@ def download_gls(year: str, s3_dst: str, workdir: Path, overwrite: bool = False)
         assets=assets,
         with_proj=True,
         properties={
-            "odc:product": "gls",
+            "odc:product": PRODUCT_NAME,
             "start_datetime": f"{year}-01-01T00:00:00Z",
             "end_datetime": f"{year}-12-31T23:59:59Z",
         },
