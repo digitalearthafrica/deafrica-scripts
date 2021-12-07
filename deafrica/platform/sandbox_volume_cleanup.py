@@ -3,9 +3,24 @@ import click as click
 from datetime import datetime
 from datetime import timedelta
 from deafrica.utils import setup_logging
+from kubernetes import config, client
 
 # Set log level to info
 log = setup_logging()
+
+try:
+    config.load_incluster_config()
+except config.ConfigException:
+    try:
+        config.load_kube_config()
+    except config.ConfigException:
+        log.exception("Could not configure kubernetes python client")
+
+configuration = client.Configuration()
+
+# create an instance of the API class
+k8s_api = client.CoreV1Api(client.ApiClient(configuration))
+k8s_namespace = 'sandbox'
 
 ec2_resource = boto3.resource("ec2")
 ct_client = boto3.client("cloudtrail")
@@ -22,7 +37,7 @@ filters = [
     {
         "Name": "tag:kubernetes.io/created-for/pvc/namespace",
         "Values": [
-            "sandbox",
+            k8s_namespace,
         ],
     },
 ]
@@ -50,21 +65,22 @@ def delete_volumes(dryrun):
         ]
 
         try:
-            if len(attach_events) == 0:
-                log.info(
-                    f"Deleting Volume {volume.id} ({volume.size} GiB) -> {volume.state}"
-                )
-                count = count + 1
-                if not dryrun:
-                    volume.delete()
-                    log.info(f"Volume successfully deleted")
+            if len(attach_events) == 0 and volume.state == 'available':
+                # Delete k8s pvc that deletes unused volume
+                for tags in volume.tags:
+                    if tags['Key'] == 'kubernetes.io/created-for/pvc/name':
+                        pvc_name = tags['Value']
+                        print(f"Deleting PVC {pvc_name} associated to -> {volume.id} ({volume.size} GiB) -> {volume.state})")
+                        if not dryrun:
+                            k8s_api.delete_namespaced_persistent_volume_claim(pvc_name, k8s_namespace)
+                        count += 1
             else:
                 log.info(
                     f"Skip Volume {volume.id} ({volume.size} GiB) -> {volume.state}"
                 )
-        except:
+        except Exception as e:
             log.exception(
-                f"Failed to Delete Volume {volume.id} ({volume.size} GiB) -> {volume.state}"
+                f"Failed to Delete Volume {volume.id} ({volume.size} GiB) -> {volume.state}: {e}"
             )
             pass
 
