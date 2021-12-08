@@ -8,46 +8,46 @@ from kubernetes import config, client
 # Set log level to info
 log = setup_logging()
 
-try:
-    config.load_incluster_config()
-except config.ConfigException:
-    try:
-        config.load_kube_config()
-    except config.ConfigException:
-        log.exception("Could not configure kubernetes python client")
-
-configuration = client.Configuration()
-
-# create an instance of the API class
-k8s_api = client.CoreV1Api(client.ApiClient(configuration))
-k8s_namespace = "sandbox"
-
-ec2_resource = boto3.resource("ec2")
-ct_client = boto3.client("cloudtrail")
-
-time_now = datetime.now()
-time_back = time_now - timedelta(days=90)
-filters = [
-    {
-        "Name": "tag:kubernetes.io/cluster/deafrica-dev-eks",
-        "Values": [
-            "owned",
-        ],
-    },
-    {
-        "Name": "tag:kubernetes.io/created-for/pvc/namespace",
-        "Values": [
-            k8s_namespace,
-        ],
-    },
-]
-
 
 def delete_volumes(dryrun):
     """
     delete volumes if CloudTrail "AttachVolume" event returns empty in the last 90 days
     """
+    # configure kubernetes API client
+    try:
+        config.load_incluster_config()
+    except config.ConfigException:
+        try:
+            config.load_kube_config()
+        except config.ConfigException:
+            log.exception("Could not configure kubernetes python client")
+
+    configuration = client.Configuration()
+    k8s_api = client.CoreV1Api(client.ApiClient(configuration))
+    k8s_namespace = "sandbox"
+
+    # configure boto3 client
+    ec2_resource = boto3.resource("ec2")
+    ct_client = boto3.client("cloudtrail")
+
+    time_now = datetime.now()
+    time_back = time_now - timedelta(days=90)
+    filters = [
+        {
+            "Name": "tag:kubernetes.io/cluster/deafrica-dev-eks",
+            "Values": [
+                "owned",
+            ],
+        },
+        {
+            "Name": "tag:kubernetes.io/created-for/pvc/namespace",
+            "Values": [
+                k8s_namespace,
+            ],
+        },
+    ]
     count = 0
+
     for volume in ec2_resource.volumes.filter(Filters=filters):
         response = ct_client.lookup_events(
             LookupAttributes=[

@@ -51,7 +51,7 @@
 
 ####Platform
  - **Sandbox Volume Cleanup**
-    - Script to delete sandbox unused EBS volumes in the last 90 days.
+    - Script to delete sandbox unused k8s PVC and EBS volumes in the last 90 days.
  
 ## ⚙️ Setup & Run
 Clone the main project repository from Github.
