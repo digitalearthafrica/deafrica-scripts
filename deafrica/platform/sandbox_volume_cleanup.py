@@ -70,7 +70,7 @@ def delete_volumes(dryrun):
                 for tags in volume.tags:
                     if tags["Key"] == "kubernetes.io/created-for/pvc/name":
                         pvc_name = tags["Value"]
-                        print(
+                        log.info(
                             f"Deleting PVC {pvc_name} associated to -> {volume.id} ({volume.size} GiB) -> {volume.state})"
                         )
                         if not dryrun:
