@@ -49,6 +49,10 @@
    - Script to check differences between Element-84 inventory bucket and Deafrica's inventory bucket. As per result, 
    gap report will generate a JSON file within a list of missing and orphan scenes.
 
+####Platform
+ - **Sandbox Volume Cleanup**
+    - Script to delete sandbox unused k8s PVC and EBS volumes in the last 90 days.
+ 
 ## ⚙️ Setup & Run
 Clone the main project repository from Github.
 ```sh
