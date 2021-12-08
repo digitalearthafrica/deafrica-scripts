@@ -20,7 +20,7 @@ configuration = client.Configuration()
 
 # create an instance of the API class
 k8s_api = client.CoreV1Api(client.ApiClient(configuration))
-k8s_namespace = 'sandbox'
+k8s_namespace = "sandbox"
 
 ec2_resource = boto3.resource("ec2")
 ct_client = boto3.client("cloudtrail")
@@ -65,14 +65,18 @@ def delete_volumes(dryrun):
         ]
 
         try:
-            if len(attach_events) == 0 and volume.state == 'available':
+            if len(attach_events) == 0 and volume.state == "available":
                 # Delete k8s pvc that deletes unused volume
                 for tags in volume.tags:
-                    if tags['Key'] == 'kubernetes.io/created-for/pvc/name':
-                        pvc_name = tags['Value']
-                        print(f"Deleting PVC {pvc_name} associated to -> {volume.id} ({volume.size} GiB) -> {volume.state})")
+                    if tags["Key"] == "kubernetes.io/created-for/pvc/name":
+                        pvc_name = tags["Value"]
+                        print(
+                            f"Deleting PVC {pvc_name} associated to -> {volume.id} ({volume.size} GiB) -> {volume.state})"
+                        )
                         if not dryrun:
-                            k8s_api.delete_namespaced_persistent_volume_claim(pvc_name, k8s_namespace)
+                            k8s_api.delete_namespaced_persistent_volume_claim(
+                                pvc_name, k8s_namespace
+                            )
                         count += 1
             else:
                 log.info(
