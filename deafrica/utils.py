@@ -10,6 +10,7 @@ import click
 import requests
 from odc.aws import s3_client, s3_fetch, s3_ls_dir
 
+# GDAL format: [ulx, uly, lrx, lry]
 AFRICA_BBOX = [-26.36, 38.35, 64.50, -47.97]
 
 
@@ -106,7 +107,7 @@ def split_list_equally(list_to_split: list, num_inter_lists: int):
 
     max_list_items = math.ceil(len(list_to_split) / num_inter_lists)
     return [
-        list_to_split[i : i + max_list_items]
+        list_to_split[i: i + max_list_items]
         for i in range(0, len(list_to_split), max_list_items)
     ]
 
