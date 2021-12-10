@@ -1,20 +1,20 @@
-import cdsapi
-from os import environ
-
 import json
+import zipfile
+from os import environ
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import cdsapi
 import click
 import pystac
-from deafrica.utils import setup_logging
+import xarray as xr
+from datacube.utils.cog import write_cog
+from datacube.utils.geometry import assign_crs
+from deafrica.utils import AFRICA_BBOX, setup_logging
 from odc.aws import s3_dump, s3_head_object
 from odc.index import odc_uuid
 from rio_stac import create_stac_item
 from urlpath import URL
-import xarray as xr
-from datacube.utils.geometry import assign_crs
-from datacube.utils.cog import write_cog
 
 """
 Download ESA Climate Change Initiative 300m Landcover from
@@ -25,19 +25,6 @@ Datasource: https://cds.climate.copernicus.eu/cdsapp#!/dataset/satellite-land-co
 """
 
 PRODUCT_NAME = "cci_landcover"
-EXTENTS = {
-    "max_lat": 40.0,
-    "min_lat": -35.0,
-    "max_lon": 55.0,
-    "min_lon": -20.0,
-}
-
-area_extents = [
-    EXTENTS["max_lat"],
-    EXTENTS["min_lon"],
-    EXTENTS["min_lat"],
-    EXTENTS["max_lon"],
-]
 
 # CDSAPI_URL = "https://cds.climate.copernicus.eu/api/v2"
 # CDSAPI_KEY = "user-or-organisation-key"
@@ -62,7 +49,8 @@ def get_version_from_year(year: str) -> str:
     """
     try:
         year_num = int(year)
-        if year_num not in range(1992, 2020):
+        # Only allow from 1992 to 2020, inclusive
+        if year_num not in range(1992, 2021):
             raise ValueError("Supplied date is outside of available range")
         if 1992 <= year_num <= 2015:
             return "v2.0.7cds"
@@ -72,67 +60,73 @@ def get_version_from_year(year: str) -> str:
         raise e
 
 
-def download_cci_lc(year: str, s3_dst: str, workdir: Path, overwrite: bool = False):
+def download_cci_lc(year: str, s3_dst: str, workdir: str, overwrite: bool = False):
     log = setup_logging()
     assets = {}
     out_stac = URL(s3_dst) / year / f"{PRODUCT_NAME}_{year}.stac-item.json"
 
     cci_lc_version = get_version_from_year(year)
-    name = f"C3S-LC-L4-LCCS-Map-300m-P1Y-{year}-{cci_lc_version}.nc"
+    name = f"C3S-LC-L4-LCCS-Map-300m-P1Y-{year}-{cci_lc_version}.zip"
+
+    workdir = Path(workdir)
+    if not workdir.exists():
+        workdir.mkdir(parents=True, exist_ok=True)
 
     if s3_head_object(str(out_stac)) is not None and not overwrite:
         log.info(f"{out_stac} exists, skipping")
         return
 
     # Create a temporary directory to work with
-    with TemporaryDirectory(prefix=workdir) as tmpdir:
+    with TemporaryDirectory(prefix=str(workdir)) as tmpdir:
         log.info(f"Working on {year}")
 
         dest_url = URL(s3_dst) / year / f"{PRODUCT_NAME}_{year}_LCCS_300m.tif"
 
         if s3_head_object(str(dest_url)) is None or overwrite:
             log.info(f"Downloading {year}")
-
             try:
                 local_file = Path(tmpdir) / str(name)
-                # Download the file
-                c = cdsapi.Client()
+                if not local_file.exists():
+                    # Download the file
+                    c = cdsapi.Client()
 
-                # we can also retrieve the object metadata from the CDS.
-                # e.g. f = c.retrieve("series",{params}) | f.location = URL to download
-                c.retrieve(
-                    "satellite-land-cover",
-                    {
-                        "format": "netcdf",
-                        "variable": "lccs_class",
-                        "version": [cci_lc_version],
-                        "year": [year],
-                        "area": area_extents,
-                    },
-                    local_file,
-                )
+                    # we can also retrieve the object metadata from the CDS.
+                    # e.g. f = c.retrieve("series",{params}) | f.location = URL to download
+                    c.retrieve(
+                        "satellite-land-cover",
+                        {
+                            "format": "zip",
+                            "variable": "all",
+                            "version": cci_lc_version,
+                            "year": str(year),
+                        },
+                        local_file,
+                    )
 
-                log.info(f"Downloaded file to {local_file}")
+                    log.info(f"Downloaded file to {local_file}")
+                else:
+                    log.info(
+                        f"File {local_file} exists, continuing without downloading"
+                    )
+
+                # Unzip the file
+                log.info(f"Unzipping {local_file}")
+                with zipfile.ZipFile(local_file, "r") as zip_ref:
+                    zip_ref.extractall(workdir)
+                unzipped = local_file.with_suffix(".nc")
 
                 # Process data
-                ds = xr.open_dataset(local_file)
+                ds = xr.open_dataset(unzipped)
                 # Subset to Africa
-                # ds_small = ds.sel(lat=slice(-35.0, 40.0), lon=slice(-20.0, 55.0))
-                ds_small = ds.where(
-                    (ds.lat >= EXTENTS["min_lat"])
-                    & (ds.lat <= EXTENTS["max_lat"])
-                    & (ds.lon >= EXTENTS["min_lon"])
-                    & (ds.lon <= EXTENTS["max_lon"]),
-                    drop=True,
-                )
+                ulx, uly, lrx, lry = AFRICA_BBOX
+                # Note: lats are upside down!
+                ds_small = ds.sel(lat=slice(uly, lry), lon=slice(ulx, lrx))
                 ds_small = assign_crs(ds_small, crs="epsg:4326")
 
                 # Create cog (in memory - :mem: returns bytes object)
                 mem_dst = write_cog(
-                    ds_small, ":mem:", nodata=255, use_windowed_writes=True
+                    ds_small.lccs_class, ":mem:", nodata=0, overview_resampling="nearest"
                 )
-                # mem_dst = to_cog(ds_small)
-                mem_dst.seek(0)
 
                 # Write to s3
                 s3_dump(mem_dst, str(dest_url), ACL="bucket-owner-full-control")
@@ -144,11 +138,11 @@ def download_cci_lc(year: str, s3_dst: str, workdir: Path, overwrite: bool = Fal
         else:
             log.info(f"{dest_url} exists, skipping")
 
-        assets[name] = pystac.Asset(
+        assets["classification"] = pystac.Asset(
             href=str(dest_url), roles=["data"], media_type=pystac.MediaType.COG
         )
 
-    # Write STAC document from the last-written file
+    # Write STAC document
     source_doc = (
         "https://cds.climate.copernicus.eu/cdsapp#!/dataset/satellite-land-cover"
     )
@@ -182,14 +176,14 @@ def download_cci_lc(year: str, s3_dst: str, workdir: Path, overwrite: bool = Fal
     log.info(f"STAC written to {out_stac}")
 
 
-@click.command("download-cci")
+@click.command("download-cop-cci")
 @click.option("--year", default="2019")
 @click.option("--s3_dst", default=f"s3://deafrica-data-dev-af/{PRODUCT_NAME}/")
 @click.option("--overwrite", is_flag=True, default=False)
 @click.option(
     "--workdir",
     "-w",
-    default="/tmp/download",
+    default="/tmp/download/",
     help="The directory to download files to",
 )
 def cli(year, s3_dst, overwrite, workdir):

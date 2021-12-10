@@ -10,6 +10,8 @@ import click
 import requests
 from odc.aws import s3_client, s3_fetch, s3_ls_dir
 
+AFRICA_BBOX = [-26.36, 38.35, 64.50, -47.97]
+
 
 def setup_logging(level: int = logging.INFO) -> logging.Logger:
     """Set up a simple logger"""
