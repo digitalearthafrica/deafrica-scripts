@@ -90,7 +90,7 @@ def download_cci_lc(year: str, s3_dst: str, workdir: str, overwrite: bool = Fals
                     # Download the file
                     c = cdsapi.Client()
 
-                    # we can also retrieve the object metadata from the CDS.
+                    # We could also retrieve the object metadata from the CDS.
                     # e.g. f = c.retrieve("series",{params}) | f.location = URL to download
                     c.retrieve(
                         "satellite-land-cover",
@@ -125,7 +125,10 @@ def download_cci_lc(year: str, s3_dst: str, workdir: str, overwrite: bool = Fals
 
                 # Create cog (in memory - :mem: returns bytes object)
                 mem_dst = write_cog(
-                    ds_small.lccs_class, ":mem:", nodata=0, overview_resampling="nearest"
+                    ds_small.lccs_class,
+                    ":mem:",
+                    nodata=0,
+                    overview_resampling="nearest",
                 )
 
                 # Write to s3
