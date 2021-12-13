@@ -21,9 +21,7 @@ from deafrica.utils import (
 MONTHLY_URL_TEMPLATE = (
     "https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_monthly/tifs/{in_file}"
 )
-DAILY_URL_TEMPLATE = (
-    "https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_daily/tifs/p05/{year}/{in_file}"
-)
+DAILY_URL_TEMPLATE = "https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_daily/tifs/p05/{year}/{in_file}"
 
 # Set log level to info
 log = setup_logging()
@@ -50,7 +48,9 @@ def download_and_cog_chirps(
         in_data = f"/vsigzip//vsicurl/{in_href}"
 
         out_data = f"{s3_dst}/{year}/{month}/chirps-v2.0_{year}.{month}.{day}.tif"
-        out_stac = f"{s3_dst}/{year}/{month}/chirps-v2.0_{year}.{month}.{day}.stac-item.json"
+        out_stac = (
+            f"{s3_dst}/{year}/{month}/chirps-v2.0_{year}.{month}.{day}.stac-item.json"
+        )
 
         start_datetime = f"{year}-{month}-{day}T00:00:00Z"
         end_datetime = f"{year}-{month}-{day}T23:59:59Z"

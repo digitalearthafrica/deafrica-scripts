@@ -1,7 +1,11 @@
 import boto3
 import moto
 import pytest
-from deafrica.data.chirps import DAILY_URL_TEMPLATE, MONTHLY_URL_TEMPLATE, download_and_cog_chirps
+from deafrica.data.chirps import (
+    DAILY_URL_TEMPLATE,
+    MONTHLY_URL_TEMPLATE,
+    download_and_cog_chirps,
+)
 from deafrica.tests.conftest import TEST_DATA_DIR
 
 from botocore.exceptions import ClientError
@@ -66,6 +70,7 @@ def remote_file_month(httpserver):
     test_url = MONTHLY_URL_TEMPLATE.format(in_file=in_file)
     httpserver.expect_request(test_url).respond_with_data(open(local_file, "rb").read())
     yield httpserver.url_for(test_url)
+
 
 @pytest.fixture
 def remote_file_day(httpserver):
