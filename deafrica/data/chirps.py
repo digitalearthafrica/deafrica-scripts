@@ -18,8 +18,11 @@ from deafrica.utils import (
 )
 
 
-URL_TEMPLATE = (
+MONTHLY_URL_TEMPLATE = (
     "https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_monthly/tifs/{in_file}"
+)
+DAILY_URL_TEMPLATE = (
+    "https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_daily/tifs/p05/{year}/{in_file}"
 )
 
 # Set log level to info
@@ -32,22 +35,44 @@ def download_and_cog_chirps(
     year: str,
     month: str,
     s3_dst: str,
+    day: str = None,
     overwrite: bool = False,
     slack_url: str = None,
 ):
-    # Set up file strings
-    in_file = f"chirps-v2.0.{year}.{month}.tif.gz"
-    in_href = URL_TEMPLATE.format(in_file=in_file)
-    in_data = f"/vsigzip//vsicurl/{in_href}"
-
+    # Cleaning and sanity checks
     s3_dst = s3_dst.rstrip("/")
-    out_data = f"{s3_dst}/chirps-v2.0_{year}.{month}.tif"
-    out_stac = f"{s3_dst}/chirps-v2.0_{year}.{month}.stac-item.json"
+
+    # Set up file strings
+    if day is not None:
+        # Set up a daily process
+        in_file = f"chirps-v2.0.{year}.{month}.{day}.tif.gz"
+        in_href = DAILY_URL_TEMPLATE.format(year=year, in_file=in_file)
+        in_data = f"/vsigzip//vsicurl/{in_href}"
+
+        out_data = f"{s3_dst}/{year}/{month}/chirps-v2.0_{year}.{month}.{day}.tif"
+        out_stac = f"{s3_dst}/{year}/{month}/chirps-v2.0_{year}.{month}.{day}.stac-item.json"
+
+        start_datetime = f"{year}-{month}-{day}T00:00:00Z"
+        end_datetime = f"{year}-{month}-{day}T23:59:59Z"
+        product_name = "rainfall_chirps_daily"
+    else:
+        # Set up a monthly process
+        in_file = f"chirps-v2.0.{year}.{month}.tif.gz"
+        in_href = MONTHLY_URL_TEMPLATE.format(in_file=in_file)
+        in_data = f"/vsigzip//vsicurl/{in_href}"
+
+        out_data = f"{s3_dst}/chirps-v2.0_{year}.{month}.tif"
+        out_stac = f"{s3_dst}/chirps-v2.0_{year}.{month}.stac-item.json"
+
+        _, end = calendar.monthrange(int(year), int(month))
+        start_datetime = f"{year}-{month}-01T00:00:00Z"
+        end_datetime = f"{year}-{month}-{end}T23:59:59Z"
+        product_name = "rainfall_chirps_monthly"
 
     try:
         # Check if file already exists
         log.info(f"Working on {in_file}")
-        if not overwrite and s3_head_object(out_stac):
+        if not overwrite and s3_head_object(out_stac) is not None:
             log.warning(f"File {out_stac} already exists. Skipping.")
             return
 
@@ -70,9 +95,9 @@ def download_and_cog_chirps(
                 input_datetime=datetime(int(year), int(month), 15),
                 properties={
                     "odc:processing_datetime": datetime_to_str(datetime.now()),
-                    "odc:product": "rainfall_chirps_monthly",
-                    "start_datetime": f"{year}-{month}-01T00:00:00Z",
-                    "end_datetime": f"{year}-{month}-{end}T23:59:59Z",
+                    "odc:product": product_name,
+                    "start_datetime": start_datetime,
+                    "end_datetime": end_datetime,
                 },
             )
             item.set_self_href(out_stac)
@@ -121,13 +146,50 @@ def download_and_cog_chirps(
         exit(1)
 
 
+@click.command("download-chirps-daily")
+@click.option("--year", default="2020")
+@click.option("--month", default="01")
+@click.option("--day", default="01")
+@click.option("--s3_dst", default="s3://deafrica-data-dev-af/rainfall_chirps_monthy/")
+@click.option("--overwrite", is_flag=True, default=False)
+@slack_url
+def cli_daily(year, month, day, s3_dst, overwrite, slack_url):
+    """
+    Download CHIRPS Africa daily tifs, COG, copy to
+    S3 bucket.
+
+    GeoTIFFs are copied from here:
+        https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_monthly/tifs/p05/
+
+    Example:
+    download-chirps-daily
+        --s3_dst s3://deafrica-data-dev-af/rainfall_chirps_monthy/
+        --year 1983
+        --month 01
+        --day 01
+
+    to download a whole year.
+
+    Available years are 1981-2021.
+    """
+
+    download_and_cog_chirps(
+        year=year,
+        month=month,
+        day=day,
+        s3_dst=s3_dst,
+        overwrite=overwrite,
+        slack_url=slack_url,
+    )
+
+
 @click.command("download-chirps")
 @click.option("--year", default="2020")
 @click.option("--month", default="01")
 @click.option("--s3_dst", default="s3://deafrica-data-dev-af/rainfall_chirps_monthy/")
 @click.option("--overwrite", is_flag=True, default=False)
 @slack_url
-def cli(year, month, s3_dst, overwrite, slack_url):
+def cli_monthly(year, month, s3_dst, overwrite, slack_url):
     """
     Download CHIRPS Africa monthly tifs, COG, copy to
     S3 bucket.
@@ -155,9 +217,3 @@ def cli(year, month, s3_dst, overwrite, slack_url):
         overwrite=overwrite,
         slack_url=slack_url,
     )
-
-
-# years = [str(i) for i in range(1981, 2022)]
-# months = [str(i).zfill(2) for i in range(1,13)]
-if __name__ == "__main__":
-    cli()
