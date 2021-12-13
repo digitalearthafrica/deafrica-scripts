@@ -168,8 +168,6 @@ def cli_daily(year, month, day, s3_dst, overwrite, slack_url):
         --month 01
         --day 01
 
-    to download a whole year.
-
     Available years are 1981-2021.
     """
 
