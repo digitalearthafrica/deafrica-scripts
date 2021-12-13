@@ -40,6 +40,7 @@ def test_one_month(remote_file_month):
     assert s3_client.head_object(Bucket=TEST_BUCKET_NAME, Key=out_stac)
 
 
+@moto.mock_s3
 def test_one_day(remote_file_day):
     try:
         s3_client = boto3.client("s3", region_name=TEST_REGION)
@@ -56,8 +57,8 @@ def test_one_day(remote_file_day):
 
     download_and_cog_chirps(YEAR, MONTH, s3_dst, day=DAY, overwrite=True)
 
-    out_data = f"chirps-v2.0_{YEAR}.{MONTH}.{DAY}.tif"
-    out_stac = f"chirps-v2.0_{YEAR}.{MONTH}.{DAY}.stac-item.json"
+    out_data = f"{YEAR}/{MONTH}/chirps-v2.0_{YEAR}.{MONTH}.{DAY}.tif"
+    out_stac = f"{YEAR}/{MONTH}/chirps-v2.0_{YEAR}.{MONTH}.{DAY}.stac-item.json"
 
     assert s3_client.head_object(Bucket=TEST_BUCKET_NAME, Key=out_data)
     assert s3_client.head_object(Bucket=TEST_BUCKET_NAME, Key=out_stac)
