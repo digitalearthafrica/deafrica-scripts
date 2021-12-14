@@ -55,6 +55,11 @@ def download_and_cog_chirps(
         start_datetime = f"{year}-{month}-{day}T00:00:00Z"
         end_datetime = f"{year}-{month}-{day}T23:59:59Z"
         product_name = "rainfall_chirps_daily"
+
+        # Completely ridiculous change handling
+        if int(year) >= 2021 and int(month) >= 6:
+            # Someone turned off gzipping
+            in_data = in_data.replace("/vsigzip/", "").replace(".gz", "")
     else:
         # Set up a monthly process
         in_file = f"chirps-v2.0.{year}.{month}.tif.gz"
@@ -123,16 +128,16 @@ def download_and_cog_chirps(
 
             # Dump the data to S3
             mem_dst.seek(0)
+            log.info(f"Writing DATA to: {out_data}")
             s3_dump(mem_dst, out_data, ACL="bucket-owner-full-control")
-            log.info(f"File written to {out_data}")
             # Write STAC to S3
+            log.info(f"Writing STAC to: {out_stac}")
             s3_dump(
                 json.dumps(item.to_dict(), indent=2),
                 out_stac,
                 ContentType="application/json",
                 ACL="bucket-owner-full-control",
             )
-            log.info(f"STAC written to {out_stac}")
             # All done!
             log.info(f"Completed work on {in_file}")
 
