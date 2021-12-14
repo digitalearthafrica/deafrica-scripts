@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 import click
 import pystac
 import requests
-from deafrica.utils import setup_logging
+from deafrica.utils import setup_logging, AFRICA_BBOX
 from odc.aws import s3_dump, s3_head_object
 from odc.index import odc_uuid
 from osgeo import gdal
@@ -69,7 +69,7 @@ def translate_file_deafrica_extent(file_name: Path):
     small_file = file_name.with_suffix(".small.tif")
     ds = gdal.Open(str(file_name))
     # [ulx, uly, lrx, lry]
-    ds = gdal.Translate(str(small_file), ds, projWin=[-26.36, 38.35, 64.50, -47.97])
+    ds = gdal.Translate(str(small_file), ds, projWin=AFRICA_BBOX)
     ds = None
     return small_file
 
