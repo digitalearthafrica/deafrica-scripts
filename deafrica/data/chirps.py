@@ -74,6 +74,9 @@ def download_and_cog_chirps(
         end_datetime = f"{year}-{month}-{end}T23:59:59Z"
         product_name = "rainfall_chirps_monthly"
 
+        # Set to 15 for the STAC metadata
+        day = 15
+
     try:
         # Check if file already exists
         log.info(f"Working on {in_file}")
@@ -97,7 +100,7 @@ def download_and_cog_chirps(
                 mem_dst,
                 id=str(odc_uuid("chirps", "2.0", [in_file])),
                 with_proj=True,
-                input_datetime=datetime(int(year), int(month), 15),
+                input_datetime=datetime(int(year), int(month), int(day)),
                 properties={
                     "odc:processing_datetime": datetime_to_str(datetime.now()),
                     "odc:product": product_name,
@@ -191,6 +194,7 @@ def cli_daily(year, month, day, s3_dst, overwrite, slack_url):
 @click.option("--month", default="01")
 @click.option("--s3_dst", default="s3://deafrica-data-dev-af/rainfall_chirps_monthy/")
 @click.option("--overwrite", is_flag=True, default=False)
+@click.option("--rewrite-metadata", is_flag=True, default=False)
 @slack_url
 def cli_monthly(year, month, s3_dst, overwrite, slack_url):
     """
