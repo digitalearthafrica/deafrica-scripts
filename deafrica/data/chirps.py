@@ -55,11 +55,6 @@ def download_and_cog_chirps(
         start_datetime = f"{year}-{month}-{day}T00:00:00Z"
         end_datetime = f"{year}-{month}-{day}T23:59:59Z"
         product_name = "rainfall_chirps_daily"
-
-        # Completely ridiculous change handling
-        if int(year) >= 2021 and int(month) >= 6:
-            # Someone turned off gzipping
-            in_data = in_data.replace("/vsigzip/", "").replace(".gz", "")
     else:
         # Set up a monthly process
         in_file = f"chirps-v2.0.{year}.{month}.tif.gz"
