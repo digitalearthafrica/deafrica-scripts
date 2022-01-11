@@ -1,5 +1,5 @@
 """
-# Read report and generate messages to fill missing scenes
+# Read gap report and generate messages to fill the missing scenes
 
 """
 import json

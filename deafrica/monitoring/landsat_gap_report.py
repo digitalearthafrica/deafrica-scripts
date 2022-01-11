@@ -1,7 +1,7 @@
 """
 # Generate a gap report between deafrica-landsat-dev and usgs-landsat bulk file
 
-This DAG runs weekly and creates a gap report in the folowing location:
+This DAG runs weekly and creates a gap report in the following location:
 s3://deafrica-landsat-dev/status-report/<satellite_date.csv.gz>
 
 """
@@ -162,7 +162,7 @@ def generate_buckets_diff(
     log.info(f"Satellite Name {satellite_name}")
     log.info(f"File Name {file_name}")
     log.info(f"Update all ({update_stac})")
-    log.info(f"Notification URL all ({notification_url})")
+    log.info(f"Notification URL ({notification_url})")
 
     # Create connection to the inventory S3 bucket
     log.info(f"Retrieving keys from inventory bucket {LANDSAT_INVENTORY_PATH}")
@@ -191,14 +191,16 @@ def generate_buckets_diff(
         orphaned_scenes = []
 
     else:
-        # Keys that are missing, they are in the source but not in the bucket
+        ## collect missing scenes
+        ## missing scenes = keys that are in the bulk file but missing in PDS sync bucket and/or from source bucket
         log.info("Filtering missing scenes")
         missing_scenes = [
             str(USGS_S3_BUCKET_PATH / path)
             for path in source_paths.difference(dest_paths)
         ]
 
-        # Keys that are orphan, they are in the bucket but not found in the files
+        ## collect orphan scenes
+        ## orphan scenes = keys that are in PDS sync bucket but missing in the bulk file and/or source bucket
         log.info("Filtering orphan scenes")
         orphaned_scenes = [
             str(URL(f"s3://{bucket_name}") / path)
