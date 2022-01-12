@@ -18,21 +18,18 @@ def get_orphans():
 
     print("Finding Orphans")
     report_files = list(s3_ls_dir(uri=DEAFRICA_REPORT_PATH, s3=s3))
+    report_files_json = [
+        report_file for report_file in report_files if report_file.endswith(".json")
+    ]
 
     landsat_8_report = [
-        report_file
-        for report_file in report_files
-        if "landsat_8" in report_file and report_file.endswith(".json")
+        report_file for report_file in report_files_json if "landsat_8" in report_file
     ][-1]
     landsat_7_report = [
-        report_file
-        for report_file in report_files
-        if "landsat_7" in report_file and report_file.endswith(".json")
+        report_file for report_file in report_files_json if "landsat_7" in report_file
     ][-1]
     landsat_5_report = [
-        report_file
-        for report_file in report_files
-        if "landsat_5" in report_file and report_file.endswith(".json")
+        report_file for report_file in report_files_json if "landsat_5" in report_file
     ][-1]
 
     list_orphan_paths = []
