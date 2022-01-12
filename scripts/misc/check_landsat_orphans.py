@@ -19,24 +19,26 @@ def get_orphans():
     print("Finding Orphans")
     report_files = list(s3_ls_dir(uri=DEAFRICA_REPORT_PATH, s3=s3))
 
-    report_files.sort()
-
-    orphan_landsat8 = [
-        orphan_file for orphan_file in report_files if "landsat_8" in orphan_file
+    landsat_8_report = [
+        report_file
+        for report_file in report_files
+        if "landsat_8" in report_file and report_file.endswith(".json")
     ][-1]
-    orphan_landsat7 = [
-        orphan_file for orphan_file in report_files if "landsat_7" in orphan_file
+    landsat_7_report = [
+        report_file
+        for report_file in report_files
+        if "landsat_7" in report_file and report_file.endswith(".json")
     ][-1]
-    orphan_landsat5 = [
-        orphan_file
-        for orphan_file in report_files
-        if "landsat_5" in orphan_file and "json" in orphan_file
+    landsat_5_report = [
+        report_file
+        for report_file in report_files
+        if "landsat_5" in report_file and report_file.endswith(".json")
     ][-1]
 
     list_orphan_paths = []
-    for orphan in [orphan_landsat7, orphan_landsat5, orphan_landsat8]:
+    for orphan in [landsat_5_report, landsat_7_report, landsat_8_report]:
         file = s3_fetch(url=orphan, s3=s3)
-        dict_file = json.loads(file.decode("utf8").replace("'", '"'))
+        dict_file = json.loads(file)
         list_orphan_paths.extend(set(dict_file.get("orphan")))
 
     return list_orphan_paths
