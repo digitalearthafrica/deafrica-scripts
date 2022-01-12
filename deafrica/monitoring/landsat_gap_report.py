@@ -191,16 +191,16 @@ def generate_buckets_diff(
         orphaned_scenes = []
 
     else:
-        ## collect missing scenes
-        ## missing scenes = keys that are in the bulk file but missing in PDS sync bucket and/or from source bucket
+        # collect missing scenes
+        # missing scenes = keys that are in the bulk file but missing in PDS sync bucket and/or in source bucket
         log.info("Filtering missing scenes")
         missing_scenes = [
             str(USGS_S3_BUCKET_PATH / path)
             for path in source_paths.difference(dest_paths)
         ]
 
-        ## collect orphan scenes
-        ## orphan scenes = keys that are in PDS sync bucket but missing in the bulk file and/or source bucket
+        # collect orphan scenes
+        # orphan scenes = keys that are in PDS sync bucket but missing in the bulk file and/or in source bucket
         log.info("Filtering orphan scenes")
         orphaned_scenes = [
             str(URL(f"s3://{bucket_name}") / path)

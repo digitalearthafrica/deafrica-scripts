@@ -12,6 +12,8 @@ DEAFRICA_REPORT_PATH = f"s3://{DEAFRICA_LANDSAT_BUCKET_NAME}/status-report/"
 USGS_AWS_REGION = "us-west-2"
 USGS_S3_BUCKET_NAME = "usgs-landsat"
 
+PUBLISH_TO_S3 = False
+
 
 def get_orphans():
     s3 = s3_client(region_name=DEAFRICA_AWS_REGION)
@@ -57,22 +59,18 @@ def check_scene_exist_in_source(path: str):
     return False
 
 
-def publish_data_to_s3(
-    data: list, output_filename: str, content_type: str = "text/plain"
-):
+def publish_to_s3(data: list, output_filename: str, content_type: str = "text/plain"):
     """
     write report to s3
     """
-
     s3 = s3_client(region_name=DEAFRICA_AWS_REGION)
-
     s3_dump(
         data=data,
         url=str(DEAFRICA_REPORT_PATH / output_filename),
         s3=s3,
         ContentType=content_type,
     )
-    print(f"Report file will be accessed from {DEAFRICA_REPORT_PATH / output_filename}")
+    print(f"Report can be accessed from {DEAFRICA_REPORT_PATH / output_filename}")
 
 
 if __name__ == "__main__":
@@ -88,12 +86,12 @@ if __name__ == "__main__":
         f"total orphan scenes to cleanup {len(cleanup_orphan_paths)} out of {len(orphan_paths)}"
     )
 
-    # write report to file
+    # write report
     date_string = datetime.now().strftime("%Y-%m-%d")
     output_file = f"landsat_orphan_cleanup_{date_string}.txt"
     report_data = "\n".join(cleanup_orphan_paths)
-    with open(output_file, "w") as f:
-        f.write(report_data)
-
-    # Optional: write report to s3
-    # publish_data_to_s3(report_data, output_file)
+    if PUBLISH_TO_S3:
+        publish_to_s3(report_data, output_file)
+    else:
+        with open(output_file, "w") as f:
+            f.write(report_data)
