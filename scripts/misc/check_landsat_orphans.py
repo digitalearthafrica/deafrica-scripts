@@ -79,10 +79,10 @@ def publish_to_s3(data: list, output_filename: str, content_type: str = "text/pl
 
 if __name__ == "__main__":
     orphan_paths = get_orphans()
-    print(f"orphaned_scenes 10 first keys {list(orphan_paths[0:10])}")
+    print(f"orphaned_scenes 10 first keys of {len(orphan_paths)}: {list(orphan_paths[0:10])}")
 
     cleanup_orphan_paths = []
-    for orphan_scene_path in orphan_paths:
+    for orphan_scene_path in list(orphan_paths[0:24237]):
         if not check_scene_exist_in_source(orphan_scene_path):
             cleanup_orphan_paths.append(orphan_scene_path)
 
