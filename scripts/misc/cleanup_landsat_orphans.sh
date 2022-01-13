@@ -35,7 +35,7 @@ export DB_HOSTNAME=$DB_HOSTNAME
 datacube system check
 
 # 1. Read Report
-orphan_report_file="landsat_5_orphan_cleanup_report_test.txt"
+orphan_report_file={orphan_report_file:-"landsat_5_orphan_cleanup_report.txt"}
 orphan_scene_paths=`cat $orphan_report_file`
 
 # 2. For each orphan scene path

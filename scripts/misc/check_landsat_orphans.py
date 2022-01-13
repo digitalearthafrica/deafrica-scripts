@@ -39,10 +39,11 @@ def get_orphans():
     # collect orphan paths
     list_orphan_paths = []
     for report in [landsat_5_report, landsat_7_report, landsat_8_report]:
-        print(f"collect orphan scenes from {report}")
         file = s3_fetch(url=report, s3=s3)
         dict_file = json.loads(file)
-        list_orphan_paths.extend(set(dict_file.get("orphan")))
+        orphans = set(dict_file.get("orphan"))
+        print(f"collected orphan scenes from {report}: {len(orphans)}")
+        list_orphan_paths.extend(orphans)
 
     return list_orphan_paths
 
@@ -79,12 +80,17 @@ def publish_to_s3(data: list, output_filename: str, content_type: str = "text/pl
 
 if __name__ == "__main__":
     orphan_paths = get_orphans()
-    print(f"orphaned_scenes 10 first keys of {len(orphan_paths)}: {list(orphan_paths[0:10])}")
+    print(
+        f"orphaned_scenes 10 first keys of {len(orphan_paths)}: {list(orphan_paths[0:10])}"
+    )
 
     cleanup_orphan_paths = []
-    for orphan_scene_path in list(orphan_paths[0:24237]):
+    for orphan_scene_path in orphan_paths:
         if not check_scene_exist_in_source(orphan_scene_path):
+            print(f"orphan path: {orphan_scene_path}")
             cleanup_orphan_paths.append(orphan_scene_path)
+        else:
+            print(f"skip path: {orphan_scene_path}")
 
     print(
         f"total orphan scenes to cleanup {len(cleanup_orphan_paths)} out of {len(orphan_paths)}"
