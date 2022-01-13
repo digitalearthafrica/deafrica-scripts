@@ -24,6 +24,8 @@ def get_orphans():
         report_file for report_file in report_files if report_file.endswith(".json")
     ]
 
+    # fetch the latest report: Landsat 5, Landsat 7 and Landsat 8
+    report_files_json.sort()
     landsat_8_report = [
         report_file for report_file in report_files_json if "landsat_8" in report_file
     ][-1]
@@ -34,9 +36,11 @@ def get_orphans():
         report_file for report_file in report_files_json if "landsat_5" in report_file
     ][-1]
 
+    # collect orphan paths
     list_orphan_paths = []
-    for orphan in [landsat_5_report, landsat_7_report, landsat_8_report]:
-        file = s3_fetch(url=orphan, s3=s3)
+    for report in [landsat_5_report, landsat_7_report, landsat_8_report]:
+        print(f"collect orphan scenes from {report}")
+        file = s3_fetch(url=report, s3=s3)
         dict_file = json.loads(file)
         list_orphan_paths.extend(set(dict_file.get("orphan")))
 
