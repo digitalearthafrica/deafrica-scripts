@@ -13,7 +13,7 @@ steps:
       datacube dataset uri-search <.json>
     * Get dataset info for given dataset-id to collect derived locations
       datacube dataset info --show-derived <dataset-id> | yq .derived[].locations[0]
-    * archive dataset and derive datasets
+    * archive landsat orphan dataset and derive datasets (i.e. wofs_ls, fc_ls and gm_ls5_ls7_annual)
       datacube dataset archive --archive-derived --dry-run <dataset-id>
     * cleanup s3 - dataset and derive datasets locations
 ###
