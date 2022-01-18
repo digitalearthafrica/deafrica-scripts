@@ -43,13 +43,13 @@ datacube system check
 # 1. Read Report
 if [ -z LATEST_ORPHAN_REPORT ]; then
   ORPHAN_REPORT_S3_PATH="s3://deafrica-landsat/status-report/orphan/"
-  LATEST_ORPHAN_REPORT=`aws s3 ls $ORPHAN_REPORT_S3_PATH | grep "landsat_orphan_" | sort | tail -n 1 | awk '{print $4}'`
+  LATEST_ORPHAN_REPORT=$(aws s3 ls $ORPHAN_REPORT_S3_PATH | grep "landsat_orphan_" | sort | tail -n 1 | awk '{print $4}')
   aws s3 cp $ORPHAN_REPORT_S3_PATH$LATEST_ORPHAN_REPORT $PWD/$LATEST_ORPHAN_REPORT
 fi
-orphan_scene_paths=`cat $PWD/$LATEST_ORPHAN_REPORT`
+orphan_scene_paths=$(cat $PWD/$LATEST_ORPHAN_REPORT)
 
 date=$(date '+%Y-%m-%d')
-archived_report_file_path="$PWD/landsat_archive_${date}.csv"
+archived_report_file_path="$PWD/landsat_archived_${date}.csv"
 echo "dataset-id,product,location" > $archived_report_file_path
 
 ARCHIVED_REPORT_S3_PATH="s3://deafrica-landsat/status-report/archived/"
@@ -58,27 +58,27 @@ ARCHIVED_REPORT_S3_PATH="s3://deafrica-landsat/status-report/archived/"
 for orphan_scene_path in $orphan_scene_paths; do
   echo "----------------------------------------------"
   echo "start archiving: $orphan_scene_path"
-  dataset_ids=`datacube dataset uri-search ${orphan_scene_path} | awk '{print $2}' | cut -d "=" -f2`
+  dataset_ids=$(datacube dataset uri-search ${orphan_scene_path} | awk '{print $2}' | cut -d "=" -f2)
 
   for dataset_id in $dataset_ids; do
     # get dataset-id
     echo "dataset_id: $dataset_id"
-    dataset_info=`datacube dataset info --show-derived $dataset_id | yq '.'`
+    dataset_info=$(datacube dataset info --show-derived $dataset_id | yq '.')
 
     # add orphan dataset info to archive report: id, product and location
     echo $dataset_info | jq -r '.id,.product,.locations[0]' | tr '\n' ',' | sed -e 's|,$||' >> $archived_report_file_path
 
     # archive derived
     # Note: only archiving landsat wofs and fc derived
-    derived=`echo $dataset_info | yq '.derived[]'`
+    derived=$(echo $dataset_info | yq '.derived[]')
     if [ -n "$derived" ]; then
-      derived_datasets=`echo $derived | jq '. | select(.product=="wofs_ls" or .product=="fc_ls")'`
+      derived_datasets=$(echo $derived | jq '. | select(.product=="wofs_ls" or .product=="fc_ls")')
 
       # add derived datasets info to archive report: id, product and location
       echo $derived_datasets | jq -r '.id,.product,.locations[0]' | tr '\n' ',' | sed -e 's|,$||' >> $archived_report_file_path
 
       # archive derived
-      derived_ids=`echo $derived_datasets | jq -r '.id'`
+      derived_ids=$(echo $derived_datasets | jq -r '.id')
       for derived_id in $derived_ids; do
         echo "archive derived dataset: $derived_id"
         datacube dataset archive --dry-run $derived_id
