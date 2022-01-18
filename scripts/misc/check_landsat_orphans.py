@@ -1,5 +1,6 @@
 """
-Read landsat gap reports for Landsat 5, Landsat 7 and Landsat 8 and check orphan scenes for cleanup
+Read latest landsat gap reports(i.e. Landsat 5, Landsat 7 and Landsat 8),
+check orphan scenes and generate report for cleanup
 """
 import json
 from datetime import datetime
@@ -7,19 +8,22 @@ from odc.aws import s3_client, s3_fetch, s3_ls, s3_dump, s3_ls_dir
 
 DEAFRICA_AWS_REGION = "af-south-1"
 DEAFRICA_LANDSAT_BUCKET_NAME = "deafrica-landsat"
-DEAFRICA_REPORT_PATH = f"s3://{DEAFRICA_LANDSAT_BUCKET_NAME}/status-report/"
+DEAFRICA_GAP_REPORT_S3_PATH = f"s3://{DEAFRICA_LANDSAT_BUCKET_NAME}/status-report/"
+DEAFRICA_ORPHAN_REPORT_S3_PATH = (
+    f"s3://{DEAFRICA_LANDSAT_BUCKET_NAME}/status-report/orphan/"
+)
 
 USGS_AWS_REGION = "us-west-2"
 USGS_S3_BUCKET_NAME = "usgs-landsat"
 
-PUBLISH_TO_S3 = False
+PUBLISH_TO_S3 = True
 
 
 def get_orphans():
     s3 = s3_client(region_name=DEAFRICA_AWS_REGION)
 
     print("Finding Orphans")
-    report_files = list(s3_ls_dir(uri=DEAFRICA_REPORT_PATH, s3=s3))
+    report_files = list(s3_ls_dir(uri=DEAFRICA_GAP_REPORT_S3_PATH, s3=s3))
     report_files_json = [
         report_file for report_file in report_files if report_file.endswith(".json")
     ]
@@ -39,10 +43,11 @@ def get_orphans():
     # collect orphan paths
     list_orphan_paths = []
     for report in [landsat_5_report, landsat_7_report, landsat_8_report]:
-        print(f"collect orphan scenes from {report}")
         file = s3_fetch(url=report, s3=s3)
         dict_file = json.loads(file)
-        list_orphan_paths.extend(set(dict_file.get("orphan")))
+        orphans = set(dict_file.get("orphan"))
+        print(f"collected orphan scenes from {report}: {len(orphans)}")
+        list_orphan_paths.extend(orphans)
 
     return list_orphan_paths
 
@@ -70,21 +75,28 @@ def publish_to_s3(data: list, output_filename: str, content_type: str = "text/pl
     s3 = s3_client(region_name=DEAFRICA_AWS_REGION)
     s3_dump(
         data=data,
-        url=str(DEAFRICA_REPORT_PATH / output_filename),
+        url=str(DEAFRICA_ORPHAN_REPORT_S3_PATH / output_filename),
         s3=s3,
         ContentType=content_type,
     )
-    print(f"Report can be accessed from {DEAFRICA_REPORT_PATH / output_filename}")
+    print(
+        f"Report can be accessed from {DEAFRICA_ORPHAN_REPORT_S3_PATH / output_filename}"
+    )
 
 
 if __name__ == "__main__":
     orphan_paths = get_orphans()
-    print(f"orphaned_scenes 10 first keys {list(orphan_paths[0:10])}")
+    print(
+        f"orphaned_scenes 10 first keys of {len(orphan_paths)}: {list(orphan_paths[0:10])}"
+    )
 
     cleanup_orphan_paths = []
     for orphan_scene_path in orphan_paths:
         if not check_scene_exist_in_source(orphan_scene_path):
+            print(f"orphan path: {orphan_scene_path}")
             cleanup_orphan_paths.append(orphan_scene_path)
+        else:
+            print(f"skip path: {orphan_scene_path}")
 
     print(
         f"total orphan scenes to cleanup {len(cleanup_orphan_paths)} out of {len(orphan_paths)}"
@@ -92,7 +104,7 @@ if __name__ == "__main__":
 
     # write report
     date_string = datetime.now().strftime("%Y-%m-%d")
-    output_file = f"landsat_orphan_cleanup_{date_string}.txt"
+    output_file = f"landsat_orphan_{date_string}.txt"
     report_data = "\n".join(cleanup_orphan_paths)
     if PUBLISH_TO_S3:
         publish_to_s3(report_data, output_file)
