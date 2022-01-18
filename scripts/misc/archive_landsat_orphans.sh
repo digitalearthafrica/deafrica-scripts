@@ -42,9 +42,9 @@ datacube system check
 
 # 1. Read Report
 if [ -z LATEST_ORPHAN_REPORT ]; then
-  ORPHAN_REPORT_PATH="s3://deafrica-landsat/status-report/orphaned/"
-  LATEST_ORPHAN_REPORT=`aws s3 ls $ORPHAN_REPORT_PATH | grep "landsat_orphan_" | sort | tail -n 1 | awk '{print $4}'`
-  aws s3 cp $ORPHAN_REPORT_PATH$LATEST_ORPHAN_REPORT $PWD/$LATEST_ORPHAN_REPORT
+  ORPHAN_REPORT_S3_PATH="s3://deafrica-landsat/status-report/orphan/"
+  LATEST_ORPHAN_REPORT=`aws s3 ls $ORPHAN_REPORT_S3_PATH | grep "landsat_orphan_" | sort | tail -n 1 | awk '{print $4}'`
+  aws s3 cp $ORPHAN_REPORT_S3_PATH$LATEST_ORPHAN_REPORT $PWD/$LATEST_ORPHAN_REPORT
 fi
 orphan_scene_paths=`cat $PWD/$LATEST_ORPHAN_REPORT`
 
