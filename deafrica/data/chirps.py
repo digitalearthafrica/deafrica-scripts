@@ -2,6 +2,7 @@ import calendar
 import json
 from datetime import datetime
 
+import requests
 import click
 import pystac
 from odc.aws import s3_dump, s3_head_object
@@ -29,6 +30,11 @@ log = setup_logging()
 log.info("Starting CHIRPS downloader")
 
 
+def check_for_compression(href):
+    response = requests.head(href)
+    return response.status_code == 200
+
+
 def download_and_cog_chirps(
     year: str,
     month: str,
@@ -45,6 +51,9 @@ def download_and_cog_chirps(
         # Set up a daily process
         in_file = f"chirps-v2.0.{year}.{month}.{day}.tif.gz"
         in_href = DAILY_URL_TEMPLATE.format(year=year, in_file=in_file)
+        if not check_for_compression(in_href):
+            in_file = f"chirps-v2.0.{year}.{month}.{day}.tif"
+            in_href = DAILY_URL_TEMPLATE.format(year=year, in_file=in_file)
         in_data = f"/vsigzip//vsicurl/{in_href}"
 
         out_data = f"{s3_dst}/{year}/{month}/chirps-v2.0_{year}.{month}.{day}.tif"
@@ -59,6 +68,9 @@ def download_and_cog_chirps(
         # Set up a monthly process
         in_file = f"chirps-v2.0.{year}.{month}.tif.gz"
         in_href = MONTHLY_URL_TEMPLATE.format(in_file=in_file)
+        if not check_for_compression(in_href):
+            in_file = f"chirps-v2.0.{year}.{month}.tif"
+            in_href = MONTHLY_URL_TEMPLATE.format(in_file=in_file)
         in_data = f"/vsigzip//vsicurl/{in_href}"
 
         out_data = f"{s3_dst}/chirps-v2.0_{year}.{month}.tif"
