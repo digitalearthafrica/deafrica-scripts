@@ -19,8 +19,8 @@ steps:
         datacube dataset info --show-derived <dataset-id> | yq '.'
       * Generate archived report for orphan and derived datasets: dataset-id, product and location
       * archive orphan dataset and derived datasets
-        datacube dataset archive --dry-run <derived-id>
-        datacube dataset archive --dry-run <dataset-id>
+        datacube dataset archive <derived-id>
+        datacube dataset archive <dataset-id>
 - Publish archived report to s3 - s3://deafrica-landsat/status-report/archived/
 ###
 
@@ -41,18 +41,21 @@ export DB_HOSTNAME=$DB_HOSTNAME
 datacube system check
 
 # 1. Read Report
-if [ -z LATEST_ORPHAN_REPORT ]; then
-  ORPHAN_REPORT_S3_PATH="s3://deafrica-landsat/status-report/orphan/"
+if [ -z ${LATEST_ORPHAN_REPORT} ]; then
+  ORPHAN_REPORT_S3_PATH="s3://deafrica-landsat/status-report/orphans/"
   LATEST_ORPHAN_REPORT=$(aws s3 ls $ORPHAN_REPORT_S3_PATH | grep "landsat_orphan_" | sort | tail -n 1 | awk '{print $4}')
-  aws s3 cp $ORPHAN_REPORT_S3_PATH$LATEST_ORPHAN_REPORT $PWD/$LATEST_ORPHAN_REPORT
+  aws s3 cp ${ORPHAN_REPORT_S3_PATH}${LATEST_ORPHAN_REPORT} ${PWD}/reports/${LATEST_ORPHAN_REPORT}
 fi
-orphan_scene_paths=$(cat $PWD/$LATEST_ORPHAN_REPORT)
+orphan_scene_paths=$(cat ${PWD}/reports/${LATEST_ORPHAN_REPORT})
 
 date=$(date '+%Y-%m-%d')
-archived_report_file_path="$PWD/landsat_archived_${date}.csv"
+archived_report_file_path="$PWD/reports/landsat_archived_${date}.csv"
 echo "dataset-id,product,location" > $archived_report_file_path
 
-ARCHIVED_REPORT_S3_PATH="s3://deafrica-landsat/status-report/archived/"
+ARCHIVED_REPORT_BUCKET=${ARCHIVED_REPORT_BUCKET:-"deafrica-landsat"}
+ARCHIVED_REPORT_S3_PATH="s3://${ARCHIVED_REPORT_BUCKET}/status-report/archived/"
+
+dryrun=${DRYRUN:-true}
 
 # 2. For each orphan scene path, archive orphan and derived datasets:
 for orphan_scene_path in $orphan_scene_paths; do
@@ -81,16 +84,28 @@ for orphan_scene_path in $orphan_scene_paths; do
       derived_ids=$(echo $derived_datasets | jq -r '.id')
       for derived_id in $derived_ids; do
         echo "archive derived dataset: $derived_id"
-        datacube dataset archive --dry-run $derived_id
+        if $dryrun; then
+          datacube dataset archive --dry-run $derived_id
+        else
+          datacube dataset archive $derived_id
+        fi
       done
     fi
 
     # archive orphan
     echo "archive orphan dataset: $dataset_id"
-    datacube dataset archive --dry-run $dataset_id
+    if $dryrun; then
+      datacube dataset archive --dry-run $dataset_id
+    else
+      datacube dataset archive $dataset_id
+    fi
   done
 done
 echo "----------------------------------------------"
 
 # 3. publish archived report to s3
-aws s3 cp --dryrun $archived_report_file_path $ARCHIVED_REPORT_S3_PATH
+if $dryrun; then
+  aws s3 cp --dryrun $archived_report_file_path $ARCHIVED_REPORT_S3_PATH
+else
+  aws s3 cp $archived_report_file_path $ARCHIVED_REPORT_S3_PATH
+fi

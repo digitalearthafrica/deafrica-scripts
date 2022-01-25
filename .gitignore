@@ -4,3 +4,4 @@ __pycache__
 deafrica.egg-info
 deafrica/_version.py
 dask-worker-space
+reports/
