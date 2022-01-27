@@ -7,3 +7,10 @@ services:
     volumes:
       - .:/code
     command: ["python --version"]
+  tests:
+    build:
+      context: .
+      target: tests
+    volumes:
+    - .:/code
+    command: ["pytest"]
