@@ -10,7 +10,7 @@ DEAFRICA_AWS_REGION = "af-south-1"
 DEAFRICA_LANDSAT_BUCKET_NAME = "deafrica-landsat"
 DEAFRICA_GAP_REPORT_S3_PATH = f"s3://{DEAFRICA_LANDSAT_BUCKET_NAME}/status-report/"
 DEAFRICA_ORPHAN_REPORT_S3_PATH = (
-    f"s3://{DEAFRICA_LANDSAT_BUCKET_NAME}/status-report/orphan/"
+    f"s3://{DEAFRICA_LANDSAT_BUCKET_NAME}/status-report/orphans/"
 )
 
 USGS_AWS_REGION = "us-west-2"
