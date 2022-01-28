@@ -5,9 +5,11 @@ set -e
 <<'###'
 Read landsat orphan report for Landsat 5, Landsat 7 and Landsat 8 and archive orphan datasets
 
-NOTE: Archiving of dataset is slow process. So if you have long list of datasets to archive
+NOTE:
+- Archiving of dataset is slow process. So if you have long list of datasets to archive
   then consider spliting input file (i.e. landsat_orphan_<date>.txt) into multiple files and
-  execute script in parallel. Also converting this script into python with multi thread is another option too.
+  execute script in parallel.
+- Converting this script into python with multi thread is another option too.
 
 pre-req:
 - read access to `deafrica-landsat` and `deafrica-services` s3 buckets for dataset search
