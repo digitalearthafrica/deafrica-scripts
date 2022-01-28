@@ -3,11 +3,17 @@
 set -e
 
 <<'###'
-Read landsat orphan report for Landsat 5, Landsat 7 and Landsat 8 and archive datasets
+Read landsat orphan report for Landsat 5, Landsat 7 and Landsat 8 and archive orphan datasets
+
+NOTE: Archiving of dataset is slow process. So if you have long list of datasets to archive
+  then consider spliting input file (i.e. landsat_orphan_<date>.txt) into multiple files and
+  execute script in parallel. Also converting this script into python with multi thread is another option too.
 
 pre-req:
-- read/write/delete access to `deafrica-landsat` and `deafrica-services` s3 buckets
-- admin access to odc database
+- read access to `deafrica-landsat` and `deafrica-services` s3 buckets for dataset search
+- write access to `deafrica-landsat` bucket for publishing archived dataset report
+- admin access to odc database for dataset archival
+- latest stable odc datacube lib (version `1.8.6` to minimum)
 
 steps:
 - Read latest orphan report
@@ -37,6 +43,11 @@ export DB_PORT=${DB_PORT:-"5432"}
 export DB_PASSWORD=$DB_ADMIN_PASSWORD
 export DB_HOSTNAME=$DB_HOSTNAME
 
+export AWS_DEFAULT_REGION="af-south-1"
+
+ENV=${ENV:-"dev"}
+REPORT_DIR=${PWD}/reports/${ENV}
+
 # Verify db connection
 datacube system check
 
@@ -44,15 +55,18 @@ datacube system check
 if [ -z ${LATEST_ORPHAN_REPORT} ]; then
   ORPHAN_REPORT_S3_PATH="s3://deafrica-landsat/status-report/orphans/"
   LATEST_ORPHAN_REPORT=$(aws s3 ls $ORPHAN_REPORT_S3_PATH | grep "landsat_orphan_" | sort | tail -n 1 | awk '{print $4}')
-  aws s3 cp ${ORPHAN_REPORT_S3_PATH}${LATEST_ORPHAN_REPORT} ${PWD}/reports/${LATEST_ORPHAN_REPORT}
+  aws s3 cp ${ORPHAN_REPORT_S3_PATH}${LATEST_ORPHAN_REPORT} ${REPORT_DIR}/${LATEST_ORPHAN_REPORT}
 fi
-orphan_scene_paths=$(cat ${PWD}/reports/${LATEST_ORPHAN_REPORT})
+orphan_scene_paths=$(cat ${REPORT_DIR}/${LATEST_ORPHAN_REPORT})
 
 date=$(date '+%Y-%m-%d')
-archived_report_file_path="$PWD/reports/landsat_archived_${date}.csv"
-echo "dataset-id,product,location" > $archived_report_file_path
+archived_report_file_path="${REPORT_DIR}/landsat_archived_${date}.csv"
+#echo "dataset-id,product,location" > $archived_report_file_path
 
-ARCHIVED_REPORT_BUCKET=${ARCHIVED_REPORT_BUCKET:-"deafrica-landsat"}
+ARCHIVED_REPORT_BUCKET="deafrica-landsat-dev"
+if [ "${ENV}" == "prod" ]; then
+  ARCHIVED_REPORT_BUCKET="deafrica-landsat"
+fi
 ARCHIVED_REPORT_S3_PATH="s3://${ARCHIVED_REPORT_BUCKET}/status-report/archived/"
 
 dryrun=${DRYRUN:-true}
@@ -85,6 +99,7 @@ for orphan_scene_path in $orphan_scene_paths; do
       for derived_id in $derived_ids; do
         echo "archive derived dataset: $derived_id"
         if $dryrun; then
+          echo "dryrun"
           datacube dataset archive --dry-run $derived_id
         else
           datacube dataset archive $derived_id
@@ -107,5 +122,9 @@ echo "----------------------------------------------"
 if $dryrun; then
   aws s3 cp --dryrun $archived_report_file_path $ARCHIVED_REPORT_S3_PATH
 else
-  aws s3 cp $archived_report_file_path $ARCHIVED_REPORT_S3_PATH
+  if [ "${ENV}" == "prod" ]; then
+    aws s3 cp $archived_report_file_path $ARCHIVED_REPORT_S3_PATH --acl bucket-owner-full-control
+  else
+    aws s3 cp $archived_report_file_path $ARCHIVED_REPORT_S3_PATH
+  fi
 fi
