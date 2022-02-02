@@ -63,26 +63,26 @@ def get_version_from_year(year: str) -> str:
 def download_cci_lc(year: str, s3_dst: str, workdir: str, overwrite: bool = False):
     log = setup_logging()
     assets = {}
-    out_stac = URL(s3_dst) / year / f"{PRODUCT_NAME}_{year}.stac-item.json"
 
     cci_lc_version = get_version_from_year(year)
-    name = f"C3S-LC-L4-LCCS-Map-300m-P1Y-{year}-{cci_lc_version}.zip"
+    name = f"{PRODUCT_NAME}_{year}_{cci_lc_version}.zip"
 
-    workdir = Path(workdir)
-    if not workdir.exists():
-        workdir.mkdir(parents=True, exist_ok=True)
+    out_cog = URL(s3_dst) / year / f"{name}.tif"
+    out_stac = URL(s3_dst) / year / f"{name}.stac-item.json"
 
     if s3_head_object(str(out_stac)) is not None and not overwrite:
         log.info(f"{out_stac} exists, skipping")
         return
 
+    workdir = Path(workdir)
+    if not workdir.exists():
+        workdir.mkdir(parents=True, exist_ok=True)
+
     # Create a temporary directory to work with
-    with TemporaryDirectory(prefix=str(workdir)) as tmpdir:
-        log.info(f"Working on {year}")
+    with TemporaryDirectory(prefix=str(f"{workdir}/")) as tmpdir:
+        log.info(f"Working on {year} in the path {tmpdir}")
 
-        dest_url = URL(s3_dst) / year / f"{PRODUCT_NAME}_{year}_LCCS_300m.tif"
-
-        if s3_head_object(str(dest_url)) is None or overwrite:
+        if s3_head_object(str(out_cog)) is None or overwrite:
             log.info(f"Downloading {year}")
             try:
                 local_file = Path(tmpdir) / str(name)
@@ -111,9 +111,10 @@ def download_cci_lc(year: str, s3_dst: str, workdir: str, overwrite: bool = Fals
 
                 # Unzip the file
                 log.info(f"Unzipping {local_file}")
+                unzipped = None
                 with zipfile.ZipFile(local_file, "r") as zip_ref:
-                    zip_ref.extractall(workdir)
-                unzipped = local_file.with_suffix(".nc")
+                    unzipped = local_file.parent / zip_ref.namelist()[0]
+                    zip_ref.extractall(tmpdir)
 
                 # Process data
                 ds = xr.open_dataset(unzipped)
@@ -132,17 +133,17 @@ def download_cci_lc(year: str, s3_dst: str, workdir: str, overwrite: bool = Fals
                 )
 
                 # Write to s3
-                s3_dump(mem_dst, str(dest_url), ACL="bucket-owner-full-control")
-                log.info(f"File written to {dest_url}")
+                s3_dump(mem_dst, str(out_cog), ACL="bucket-owner-full-control")
+                log.info(f"File written to {out_cog}")
 
             except Exception:
                 log.exception(f"Failed to process {name}")
                 exit(1)
         else:
-            log.info(f"{dest_url} exists, skipping")
+            log.info(f"{out_cog} exists, skipping")
 
         assets["classification"] = pystac.Asset(
-            href=str(dest_url), roles=["data"], media_type=pystac.MediaType.COG
+            href=str(out_cog), roles=["data"], media_type=pystac.MediaType.COG
         )
 
     # Write STAC document
@@ -150,7 +151,7 @@ def download_cci_lc(year: str, s3_dst: str, workdir: str, overwrite: bool = Fals
         "https://cds.climate.copernicus.eu/cdsapp#!/dataset/satellite-land-cover"
     )
     item = create_stac_item(
-        str(dest_url),
+        str(out_cog),
         id=str(odc_uuid("Copernicus Land Cover", cci_lc_version, [source_doc])),
         assets=assets,
         with_proj=True,
