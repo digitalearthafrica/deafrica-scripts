@@ -2,7 +2,7 @@ import json
 import zipfile
 from os import environ
 from pathlib import Path
-from tempfile import TemporaryDirectory
+from tempfile import mkdtemp
 
 import cdsapi
 import click
@@ -65,7 +65,7 @@ def download_cci_lc(year: str, s3_dst: str, workdir: str, overwrite: bool = Fals
     assets = {}
 
     cci_lc_version = get_version_from_year(year)
-    name = f"{PRODUCT_NAME}_{year}_{cci_lc_version}.zip"
+    name = f"{PRODUCT_NAME}_{year}_{cci_lc_version}"
 
     out_cog = URL(s3_dst) / year / f"{name}.tif"
     out_stac = URL(s3_dst) / year / f"{name}.stac-item.json"
@@ -79,72 +79,72 @@ def download_cci_lc(year: str, s3_dst: str, workdir: str, overwrite: bool = Fals
         workdir.mkdir(parents=True, exist_ok=True)
 
     # Create a temporary directory to work with
-    with TemporaryDirectory(prefix=str(f"{workdir}/")) as tmpdir:
-        log.info(f"Working on {year} in the path {tmpdir}")
+    tmpdir = mkdtemp(prefix=str(f"{workdir}/"))
+    log.info(f"Working on {year} in the path {tmpdir}")
 
-        if s3_head_object(str(out_cog)) is None or overwrite:
-            log.info(f"Downloading {year}")
-            try:
-                local_file = Path(tmpdir) / str(name)
-                if not local_file.exists():
-                    # Download the file
-                    c = cdsapi.Client()
+    if s3_head_object(str(out_cog)) is None or overwrite:
+        log.info(f"Downloading {year}")
+        try:
+            local_file = Path(tmpdir) / f"{name}.zip"
+            if not local_file.exists():
+                # Download the file
+                c = cdsapi.Client()
 
-                    # We could also retrieve the object metadata from the CDS.
-                    # e.g. f = c.retrieve("series",{params}) | f.location = URL to download
-                    c.retrieve(
-                        "satellite-land-cover",
-                        {
-                            "format": "zip",
-                            "variable": "all",
-                            "version": cci_lc_version,
-                            "year": str(year),
-                        },
-                        local_file,
-                    )
-
-                    log.info(f"Downloaded file to {local_file}")
-                else:
-                    log.info(
-                        f"File {local_file} exists, continuing without downloading"
-                    )
-
-                # Unzip the file
-                log.info(f"Unzipping {local_file}")
-                unzipped = None
-                with zipfile.ZipFile(local_file, "r") as zip_ref:
-                    unzipped = local_file.parent / zip_ref.namelist()[0]
-                    zip_ref.extractall(tmpdir)
-
-                # Process data
-                ds = xr.open_dataset(unzipped)
-                # Subset to Africa
-                ulx, uly, lrx, lry = AFRICA_BBOX
-                # Note: lats are upside down!
-                ds_small = ds.sel(lat=slice(uly, lry), lon=slice(ulx, lrx))
-                ds_small = assign_crs(ds_small, crs="epsg:4326")
-
-                # Create cog (in memory - :mem: returns bytes object)
-                mem_dst = write_cog(
-                    ds_small.lccs_class,
-                    ":mem:",
-                    nodata=0,
-                    overview_resampling="nearest",
+                # We could also retrieve the object metadata from the CDS.
+                # e.g. f = c.retrieve("series",{params}) | f.location = URL to download
+                c.retrieve(
+                    "satellite-land-cover",
+                    {
+                        "format": "zip",
+                        "variable": "all",
+                        "version": cci_lc_version,
+                        "year": str(year),
+                    },
+                    local_file,
                 )
 
-                # Write to s3
-                s3_dump(mem_dst, str(out_cog), ACL="bucket-owner-full-control")
-                log.info(f"File written to {out_cog}")
+                log.info(f"Downloaded file to {local_file}")
+            else:
+                log.info(
+                    f"File {local_file} exists, continuing without downloading"
+                )
 
-            except Exception:
-                log.exception(f"Failed to process {name}")
-                exit(1)
-        else:
-            log.info(f"{out_cog} exists, skipping")
+            # Unzip the file
+            log.info(f"Unzipping {local_file}")
+            unzipped = None
+            with zipfile.ZipFile(local_file, "r") as zip_ref:
+                unzipped = local_file.parent / zip_ref.namelist()[0]
+                zip_ref.extractall(tmpdir)
 
-        assets["classification"] = pystac.Asset(
-            href=str(out_cog), roles=["data"], media_type=pystac.MediaType.COG
-        )
+            # Process data
+            ds = xr.open_dataset(unzipped)
+            # Subset to Africa
+            ulx, uly, lrx, lry = AFRICA_BBOX
+            # Note: lats are upside down!
+            ds_small = ds.sel(lat=slice(uly, lry), lon=slice(ulx, lrx))
+            ds_small = assign_crs(ds_small, crs="epsg:4326")
+
+            # Create cog (in memory - :mem: returns bytes object)
+            mem_dst = write_cog(
+                ds_small.lccs_class,
+                ":mem:",
+                nodata=0,
+                overview_resampling="nearest",
+            )
+
+            # Write to s3
+            s3_dump(mem_dst, str(out_cog), ACL="bucket-owner-full-control")
+            log.info(f"File written to {out_cog}")
+
+        except Exception:
+            log.exception(f"Failed to process {name}")
+            exit(1)
+    else:
+        log.info(f"{out_cog} exists, skipping")
+
+    assets["classification"] = pystac.Asset(
+        href=str(out_cog), roles=["data"], media_type=pystac.MediaType.COG
+    )
 
     # Write STAC document
     source_doc = (
