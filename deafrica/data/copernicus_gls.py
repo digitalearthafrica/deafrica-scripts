@@ -8,7 +8,7 @@ import pystac
 import requests
 from deafrica.utils import setup_logging, AFRICA_BBOX
 from odc.aws import s3_dump, s3_head_object
-from odc.index import odc_uuid
+from deafrica.utils import odc_uuid
 from osgeo import gdal
 from rasterio import MemoryFile
 from rio_cogeo import cog_profiles, cog_translate

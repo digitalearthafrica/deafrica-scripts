@@ -13,7 +13,7 @@ import click
 import pystac
 from deafrica.utils import setup_logging
 from odc.aws import s3_dump, s3_head_object
-from odc.index import odc_uuid
+from deafrica.utils import odc_uuid
 from osgeo import gdal
 from rio_cogeo.cogeo import cog_translate
 from rio_cogeo.profiles import cog_profiles

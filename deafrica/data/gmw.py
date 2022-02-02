@@ -7,7 +7,7 @@ from subprocess import check_output, STDOUT
 import click
 import pystac
 from odc.aws import s3_dump
-from odc.index import odc_uuid
+from deafrica.utils import odc_uuid
 from pystac import Item
 from rio_stac import create_stac_item
 from urlpath import URL
