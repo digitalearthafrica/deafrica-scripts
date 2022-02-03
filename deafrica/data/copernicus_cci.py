@@ -105,9 +105,7 @@ def download_cci_lc(year: str, s3_dst: str, workdir: str, overwrite: bool = Fals
 
                 log.info(f"Downloaded file to {local_file}")
             else:
-                log.info(
-                    f"File {local_file} exists, continuing without downloading"
-                )
+                log.info(f"File {local_file} exists, continuing without downloading")
 
             # Unzip the file
             log.info(f"Unzipping {local_file}")
