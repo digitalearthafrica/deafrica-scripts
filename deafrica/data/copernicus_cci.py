@@ -150,7 +150,7 @@ def download_cci_lc(year: str, s3_dst: str, workdir: str, overwrite: bool = Fals
     )
     item = create_stac_item(
         str(out_cog),
-        id=str(odc_uuid("Copernicus Land Cover", cci_lc_version, [source_doc])),
+        id=str(odc_uuid("Copernicus Land Cover", cci_lc_version, [source_doc, name])),
         assets=assets,
         with_proj=True,
         properties={
