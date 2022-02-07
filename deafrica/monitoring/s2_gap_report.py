@@ -114,7 +114,7 @@ def generate_buckets_diff(
             if key not in destination_keys
         )
 
-        # Keys that are lost, they are in the bucket but not found in the files
+        # Keys that are lost, they are in the bucket but not found in the source
         orphaned_keys = destination_keys.difference(source_keys)
 
     s2_s3 = s3_client(region_name=SENTINEL_2_REGION)
@@ -126,7 +126,7 @@ def generate_buckets_diff(
             else URL(f"{date_string}_gap_report_update.json")
         )
 
-        log.info(f"File will be saved in {s2_status_report_path}{output_filename}")
+        log.info(f"File will be saved in {s2_status_report_path}/{output_filename}")
 
         missing_orphan_scenes_json = json.dumps(
             {"orphan": list(orphaned_keys), "missing": list(missing_scenes)}
@@ -139,17 +139,12 @@ def generate_buckets_diff(
             ContentType="application/json",
         )
 
-    report_output = (
-        str(s2_status_report_path / output_filename)
-        if len(missing_scenes) > 0 or len(orphaned_keys) > 0
-        else output_filename
-    )
-
+    report_http_link = f"https://{bucket_name}.s3.{SENTINEL_2_REGION}.amazonaws.com/status-report/{output_filename}"
     message = dedent(
         f"*SENTINEL 2 GAP REPORT - {environment}*\n"
         f"Missing Scenes: {len(missing_scenes)}\n"
         f"Orphan Scenes: {len(orphaned_keys)}\n"
-        f"Report: {report_output}\n"
+        f"Report: {report_http_link}\n"
     )
 
     log.info(message)
