@@ -64,7 +64,7 @@ orphan_scene_paths=$(cat ${REPORT_DIR}/${LATEST_ORPHAN_REPORT})
 date=$(date '+%Y-%m-%d')
 archived_report_file_path="${REPORT_DIR}/landsat_archived_${date}.csv"
 header="dataset-id,product,location"
-touch archived_report_file_path
+touch $archived_report_file_path
 if grep -q "${header}" "${archived_report_file_path}" ; then
    echo 'the header exists'
 else
