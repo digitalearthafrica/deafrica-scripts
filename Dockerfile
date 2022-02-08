@@ -1,4 +1,4 @@
-FROM osgeo/gdal:ubuntu-small-3.3.3
+FROM osgeo/gdal:ubuntu-small-3.3.3 as base
 
 ENV CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 
@@ -34,3 +34,6 @@ COPY . /code/
 RUN pip install /code
 
 CMD ["python", "--version"]
+
+FROM base as tests
+RUN pip install --no-cache-dir -r /code/requirements-test.txt

@@ -2,6 +2,7 @@ import calendar
 import json
 from datetime import datetime
 
+import requests
 import click
 import pystac
 from deafrica.utils import odc_uuid, send_slack_notification, setup_logging, slack_url
@@ -23,6 +24,11 @@ log = setup_logging()
 log.info("Starting CHIRPS downloader")
 
 
+def check_for_url_existence(href):
+    response = requests.head(href)
+    return response.status_code == 200
+
+
 def download_and_cog_chirps(
     year: str,
     month: str,
@@ -40,6 +46,10 @@ def download_and_cog_chirps(
         in_file = f"chirps-v2.0.{year}.{month}.{day}.tif.gz"
         in_href = DAILY_URL_TEMPLATE.format(year=year, in_file=in_file)
         in_data = f"/vsigzip//vsicurl/{in_href}"
+        if not check_for_url_existence(in_href):
+            in_file = f"chirps-v2.0.{year}.{month}.{day}.tif"
+            in_href = DAILY_URL_TEMPLATE.format(year=year, in_file=in_file)
+            in_data = f"/vsicurl/{in_href}"
 
         out_data = f"{s3_dst}/{year}/{month}/chirps-v2.0_{year}.{month}.{day}.tif"
         out_stac = (
@@ -54,6 +64,10 @@ def download_and_cog_chirps(
         in_file = f"chirps-v2.0.{year}.{month}.tif.gz"
         in_href = MONTHLY_URL_TEMPLATE.format(in_file=in_file)
         in_data = f"/vsigzip//vsicurl/{in_href}"
+        if not check_for_url_existence(in_href):
+            in_file = f"chirps-v2.0.{year}.{month}.tif"
+            in_href = MONTHLY_URL_TEMPLATE.format(in_file=in_file)
+            in_data = f"/vsicurl/{in_href}"
 
         out_data = f"{s3_dst}/chirps-v2.0_{year}.{month}.tif"
         out_stac = f"{s3_dst}/chirps-v2.0_{year}.{month}.stac-item.json"
