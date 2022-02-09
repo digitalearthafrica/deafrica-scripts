@@ -1,10 +1,11 @@
 import calendar
 import json
+import sys
 from datetime import datetime
 
-import requests
 import click
 import pystac
+import requests
 from deafrica.utils import odc_uuid, send_slack_notification, setup_logging, slack_url
 from odc.aws import s3_dump, s3_head_object
 from pystac.utils import datetime_to_str
@@ -26,7 +27,12 @@ log.info("Starting CHIRPS downloader")
 
 def check_for_url_existence(href):
     response = requests.head(href)
-    return response.status_code == 200
+    try:
+        response.raise_for_status()
+    except requests.exceptions.HTTPError:
+        log.error(f"{href} returned {response.status_code}")
+        return False
+    return True
 
 
 def download_and_cog_chirps(
@@ -47,14 +53,18 @@ def download_and_cog_chirps(
         in_href = DAILY_URL_TEMPLATE.format(year=year, in_file=in_file)
         in_data = f"/vsigzip//vsicurl/{in_href}"
         if not check_for_url_existence(in_href):
+            log.warning("Couldn't find the gzipped file, trying the .tif")
             in_file = f"chirps-v2.0.{year}.{month}.{day}.tif"
             in_href = DAILY_URL_TEMPLATE.format(year=year, in_file=in_file)
             in_data = f"/vsicurl/{in_href}"
 
-        out_data = f"{s3_dst}/{year}/{month}/chirps-v2.0_{year}.{month}.{day}.tif"
-        out_stac = (
-            f"{s3_dst}/{year}/{month}/chirps-v2.0_{year}.{month}.{day}.stac-item.json"
-        )
+            if not check_for_url_existence(in_href):
+                log.error("Couldn't find the .tif file either, aborting")
+                sys.exit(1)
+
+        file_base = f"{s3_dst}/{year}/{month}/chirps-v2.0_{year}.{month}.{day}"
+        out_data = f"{file_base}.tif"
+        out_stac = f"{file_base}.stac-item.json"
 
         start_datetime = f"{year}-{month}-{day}T00:00:00Z"
         end_datetime = f"{year}-{month}-{day}T23:59:59Z"
@@ -65,12 +75,18 @@ def download_and_cog_chirps(
         in_href = MONTHLY_URL_TEMPLATE.format(in_file=in_file)
         in_data = f"/vsigzip//vsicurl/{in_href}"
         if not check_for_url_existence(in_href):
+            log.warning("Couldn't find the gzipped file, trying the .tif")
             in_file = f"chirps-v2.0.{year}.{month}.tif"
             in_href = MONTHLY_URL_TEMPLATE.format(in_file=in_file)
             in_data = f"/vsicurl/{in_href}"
 
-        out_data = f"{s3_dst}/chirps-v2.0_{year}.{month}.tif"
-        out_stac = f"{s3_dst}/chirps-v2.0_{year}.{month}.stac-item.json"
+            if not check_for_url_existence(in_href):
+                log.error("Couldn't find the .tif file either, aborting")
+                sys.exit(1)
+
+        file_base = f"{s3_dst}/chirps-v2.0_{year}.{month}"
+        out_data = f"{file_base}.tif"
+        out_stac = f"{file_base}.stac-item.json"
 
         _, end = calendar.monthrange(int(year), int(month))
         start_datetime = f"{year}-{month}-01T00:00:00Z"
@@ -170,7 +186,7 @@ def cli_daily(year, month, day, s3_dst, overwrite, slack_url):
     S3 bucket.
 
     GeoTIFFs are copied from here:
-        https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_monthly/tifs/p05/
+        https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_daily/tifs/p05/
 
     Example:
     download-chirps-daily
