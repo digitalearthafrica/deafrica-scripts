@@ -28,12 +28,15 @@ dc = datacube.Datacube()
 index = dc.index
 
 def get_sr_id(uri):
+    child = None
     for dataset in index.datasets.get_datasets_for_location(uri):
         if not dataset.is_archived:
-            break
-
-    dataset_with_parents = index.datasets.get(dataset.id, include_sources=True)
-    return str(dataset_with_parents.sources["ard"].id)
+            child = dataset
+    if child is not None:
+      dataset_with_parents = index.datasets.get(dataset.id, include_sources=True)
+      return str(dataset_with_parents.sources["ard"].id)
+    else:
+      print(f"No active dataset found for URI: {uri}")
 
 fc_scenes = []
 # fc.csv is really just a list of URIs
