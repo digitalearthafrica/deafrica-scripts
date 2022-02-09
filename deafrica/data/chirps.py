@@ -6,8 +6,7 @@ from datetime import datetime
 import click
 import pystac
 import requests
-from deafrica.utils import (odc_uuid, send_slack_notification, setup_logging,
-                            slack_url)
+from deafrica.utils import odc_uuid, send_slack_notification, setup_logging, slack_url
 from odc.aws import s3_dump, s3_head_object
 from pystac.utils import datetime_to_str
 from rasterio.io import MemoryFile
