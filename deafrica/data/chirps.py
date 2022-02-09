@@ -28,7 +28,7 @@ log.info("Starting CHIRPS downloader")
 def check_for_url_existence(href):
     response = requests.head(href)
     try:
-        requests.raise_for_status(response)
+        response.raise_for_status()
     except requests.exceptions.HTTPError:
         log.error(f"{href} returned {response.status_code}")
         return False
