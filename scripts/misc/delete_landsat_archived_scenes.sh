@@ -7,12 +7,14 @@ Read landsat archived report and perform s3 cleanup
 
 pre-req:
 - read/delete access to `deafrica-landsat` and `deafrica-services` s3 buckets
+- admin access to odc database
+- latest stable odc datacube lib (version `1.8.6` to minimum)
 
 steps:
 1. Download and read latest archived report from s3
 2. For each dataset, get the s3 location
-3. Find datasets for given s3 location and check their status
-4. Delete scene only it has all archived datasets
+3. Find datasets for given s3 location and check its status
+4. Delete scene only if it has all archived datasets
 ###
 
 if [[ -z ${DB_ADMIN_PASSWORD} || -z ${DB_HOSTNAME} ]]; then

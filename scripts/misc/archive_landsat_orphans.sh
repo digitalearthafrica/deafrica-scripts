@@ -14,7 +14,7 @@ NOTE:
 pre-req:
 - read access to `deafrica-landsat` and `deafrica-services` s3 buckets for dataset search
 - write access to `deafrica-landsat` bucket for publishing archived dataset report
-- admin access to odc database for dataset archival
+- admin access to odc database
 - latest stable odc datacube lib (version `1.8.6` to minimum)
 
 steps:
