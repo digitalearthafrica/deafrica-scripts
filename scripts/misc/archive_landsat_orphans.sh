@@ -55,13 +55,12 @@ mkdir -p $REPORT_DIR
 datacube system check
 
 # 1. Read Report
-#if [ -z ${LATEST_ORPHAN_REPORT} ]; then
-#  ORPHAN_REPORT_S3_PATH="s3://deafrica-landsat/status-report/orphans/"
-#  LATEST_ORPHAN_REPORT=$(aws s3 ls $ORPHAN_REPORT_S3_PATH | grep "landsat_orphan_" | sort | tail -n 1 | awk '{print $4}')
-#  aws s3 cp ${ORPHAN_REPORT_S3_PATH}${LATEST_ORPHAN_REPORT} ${REPORT_DIR}/${LATEST_ORPHAN_REPORT}
-#fi
-#orphan_scene_paths=$(cat ${REPORT_DIR}/${LATEST_ORPHAN_REPORT})
-orphan_scene_paths=("s3://deafrica-landsat/collection02/level-2/standard/tm/1996/176/044/LT05_L2SP_176044_19960719_20200911_02_T1/")
+if [ -z ${LATEST_ORPHAN_REPORT} ]; then
+  ORPHAN_REPORT_S3_PATH="s3://deafrica-landsat/status-report/orphans/"
+  LATEST_ORPHAN_REPORT=$(aws s3 ls $ORPHAN_REPORT_S3_PATH | grep "landsat_orphan_" | sort | tail -n 1 | awk '{print $4}')
+  aws s3 cp ${ORPHAN_REPORT_S3_PATH}${LATEST_ORPHAN_REPORT} ${REPORT_DIR}/${LATEST_ORPHAN_REPORT}
+fi
+orphan_scene_paths=$(cat ${REPORT_DIR}/${LATEST_ORPHAN_REPORT})
 
 date=$(date '+%Y-%m-%d')
 archived_report_file_path="${REPORT_DIR}/landsat_archived_${date}.csv"
