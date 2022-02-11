@@ -14,7 +14,7 @@ NOTE:
 pre-req:
 - read access to `deafrica-landsat` and `deafrica-services` s3 buckets for dataset search
 - write access to `deafrica-landsat` bucket for publishing archived dataset report
-- admin access to odc database for dataset archival
+- admin access to odc database
 - latest stable odc datacube lib (version `1.8.6` to minimum)
 
 steps:
@@ -49,6 +49,7 @@ export AWS_DEFAULT_REGION="af-south-1"
 
 ENV=${ENV:-"dev"}
 REPORT_DIR=${PWD}/reports/${ENV}
+mkdir -p $REPORT_DIR
 
 # Verify db connection
 datacube system check
@@ -91,7 +92,7 @@ for orphan_scene_path in $orphan_scene_paths; do
     dataset_info=$(datacube dataset info --show-derived $dataset_id | yq '.')
 
     # add orphan dataset info to archive report: id, product and location
-    echo $dataset_info | jq -r '.id,.product,.locations[0]' | tr '\n' ',' | sed -e 's|,$||' >> $archived_report_file_path
+    echo $dataset_info | jq -r '.id,.product,.locations[0]' | paste -d, - - - >> $archived_report_file_path
 
     # archive derived
     # Note: only archiving landsat wofs and fc derived
@@ -100,7 +101,7 @@ for orphan_scene_path in $orphan_scene_paths; do
       derived_datasets=$(echo $derived | jq '. | select(.product=="wofs_ls" or .product=="fc_ls")')
 
       # add derived datasets info to archive report: id, product and location
-      echo $derived_datasets | jq -r '.id,.product,.locations[0]' | tr '\n' ',' | sed -e 's|,$||' >> $archived_report_file_path
+      echo $derived_datasets | jq -r '.id,.product,.locations[0]' | paste -d, - - - >> $archived_report_file_path
 
       # archive derived
       derived_ids=$(echo $derived_datasets | jq -r '.id')
