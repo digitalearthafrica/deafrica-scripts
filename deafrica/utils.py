@@ -1,9 +1,14 @@
+import csv
 import json
 import logging
 import math
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+from gzip import GzipFile
+from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Sequence
 from urllib.parse import urlparse
 from uuid import UUID, uuid5
@@ -138,7 +143,7 @@ def split_list_equally(list_to_split: list, num_inter_lists: int):
 
     max_list_items = math.ceil(len(list_to_split) / num_inter_lists)
     return [
-        list_to_split[i : i + max_list_items]
+        list_to_split[i: i + max_list_items]
         for i in range(0, len(list_to_split), max_list_items)
     ]
 
@@ -261,3 +266,124 @@ limit = click.option(
     help="Limit the number of messages to transfer.",
     default=None,
 )
+
+
+def find_latest_manifest(prefix, s3, **kw) -> str:
+    """
+    Find latest manifest
+    """
+    manifest_dirs = sorted(s3_ls_dir(prefix, s3=s3, **kw), reverse=True)
+
+    for d in manifest_dirs:
+        if d.endswith("/"):
+            leaf = d.split("/")[-2]
+            if leaf.endswith("Z"):
+                return d + "manifest.json"
+
+
+def retrieve_manifest_files(key: str, s3, schema, **kw):
+    """
+    Retrieve manifest file and return a namespace
+
+    namespace(
+        Bucket=<bucket_name>,
+        Key=<key_path>,
+        LastModifiedDate=<date>,
+        Size=<size>
+    )
+    """
+    bb = s3_fetch(key, s3=s3, **kw)
+    gz = GzipFile(fileobj=BytesIO(bb), mode="r")
+    csv_rdr = csv.reader(f.decode("utf8") for f in gz)
+    for rec in csv_rdr:
+        rec = SimpleNamespace(**{k: v for k, v in zip(schema, rec)})
+        yield rec
+
+
+def test_key(key: str, prefix: str = '', suffix: str = '', contains: str = '', multiple_contains: list[str] = None):
+    """
+    Test if key is valid
+    """
+    contains = [contains]
+    if multiple_contains is not None:
+        contains = multiple_contains
+
+    if key.startswith(prefix) and key.endswith(suffix):
+        for c in multiple_contains:
+            if c in key:
+                return True
+
+    return False
+
+
+def list_inventory(
+        manifest,
+        s3=None,
+        prefix: str = '',
+        suffix: str = '',
+        contains: str = '',
+        multiple_contains: list[str] = None,
+        n_threads: int = None,
+        **kw
+):
+    """
+    Returns a generator of inventory records
+
+    manifest -- s3:// url to manifest.json or a folder in which case latest one is chosen.
+
+    :param manifest: (str)
+    :param s3: (aws client)
+    :param prefix: (str)
+    :param prefixes: (List(str)) allow multiple prefixes to be searched
+    :param suffix: (str)
+    :param contains: (str)
+    :param n_threads: (int) number of threads, if not sent does not use threads
+    :return: SimpleNamespace
+    """
+    s3 = s3 or s3_client()
+
+    if manifest.endswith("/"):
+        manifest = find_latest_manifest(manifest, s3, **kw)
+
+    info = s3_fetch(manifest, s3=s3, **kw)
+    info = json.loads(info)
+
+    must_have_keys = {"fileFormat", "fileSchema", "files", "destinationBucket"}
+    missing_keys = must_have_keys - set(info)
+    if missing_keys:
+        raise ValueError("Manifest file haven't parsed correctly")
+
+    if info["fileFormat"].upper() != "CSV":
+        raise ValueError("Data is not in CSV format")
+
+    s3_prefix = "s3://" + info["destinationBucket"].split(":")[-1] + "/"
+    data_urls = [s3_prefix + f["key"] for f in info["files"]]
+    schema = tuple(info["fileSchema"].split(", "))
+
+    if n_threads:
+        with ThreadPoolExecutor(max_workers=1000) as executor:
+            tasks = [
+                executor.submit(
+                    retrieve_manifest_files,
+                    key,
+                    s3,
+                    schema
+                )
+                for key in data_urls
+            ]
+
+            for future in as_completed(tasks):
+                for namespace in future.result():
+                    key = namespace.Key
+                    if test_key(key, prefix=prefix, suffix=suffix, contains=contains, multiple_contains=multiple_contains):
+                        yield namespace
+    else:
+        for u in data_urls:
+            for namespace in retrieve_manifest_files(
+                    u,
+                    s3,
+                    schema
+            ):
+                key = namespace.Key
+                if test_key(key, prefix=prefix, suffix=suffix, contains=contains, multiple_contains=multiple_contains):
+                    yield namespace

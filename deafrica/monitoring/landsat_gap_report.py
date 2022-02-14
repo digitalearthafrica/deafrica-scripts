@@ -17,7 +17,6 @@ from textwrap import dedent
 import click
 import pandas as pd
 from odc.aws import s3_dump, s3_client
-from odc.aws.inventory import list_inventory
 from urlpath import URL
 
 from deafrica import __version__
@@ -29,17 +28,20 @@ from deafrica.utils import (
     download_file_to_tmp,
     convert_str_to_date,
     time_process,
+    list_inventory
 )
 
+SUPPORTED_SATELLITES = ("ls8_ls9", "ls7", "ls5")
 FILES = {
-    "landsat_8": "LANDSAT_OT_C2_L2.csv.gz",
-    "landsat_7": "LANDSAT_ETM_C2_L2.csv.gz",
-    "landsat_5": "LANDSAT_TM_C2_L2.csv.gz",
+    "ls8_ls9": "LANDSAT_OT_C2_L2.csv.gz",
+    "ls7": "LANDSAT_ETM_C2_L2.csv.gz",
+    "ls5": "LANDSAT_TM_C2_L2.csv.gz",
 }
 
 BASE_BULK_CSV_URL = URL(
     "https://landsat.usgs.gov/landsat/metadata_service/bulk_metadata_files/"
 )
+
 AFRICA_GZ_PATHROWS_URL = URL(
     "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/master/deafrica-usgs-pathrows.csv.gz"
 )
@@ -47,6 +49,7 @@ AFRICA_GZ_PATHROWS_URL = URL(
 LANDSAT_INVENTORY_PATH = URL(
     "s3://deafrica-landsat-inventory/deafrica-landsat/deafrica-landsat-inventory/"
 )
+
 USGS_S3_BUCKET_PATH = URL("s3://usgs-landsat")
 
 
@@ -105,7 +108,7 @@ def get_and_filter_keys_from_files(file_path: Path):
         )
 
 
-def get_and_filter_keys(landsat: str) -> set:
+def get_and_filter_keys(satellites: list[str]) -> set:
     """
     Retrieve key list from a inventory bucket and filter
 
@@ -113,22 +116,25 @@ def get_and_filter_keys(landsat: str) -> set:
     :return:(set)
     """
 
-    sat_prefix = None
-    if landsat == "landsat_8":
-        sat_prefix = "LC08"
-    elif landsat == "landsat_7":
-        sat_prefix = "LE07"
-    elif landsat == "landsat_5":
-        sat_prefix = "LT05"
+    sat_prefixes = []
 
-    if not sat_prefix:
-        raise Exception(f"Informed satellite {landsat} not supported")
+    if "ls9" in satellites:
+        sat_prefixes.append("LC09")
+    if "ls8" in satellites:
+        sat_prefixes.append("LC08")
+    if "ls7" in satellites:
+        sat_prefixes.append("LE07")
+    if "ls5" in satellites:
+        sat_prefixes.append("LT05")
+
+    if len(sat_prefixes) == 0:
+        raise ValueError(f"Invalid satellites: {satellites}")
 
     list_json_keys = list_inventory(
         manifest=str(LANDSAT_INVENTORY_PATH),
         prefix="collection02",
         suffix="_stac.json",
-        contains=sat_prefix,
+        multiple_contains=sat_prefixes,
         n_threads=200,
     )
     return set(f"{key.Key.rsplit('/', 1)[0]}/" for key in list_json_keys)
@@ -136,7 +142,7 @@ def get_and_filter_keys(landsat: str) -> set:
 
 def generate_buckets_diff(
     bucket_name: str,
-    satellite_name: str,
+    satellites: str,
     file_name: str,
     update_stac: bool = False,
     notification_url: str = None,
@@ -159,14 +165,14 @@ def generate_buckets_diff(
     environment = "DEV" if "dev" in bucket_name else "PDS"
     log.info(f"Environment {environment}")
     log.info(f"Bucket Name {bucket_name}")
-    log.info(f"Satellite Name {satellite_name}")
+    log.info(f"Satellites {satellites}")
     log.info(f"File Name {file_name}")
     log.info(f"Update all ({update_stac})")
     log.info(f"Notification URL ({notification_url})")
 
     # Create connection to the inventory S3 bucket
     log.info(f"Retrieving keys from inventory bucket {LANDSAT_INVENTORY_PATH}")
-    dest_paths = get_and_filter_keys(landsat=satellite_name)
+    dest_paths = get_and_filter_keys(satellites=satellites)
 
     log.info(f"INVENTORY bucket number of objects {len(dest_paths)}")
     log.info(f"INVENTORY 10 first {list(dest_paths)[0:10]}")
@@ -216,7 +222,7 @@ def generate_buckets_diff(
 
     if len(missing_scenes) > 0 or len(orphaned_scenes) > 0:
         output_filename = (
-            f"{satellite_name}_{date_string}_gap_report.json"
+            f"{satellites}_{date_string}_gap_report.json"
             if not update_stac
             else URL(f"{date_string}_gap_report_update.json")
         )
@@ -240,8 +246,10 @@ def generate_buckets_diff(
         if len(missing_scenes) > 0 or len(orphaned_scenes) > 0
         else output_filename
     )
+
+    title = " & ".join(satellites).replace("ls", "Landsat")
     message = dedent(
-        f"*{satellite_name.upper()} GAP REPORT - {environment}*\n "
+        f"*{title} GAP REPORT - {environment}*\n "
         f"Missing Scenes: {len(missing_scenes)}\n"
         f"Orphan Scenes: {len(orphaned_scenes)}\n"
         f"Report: {report_output}\n"
@@ -256,7 +264,7 @@ def generate_buckets_diff(
     if not update_stac and (len(missing_scenes) > 200 or len(orphaned_scenes) > 200):
         if notification_url is not None:
             send_slack_notification(
-                notification_url, f"{satellite_name} Gap Report", message
+                notification_url, f"{satellites} Gap Report", message
             )
         raise Exception(f"More than 200 scenes were found \n {message}")
 
@@ -273,7 +281,7 @@ def generate_buckets_diff(
     type=str,
     nargs=1,
     required=True,
-    default="satellite to be compared, supported ones (landsat_8, landsat_7, landsat_5)",
+    default=f"Satellite to be compared, supported ones are {SUPPORTED_SATELLITES}",
 )
 @update_stac
 @slack_url
@@ -292,11 +300,11 @@ def cli(
 
     if version:
         click.echo(__version__)
-
-    generate_buckets_diff(
-        bucket_name=bucket_name,
-        satellite_name=satellite,
-        file_name=FILES.get(satellite, None),
-        update_stac=update_stac,
-        notification_url=slack_url,
-    )
+    else:
+        generate_buckets_diff(
+            bucket_name=bucket_name,
+            satellites=satellite.split("_"),
+            file_name=FILES.get(satellite, None),
+            update_stac=update_stac,
+            notification_url=slack_url,
+        )
