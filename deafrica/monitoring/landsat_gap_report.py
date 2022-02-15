@@ -28,7 +28,7 @@ from deafrica.utils import (
     download_file_to_tmp,
     convert_str_to_date,
     time_process,
-    list_inventory
+    list_inventory,
 )
 
 SUPPORTED_SATELLITES = ("ls8_ls9", "ls7", "ls5")

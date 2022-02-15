@@ -143,7 +143,7 @@ def split_list_equally(list_to_split: list, num_inter_lists: int):
 
     max_list_items = math.ceil(len(list_to_split) / num_inter_lists)
     return [
-        list_to_split[i: i + max_list_items]
+        list_to_split[i : i + max_list_items]
         for i in range(0, len(list_to_split), max_list_items)
     ]
 
@@ -300,7 +300,13 @@ def retrieve_manifest_files(key: str, s3, schema, **kw):
         yield rec
 
 
-def test_key(key: str, prefix: str = '', suffix: str = '', contains: str = '', multiple_contains: list[str] = None):
+def test_key(
+    key: str,
+    prefix: str = "",
+    suffix: str = "",
+    contains: str = "",
+    multiple_contains: list[str] = None,
+):
     """
     Test if key is valid
     """
@@ -317,14 +323,14 @@ def test_key(key: str, prefix: str = '', suffix: str = '', contains: str = '', m
 
 
 def list_inventory(
-        manifest,
-        s3=None,
-        prefix: str = '',
-        suffix: str = '',
-        contains: str = '',
-        multiple_contains: list[str] = None,
-        n_threads: int = None,
-        **kw
+    manifest,
+    s3=None,
+    prefix: str = "",
+    suffix: str = "",
+    contains: str = "",
+    multiple_contains: list[str] = None,
+    n_threads: int = None,
+    **kw,
 ):
     """
     Returns a generator of inventory records
@@ -363,27 +369,30 @@ def list_inventory(
     if n_threads:
         with ThreadPoolExecutor(max_workers=1000) as executor:
             tasks = [
-                executor.submit(
-                    retrieve_manifest_files,
-                    key,
-                    s3,
-                    schema
-                )
+                executor.submit(retrieve_manifest_files, key, s3, schema)
                 for key in data_urls
             ]
 
             for future in as_completed(tasks):
                 for namespace in future.result():
                     key = namespace.Key
-                    if test_key(key, prefix=prefix, suffix=suffix, contains=contains, multiple_contains=multiple_contains):
+                    if test_key(
+                        key,
+                        prefix=prefix,
+                        suffix=suffix,
+                        contains=contains,
+                        multiple_contains=multiple_contains,
+                    ):
                         yield namespace
     else:
         for u in data_urls:
-            for namespace in retrieve_manifest_files(
-                    u,
-                    s3,
-                    schema
-            ):
+            for namespace in retrieve_manifest_files(u, s3, schema):
                 key = namespace.Key
-                if test_key(key, prefix=prefix, suffix=suffix, contains=contains, multiple_contains=multiple_contains):
+                if test_key(
+                    key,
+                    prefix=prefix,
+                    suffix=suffix,
+                    contains=contains,
+                    multiple_contains=multiple_contains,
+                ):
                     yield namespace
