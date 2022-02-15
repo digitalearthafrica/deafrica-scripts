@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import csv
 import json
 import logging
@@ -305,7 +307,7 @@ def test_key(
     prefix: str = "",
     suffix: str = "",
     contains: str = "",
-    multiple_contains: list[str] = None,
+    multiple_contains: tuple[str, str] = None,
 ):
     """
     Test if key is valid
@@ -328,7 +330,7 @@ def list_inventory(
     prefix: str = "",
     suffix: str = "",
     contains: str = "",
-    multiple_contains: list[str] = None,
+    multiple_contains: tuple[str, str] = None,
     n_threads: int = None,
     **kw,
 ):

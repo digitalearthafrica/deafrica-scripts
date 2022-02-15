@@ -5,6 +5,7 @@ This DAG runs weekly and creates a gap report in the following location:
 s3://deafrica-landsat-dev/status-report/<satellite_date.csv.gz>
 
 """
+from __future__ import annotations
 
 import csv
 import gzip
@@ -108,7 +109,7 @@ def get_and_filter_keys_from_files(file_path: Path):
         )
 
 
-def get_and_filter_keys(satellites: list[str]) -> set:
+def get_and_filter_keys(satellites: tuple[str, str]) -> set:
     """
     Retrieve key list from a inventory bucket and filter
 
