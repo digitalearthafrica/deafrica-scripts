@@ -113,7 +113,7 @@ def get_and_filter_keys(satellites: tuple[str, str]) -> set:
     """
     Retrieve key list from a inventory bucket and filter
 
-    :param landsat:(str)
+    :param satellites:tuple[str] a list of satellite names
     :return:(set)
     """
 
