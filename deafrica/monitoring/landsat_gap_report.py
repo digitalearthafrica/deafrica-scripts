@@ -226,10 +226,14 @@ def generate_buckets_diff(
 
     if len(missing_scenes) > 0 or len(orphaned_scenes) > 0:
         output_filename = (
-            f"{title}_{date_string}_gap_report.json"
-            if not update_stac
-            else URL(f"{date_string}_gap_report_update.json")
-        ).replace(" ", "_").replace("_&", "")
+            (
+                f"{title}_{date_string}_gap_report.json"
+                if not update_stac
+                else URL(f"{date_string}_gap_report_update.json")
+            )
+            .replace(" ", "_")
+            .replace("_&", "")
+        )
 
         log.info(
             f"Report file will be saved in {landsat_status_report_path / output_filename}"
