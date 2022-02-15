@@ -69,7 +69,7 @@ def test_get_and_filter_keys(
         "deafrica.monitoring.landsat_gap_report.LANDSAT_INVENTORY_PATH",
         s3_inventory_path,
     ):
-        keys = get_and_filter_keys("landsat_5")
+        keys = get_and_filter_keys("ls5")
         assert len(keys) == 1
 
 
@@ -125,11 +125,11 @@ def test_landsat_gap_report_cli(
         runner.invoke(
             cli,
             [
-                "landsat_5",
+                "ls5",
                 TEST_BUCKET_NAME,
             ],
         )
 
         bucket_objs = list(boto3.resource("s3").Bucket(TEST_BUCKET_NAME).objects.all())
         assert len(bucket_objs) == 1
-        assert "landsat_5" in bucket_objs[0].key
+        assert "ls5" in bucket_objs[0].key
