@@ -164,6 +164,9 @@ def generate_buckets_diff(
         f"https://{bucket_name}.s3.af-south-1.amazonaws.com/status-report/"
     )
     environment = "DEV" if "dev" in bucket_name else "PDS"
+
+    title = " & ".join(satellites).replace("ls", "Landsat ")
+
     log.info(f"Environment {environment}")
     log.info(f"Bucket Name {bucket_name}")
     log.info(f"Satellites {satellites}")
@@ -223,10 +226,10 @@ def generate_buckets_diff(
 
     if len(missing_scenes) > 0 or len(orphaned_scenes) > 0:
         output_filename = (
-            f"{satellites}_{date_string}_gap_report.json"
+            f"{title}_{date_string}_gap_report.json"
             if not update_stac
             else URL(f"{date_string}_gap_report_update.json")
-        )
+        ).replace(" ", "_")
 
         log.info(
             f"Report file will be saved in {landsat_status_report_path / output_filename}"
@@ -248,7 +251,6 @@ def generate_buckets_diff(
         else output_filename
     )
 
-    title = " & ".join(satellites).replace("ls", "Landsat")
     message = dedent(
         f"*{title} GAP REPORT - {environment}*\n "
         f"Missing Scenes: {len(missing_scenes)}\n"
