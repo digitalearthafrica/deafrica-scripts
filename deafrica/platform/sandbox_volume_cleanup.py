@@ -69,8 +69,9 @@ def delete_volumes(cluster_name, dryrun):
                 delete(dryrun, k8s_api, k8s_namespace, volume)
                 count += 1
             else:
+                pv_name, pvc_name = get_user_claim(volume)
                 log.info(
-                    f"Skip Volume {volume.id} ({volume.size} GiB) -> {volume.state}"
+                    f"Skip PVC {pvc_name}, PV {pv_name} and EBS volume {volume.id} ({volume.size} GiB) -> {volume.state})"
                 )
         except Exception as e:
             log.exception(
@@ -82,13 +83,7 @@ def delete_volumes(cluster_name, dryrun):
 
 
 def delete(dryrun, k8s_api, k8s_namespace, volume):
-    pvc_name = ""
-    pv_name = ""
-    for tags in volume.tags:
-        if tags["Key"] == "kubernetes.io/created-for/pvc/name":
-            pvc_name = tags["Value"]
-        if tags["Key"] == "kubernetes.io/created-for/pv/name":
-            pv_name = tags["Value"]
+    pv_name, pvc_name = get_user_claim(volume.tags)
     log.info(
         f"Deleting PVC {pvc_name}, PV {pv_name} and EBS volume {volume.id} ({volume.size} GiB) -> {volume.state})"
     )
@@ -123,6 +118,17 @@ def delete(dryrun, k8s_api, k8s_namespace, volume):
             log.info(f"Delete volume: {volume.id}")
             volume.delete()
         log.info("Deletion Completed Successfully")
+
+
+def get_user_claim(volume):
+    pvc_name = ""
+    pv_name = ""
+    for tags in volume.tags:
+        if tags["Key"] == "kubernetes.io/created-for/pvc/name":
+            pvc_name = tags["Value"]
+        if tags["Key"] == "kubernetes.io/created-for/pv/name":
+            pv_name = tags["Value"]
+    return pv_name, pvc_name
 
 
 @click.command("delete-sandbox-volumes")
