@@ -83,7 +83,7 @@ def delete_volumes(cluster_name, dryrun):
 
 
 def delete(dryrun, k8s_api, k8s_namespace, volume):
-    pv_name, pvc_name = get_user_claim(volume.tags)
+    pv_name, pvc_name = get_user_claim(volume)
     log.info(
         f"Deleting PVC {pvc_name}, PV {pv_name} and EBS volume {volume.id} ({volume.size} GiB) -> {volume.state})"
     )
