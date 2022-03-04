@@ -88,6 +88,7 @@ def delete(dryrun, k8s_api, k8s_namespace, volume):
         f"Deleting PVC {pvc_name}, PV {pv_name} and EBS volume {volume.id} ({volume.size} GiB) -> {volume.state})"
     )
     if not dryrun:
+        # cleanup k8s PVC/PV
         if (
             len(
                 [
@@ -114,9 +115,11 @@ def delete(dryrun, k8s_api, k8s_namespace, volume):
         ):
             log.info(f"Delete PV: {pv_name}")
             k8s_api.delete_persistent_volume(pv_name)
-        else:
-            log.info(f"Delete volume: {volume.id}")
-            volume.delete()
+
+        # cleanup volume
+        # NOTE: k8s ebs storageclass volume reclaimPolicy:retain so explicit cleanup required
+        log.info(f"Delete volume: {volume.id}")
+        volume.delete()
         log.info("Deletion Completed Successfully")
 
 
