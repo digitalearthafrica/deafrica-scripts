@@ -2,6 +2,7 @@ import calendar
 import json
 import sys
 from datetime import datetime
+from typing import Optional, Tuple
 
 import click
 import pystac
@@ -23,6 +24,23 @@ DAILY_URL_TEMPLATE = "https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_daily
 log = setup_logging()
 
 log.info("Starting CHIRPS downloader")
+
+
+def check_values(
+    year: str, month: str, day: Optional[str]
+) -> Tuple[str, str, Optional[str]]:
+    # Assert that the year should be 4 characters long
+    assert len(year) == 4, "Year should be 4 characters long"
+
+    # Ensure the month is zero padded
+    if len(month) == 1:
+        month = f"0{month}"
+
+    # As is the day, if it is provided
+    if day is not None and len(day) == 1:
+        day = f"0{day}"
+
+    return year, month, day
 
 
 def check_for_url_existence(href):
@@ -198,6 +216,8 @@ def cli_daily(year, month, day, s3_dst, overwrite, slack_url):
     Available years are 1981-2021.
     """
 
+    year, month, day = check_values(year, month, day)
+
     download_and_cog_chirps(
         year=year,
         month=month,
@@ -234,6 +254,8 @@ def cli_monthly(year, month, s3_dst, overwrite, slack_url):
 
     Available years are 1981-2021.
     """
+
+    year, month, _ = check_values(year, month)
 
     download_and_cog_chirps(
         year=year,
