@@ -42,21 +42,19 @@ def latency_check_slack(
         send_slack_notification(notification_url, "Data Latency Checker", message)
 
 
-def latency_check(notification_slack_url: str = None) -> None:
+def latency_check(
+    satellite: str, latency: int = 3, notification_slack_url: str = None
+) -> None:
     """
-    Function to detect and send a slack message reporting higher than specified latency on the below sensors
-    Latency for Landsat 9: 10 days
-    Latency for Landsat 8: 20 days
-    Latency for Sentinel 2: 3 days
-    Latency for Sentinel 1: 3 days
+    Function to detect and send a slack message to the given URL reporting higher than specified latency on the given sensor
+    :param satellite:(str) Name of satellite (product)
+    :param latency:(int) Maximum latency for satellite in days
     :param notification_slack_url:(str) Slack notification URL
     :return:(None)
     """
 
     today = date.today()
-    date_03_days_ago = today - timedelta(days=3)
-    date_10_days_ago = today - timedelta(days=10)
-    date_20_days_ago = today - timedelta(days=20)
+    date_n_days_ago = today - timedelta(days=latency)
 
     dc = datacube.Datacube(app="latency_checker")
 
@@ -69,58 +67,45 @@ def latency_check(notification_slack_url: str = None) -> None:
     query = {
         "x": lons,
         "y": lats,
-        "time": (date_10_days_ago, today),
+        "time": (date_n_days_ago, today),
         "group_by": "solar_day",
     }
-    ds_ls9_sr = dc.find_datasets(product="ls9_sr", **query)
-    print("ls9_sr since ", date_10_days_ago, " : ", len(ds_ls9_sr))
+    ds = dc.find_datasets(product=satellite, **query)
+    print("Datasets since ", date_n_days_ago, " : ", len(ds))
 
-    query = {
-        "x": lons,
-        "y": lats,
-        "time": (date_20_days_ago, today),
-        "group_by": "solar_day",
-    }
-    ds_ls8_sr = dc.find_datasets(product="ls8_sr", **query)
-    print("ls8_sr since ", date_20_days_ago, " : ", len(ds_ls8_sr))
-
-    query = {
-        "x": lons,
-        "y": lats,
-        "time": (date_03_days_ago, today),
-        "group_by": "solar_day",
-    }
-    ds_s2_l2a = dc.find_datasets(product="s2_l2a", **query)
-    print("s2_l2a since ", date_03_days_ago, " : ", len(ds_s2_l2a))
-
-    ds_s1_rtc = dc.find_datasets(product="s1_rtc", **query)
-    print("s1_rtc since ", date_03_days_ago, " : ", len(ds_s1_rtc))
-
-    if len(ds_ls9_sr) <= 0:
-        latency_check_slack(sensor="Landsat 9", notification_url=notification_slack_url)
-    if len(ds_ls8_sr) <= 0:
-        latency_check_slack(sensor="Landsat 8", notification_url=notification_slack_url)
-    if len(ds_s2_l2a) <= 0:
-        latency_check_slack(
-            sensor="Sentinel 2", notification_url=notification_slack_url
-        )
-    if len(ds_s1_rtc) <= 0:
-        latency_check_slack(
-            sensor="Sentinel 1", notification_url=notification_slack_url
-        )
+    if len(ds) <= 0:
+        latency_check_slack(sensor=satellite, notification_url=notification_slack_url)
 
 
+@click.argument(
+    "satellite",
+    type=str,
+    nargs=1,
+    required=True,
+    default="satellite or product name",
+)
+@click.argument(
+    "latency",
+    type=int,
+    nargs=1,
+    required=True,
+    default=3,
+)
 @slack_url
 @click.option("--version", is_flag=True, default=False)
 @click.command("latency-check")
 def cli(
+    satellite: str = None,
+    latency: int = 3,
     slack_url: str = None,
     version: bool = False,
 ):
     """
-    Post a high latency warning message on Slack
+    Post a high latency warning message on Slack given a latency on a product or satellite
     """
 
     if version:
         click.echo(__version__)
-    latency_check(notification_slack_url=slack_url)
+    latency_check(
+        satellite=satellite, latency=latency, notification_slack_url=slack_url
+    )
