@@ -44,7 +44,7 @@ def latency_check_slack(
 
 def latency_check(
     satellite: str, latency: int = 3, notification_slack_url: str = None
-) -> None:
+) -> int:
     """
     Function to detect and send a slack message to the given URL reporting higher than specified latency on the given sensor
     :param satellite:(str) Name of satellite (product)
@@ -53,28 +53,43 @@ def latency_check(
     :return:(None)
     """
 
-    today = date.today()
-    date_n_days_ago = today - timedelta(days=latency)
+    if latency > 0:
+        today = date.today()
+        date_n_days_ago = today - timedelta(days=latency)
 
-    dc = datacube.Datacube(app="latency_checker")
+        dc = datacube.Datacube(app="latency_checker")
+        pl = dc.list_products()
 
-    central_lat = 0
-    central_lon = 0
-    buffer = 90
-    lats = (central_lat - buffer, central_lat + buffer)
-    lons = (central_lon - buffer, central_lon + buffer)
+        central_lat = 0
+        central_lon = 0
+        buffer = 90
+        lats = (central_lat - buffer, central_lat + buffer)
+        lons = (central_lon - buffer, central_lon + buffer)
 
-    query = {
-        "x": lons,
-        "y": lats,
-        "time": (date_n_days_ago, today),
-        "group_by": "solar_day",
-    }
-    ds = dc.find_datasets(product=satellite, **query)
-    print("Datasets since ", date_n_days_ago, " : ", len(ds))
+        query = {
+            "x": lons,
+            "y": lats,
+            "time": (date_n_days_ago, today),
+            "group_by": "solar_day",
+        }
 
-    if len(ds) <= 0:
-        latency_check_slack(sensor=satellite, notification_url=notification_slack_url)
+        if satellite in pl.name:
+            ds = dc.find_datasets(product=satellite, **query)
+            print("Datasets since ", date_n_days_ago, " : ", len(ds))
+
+            if len(ds) <= 0:
+                latency_check_slack(
+                    sensor=satellite, notification_url=notification_slack_url
+                )
+            else:
+                print("Latency on ", satellite, " valid.")
+            return 0
+        else:
+            print("Invalid Product!")
+            return -1
+    else:
+        print("Invalid Latency!")
+        return -1
 
 
 @click.argument(
@@ -106,6 +121,6 @@ def cli(
 
     if version:
         click.echo(__version__)
-    latency_check(
+    res = latency_check(
         satellite=satellite, latency=latency, notification_slack_url=slack_url
     )
