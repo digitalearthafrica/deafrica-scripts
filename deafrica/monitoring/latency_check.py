@@ -42,7 +42,7 @@ def latency_check_slack(
         send_slack_notification(notification_url, "Data Latency Checker", message)
 
 
-def latency_check(
+def latency_checker(
     satellite: str, latency: int = 3, notification_slack_url: str = None
 ) -> int:
     """
@@ -121,6 +121,6 @@ def cli(
 
     if version:
         click.echo(__version__)
-    res = latency_check(
+    res = latency_checker(
         satellite=satellite, latency=latency, notification_slack_url=slack_url
     )

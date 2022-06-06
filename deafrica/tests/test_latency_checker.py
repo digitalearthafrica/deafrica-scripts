@@ -1,8 +1,8 @@
-from deafrica.monitoring import latency_check
+from deafrica.monitoring.latency_check import latency_checker
 import pytest
 
 
 def test_latency_checker():
-    assert latency_check("asdasd", 3, None) == -1
-    assert latency_check("s2_l2a", -1, None) == -1
-    assert latency_check("s2_l2a", 3, None) == 0
+    assert latency_checker("asdasd", 3, None) == -1
+    assert latency_checker("s2_l2a", -1, None) == -1
+    assert latency_checker("s2_l2a", 3, None) == 0
