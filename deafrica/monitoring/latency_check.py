@@ -57,7 +57,7 @@ def latency_checker(
         today = date.today()
         date_n_days_ago = today - timedelta(days=latency)
 
-        dc = datacube.Datacube(app="latency_checker")
+        dc = datacube.Datacube()
         pl = dc.list_products()
 
         central_lat = 0
