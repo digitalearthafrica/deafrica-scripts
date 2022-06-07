@@ -58,7 +58,14 @@ def latency_checker(
         today = date.today()
         date_n_days_ago = today - timedelta(days=latency)
 
-        os.environ["DATACUBE_ENVIRONMENT"] = "datacube"
+        os.environ["DB_DATABASE"] = "odc"
+        os.environ[
+            "DB_HOSTNAME"
+        ] = "db-aurora-deafrica-dev-eks.cluster-ro-cwomfud9e3ms.af-south-1.rds.amazonaws.com"
+        os.environ["DB_USERNAME"] = "sandbox_reader"
+        os.environ["DB_PASSWORD"] = "ZcE52K4CGUMO2Mej"
+        os.environ["DB_PORT"] = str(5432)
+
         dc = datacube.Datacube()
         pl = dc.list_products()
 
