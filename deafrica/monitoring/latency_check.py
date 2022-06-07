@@ -11,6 +11,7 @@ import datacube
 from datetime import date, timedelta
 
 import click
+import os
 
 from deafrica import __version__
 from deafrica.utils import (
@@ -57,7 +58,8 @@ def latency_checker(
         today = date.today()
         date_n_days_ago = today - timedelta(days=latency)
 
-        dc = datacube.Datacube(env="datacube")
+        os.environ['DATACUBE_ENVIRONMENT'] = "datacube"
+        dc = datacube.Datacube()
         pl = dc.list_products()
 
         central_lat = 0
