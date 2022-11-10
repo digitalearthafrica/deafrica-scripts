@@ -7,8 +7,6 @@ import geopandas as gpd
 import datetime
 from sentinelhub import SHConfig, SentinelHubCatalog, Geometry, DataCollection
 from urlpath import URL
-from oauthlib.oauth2 import BackendApplicationClient
-from requests_oauthlib import OAuth2Session
 from deafrica import __version__
 from deafrica.utils import (
     slack_url,
@@ -27,15 +25,7 @@ missing_datatakes = []
 incomplete_datatakes = []
 missing_files = []
 
-
 def get_origin_data(grided_africa:gpd.GeoDataFrame, africa_geometry, date:str, sh_client_id:str, sh_client_secret:str):
-    # Create a session
-    shClient = BackendApplicationClient(client_id=sh_client_id)
-    oauth = OAuth2Session(client=shClient)
-
-    # Get token for the session
-    token = oauth.fetch_token(token_url='https://services.sentinel-hub.com/oauth/token',
-                          client_secret=sh_client_secret)
     config = SHConfig()
     config.sh_client_id = sh_client_id
     config.sh_client_secret =sh_client_secret
