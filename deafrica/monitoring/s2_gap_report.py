@@ -23,7 +23,7 @@ SENTINEL_2_INVENTORY_PATH = URL(
 SOURCE_INVENTORY_PATH = URL("s3://sentinel-cogs-inventory/sentinel-cogs/sentinel-cogs/")
 SENTINEL_2_REGION = "af-south-1"
 SOURCE_REGION = "us-west-2"
-BASE_FOLDER_NAME = "sentinel-s2-l2a-cogs"
+BASE_FOLDER_NAME = "sentinel-s2-l2a"
 
 
 def get_and_filter_cogs_keys():
@@ -54,7 +54,7 @@ def get_and_filter_cogs_keys():
         if (
             key.Key.split("/")[-2].split("_")[1] in africa_tile_ids
             # We need to ensure we're ignoring the old format data
-            and re.match(r"sentinel-s2-l2a-cogs/\d{4}/", key.Key) is None
+            and re.match(r"sentinel-s2-l2a/\d{4}/", key.Key) is None
         )
     )
 
