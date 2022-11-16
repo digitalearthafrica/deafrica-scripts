@@ -289,6 +289,8 @@ rio-stac==0.6.1
     # via deafrica (setup.py)
 rsa==4.9
     # via google-auth
+rtree==1.0.1
+    # via deafrica (setup.py)
 ruamel-yaml==0.17.21
     # via deafrica (setup.py)
 ruamel-yaml-clib==0.2.7
