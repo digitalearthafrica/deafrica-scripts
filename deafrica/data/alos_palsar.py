@@ -73,7 +73,7 @@ def delete_directories(directories: Tuple[Path, Path], log):
 
 def download_files(workdir, year, tile, log):
     if int(year) > 2010:
-        filename = f"{tile}_{year[-2:]}_MOS_F02DAR.tar.gz"
+        filename = f"{tile}_{year[-2:]}_MOS_F02DAR.zip"
     else:
         filename = f"{tile}_{year[-2:]}_MOS.tar.gz"
 
@@ -100,8 +100,12 @@ def download_files(workdir, year, tile, log):
         log.warning("File failed to download... skipping")
         exit(0)
 
-    log.info("Untarring file")
-    subprocess.check_call(["tar", "-xf", filename, "--no-same-owner"], cwd=workdir)
+    if int(year) > 2010:
+        log.info("Unzipping file")
+        subprocess.check_call(["unzip", "-o", tar_file, "-d", workdir])
+    else:
+        log.info("Untarring file")
+        subprocess.check_call(["tar", "-xf", filename, "--no-same-owner"], cwd=workdir)
 
 
 def combine_cog(PATH, OUTPATH, tile, year, log):
