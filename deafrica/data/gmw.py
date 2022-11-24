@@ -17,7 +17,19 @@ from deafrica.utils import (
     send_slack_notification,
 )
 
-VALID_YEARS = ["1996", "2007", "2008", "2009", "2010", "2015", "2016"]
+VALID_YEARS = [
+    "1996",
+    "2007",
+    "2008",
+    "2009",
+    "2010",
+    "2015",
+    "2016",
+    "2017",
+    "2018",
+    "2019",
+    "2020",
+]
 LOCAL_DIR = Path(os.getcwd())
 SOURCE_URL_PATH = URL("https://wcmc.io/")
 FILE_NAME = "GMW_{year}"
@@ -36,10 +48,8 @@ def download_and_unzip_gmw(local_filename: str) -> str:
     with requests.get(url, stream=True, allow_redirects=True) as r:
         with open(local_filename, "wb") as f:
             shutil.copyfileobj(r.raw, f)
-
     with ZipFile(local_filename) as z:
         z.extractall()
-
     return [f for f in z.namelist() if f.endswith(".shp")][0]
 
 
@@ -49,7 +59,7 @@ def create_and_upload_stac(cog_file: Path, s3_dst: str, year) -> Item:
     log.info("Item base creation")
     item = create_stac_item(
         str(cog_file),
-        id=str(odc_uuid("gmw", "2.0", [cog_file.name.replace("tif", "")])),
+        id=str(odc_uuid("gmw", "3.0", [cog_file.name.replace("tif", "")])),
         with_proj=True,
         input_datetime=datetime(int(year), 12, 31),
         properties={
@@ -77,7 +87,7 @@ def create_and_upload_stac(cog_file: Path, s3_dst: str, year) -> Item:
     del item.assets["asset"]
     item.assets["mangrove"] = pystac.Asset(
         href=str(out_data),
-        title="gmw-v1.0",
+        title="gmw-v3.0",
         media_type=pystac.MediaType.COG,
         roles=["data"],
     )
@@ -119,15 +129,16 @@ def gmw_download_stac_cog(year: str, s3_dst: str, slack_url: str = None) -> None
             raise ValueError(
                 f"Chosen year {year} is not valid, please choose from one of {VALID_YEARS}"
             )
-
         log.info(f"Starting GMW downloader for year {year}")
 
         log.info("download extents if needed")
-        gmw_shp = f"GMW_001_GlobalMangroveWatch_{year}/01_Data/GMW_{year}_v2.shp"
+        if year == "2018":
+            gmw_shp = f"GMW_v3_{year}/00_Data/gmw_v3_{year}.shp"
+        else:
+            gmw_shp = f"gmw_v3_{year}_vec.shp"
         local_filename = FILE_NAME.format(year=year)
         if not os.path.exists(gmw_shp):
             gmw_shp = download_and_unzip_gmw(local_filename=local_filename)
-
         local_extracted_file_path = LOCAL_DIR / gmw_shp
 
         output_file = LOCAL_DIR / gmw_shp.replace(".shp", ".tif")
@@ -159,7 +170,6 @@ def gmw_download_stac_cog(year: str, s3_dst: str, slack_url: str = None) -> None
 
         # All done!
         log.info(f"Completed work on {s3_dst}/{year}")
-
     except Exception as e:
         message = f"Failed to handle GMW {gmw_shp} with error {e}"
 
@@ -184,6 +194,10 @@ def cli(year, s3_dst, slack_url):
     • 2010
     • 2015
     • 2016
+    • 2017
+    • 2018
+    • 2019
+    • 2020
     """
 
     gmw_download_stac_cog(year=year, s3_dst=s3_dst, slack_url=slack_url)
