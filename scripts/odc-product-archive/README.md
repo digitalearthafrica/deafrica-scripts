@@ -12,7 +12,8 @@
  - Runs on ODC environment. [To configure ODC environment](https://datacube-core.readthedocs.io/en/latest/installation/setup/ubuntu.html#)
  - Input : existing **PRODUCT-NAME**
  - Output : `PRODUCT_NAME_archived.csv` containing a list of archived **dataset ids**
- - `s3 Bucket` : s3://deafrica-landsat/status-report/archived/
+ - `s3 Bucket` : `archive-deafrica-datasets`
+ - ***NOTE*** : `s3.Bucket("archive-deafrica-datasets").upload_file(Filename=PRODUCT_NAME + "_archived.csv", Key="crop-mask/"+PRODUCT_NAME + "_archived.csv")` Key specifies the folder exiting inside the S3 bucket.
 
 ## Environment variables
 ``` bash
