@@ -42,9 +42,12 @@ if not dataset_ids:
 else:
     df = pd.DataFrame(dataset_ids)
     df.to_csv(PRODUCT_NAME + "_archived.csv")
-    
-    #Upload to AWS s3 bucket
-    s3.Bucket("archive-deafrica-datasets").upload_file(Filename=PRODUCT_NAME + "_archived.csv", Key="crop-mask/"+PRODUCT_NAME + "_archived.csv")
+
+    # Upload to AWS s3 bucket
+    s3.Bucket("archive-deafrica-datasets").upload_file(
+        Filename=PRODUCT_NAME + "_archived.csv",
+        Key="crop-mask/" + PRODUCT_NAME + "_archived.csv",
+    )
     dc.index.datasets.archive(dataset_ids)
 
 print("Done")
