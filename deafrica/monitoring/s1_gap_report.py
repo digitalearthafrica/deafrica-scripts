@@ -7,12 +7,16 @@ import geopandas as gpd
 import datetime
 from sentinelhub import SHConfig, SentinelHubCatalog, Geometry, DataCollection
 from urlpath import URL
-from deafrica import __version__
+import os
 from deafrica.utils import (
     slack_url,
     send_slack_notification,
     setup_logging,
 )
+
+
+SH_CLIENT_ID = os.getenv("SH_CLIENT_ID", "")
+SH_CLIENT_SECRET = os.getenv("SH_CLIENT_SECRET", "")
 
 BUCKET = "s3://deafrica-sentinel-1/"
 REGION_NAME = "af-south-1"
@@ -30,12 +34,11 @@ def get_origin_data(
     grided_africa: gpd.GeoDataFrame,
     africa_geometry,
     date: str,
-    sh_client_id: str,
-    sh_client_secret: str,
 ):
+
     config = SHConfig()
-    config.sh_client_id = sh_client_id
-    config.sh_client_secret = sh_client_secret
+    config.sh_client_id = SH_CLIENT_ID
+    config.sh_client_secret = SH_CLIENT_SECRET
 
     catalog = SentinelHubCatalog(config=config)
 
@@ -158,7 +161,7 @@ def create_path_from_file(path: str):
 
 def sendNotification(slack_url, report_http_link):
     message = dedent(
-        f"*SENTINEL 1 GAP REPORT*\n"
+        f"*SENTINEL 1 GAP REPORT - PDS*\n"
         f"Missing Datasets: {len(missing_datasets)}\n"
         f"Missing Files: {len(missing_files)}\n"
         f"Incomplete Datatakes: {len(incomplete_datatakes)}\n"
@@ -168,9 +171,7 @@ def sendNotification(slack_url, report_http_link):
     send_slack_notification(slack_url, "S1 Gap Report", message)
 
 
-def find_missing_s1_data(
-    bucket_name: str, slack_url: str, sh_client_id: str, sh_client_secret: str
-):
+def find_missing_s1_data(bucket_name: str, slack_url: str):
     log = setup_logging()
     log.info("Task started ")
     s1_status_report_path = URL(f"s3://{bucket_name}/status-report/")
@@ -186,13 +187,11 @@ def find_missing_s1_data(
             log.info("Checking S1 data for date: " + date_str)
 
             africa_geometry = load_json_from_geometry(africa_extent_json)
-            origin_data = get_origin_data(
-                africa_grid, africa_geometry, date_str, sh_client_id, sh_client_secret
-            )
-            log.info("sentinel-hub results: " + str(len(origin_data)))
+            origin_data = get_origin_data(africa_grid, africa_geometry, date_str)
+            log.info("Sentinel-Hub results: " + str(len(origin_data)))
 
             target_data = check_target_data(origin_data, target_datatakes)
-            log.info("Africa S3 results: " + str(len(target_data)))
+            log.info("DEAfrica results: " + str(len(target_data)))
         if missing_datasets:
             for dataset in missing_datasets:
                 datatake = dataset[-6:]
@@ -227,9 +226,9 @@ def find_missing_s1_data(
                 ContentType="application/json",
             )
 
-            report_http_link = f"https://{bucket_name}.s3.af-south-1.amazonaws.com/status-report/{output_filename}"
-
-            sendNotification(slack_url, report_http_link)
+            if slack_url:
+                report_http_link = f"https://{bucket_name}.s3.af-south-1.amazonaws.com/status-report/{output_filename}"
+                sendNotification(slack_url, report_http_link)
     except Exception as exc:
         log.error(exc)
 
@@ -241,39 +240,17 @@ def find_missing_s1_data(
     required=True,
     default="Bucket where the gap report will be stored",
 )
-@click.argument(
-    "sh_client_id",
-    type=str,
-    nargs=1,
-    required=True,
-    default=f"Sentinel Hub client id",
-)
-@click.argument(
-    "sh_client_secret",
-    type=str,
-    nargs=1,
-    required=True,
-    default=f"Sentinel Hub client secret",
-)
 @slack_url
-@click.option("--version", is_flag=True, default=False)
 @click.command("s1-gap-report")
 def cli(
     bucket_name: str,
-    sh_client_id: str,
-    sh_client_secret: str,
     slack_url: str = None,
-    version: bool = False,
 ):
     """
-    Publish missing scenes
+    Publish missing datasets
     """
 
-    if version:
-        click.echo(__version__)
     find_missing_s1_data(
         bucket_name=bucket_name,
         slack_url=slack_url,
-        sh_client_id=sh_client_id,
-        sh_client_secret=sh_client_secret,
     )
