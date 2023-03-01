@@ -153,7 +153,7 @@ def generate_buckets_diff(
             raise Exception(f"More than 200 scenes were found \n {message}")
         else:
             send_slack_notification(notification_url, "S2 Gap Report", message)
-            raise Exception(f"No missing scenes were found. \n {message}")
+            raise Exception(f"Missing scenes below threshold. \n {message}")
 
 
 @click.argument(
