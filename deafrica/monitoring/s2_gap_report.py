@@ -184,3 +184,4 @@ def cli(
     generate_buckets_diff(
         bucket_name=bucket_name, update_stac=update_stac, notification_url=slack_url
     )
+    
