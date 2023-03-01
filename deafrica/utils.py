@@ -200,7 +200,6 @@ def download_file_to_tmp(url: str, file_name: str, always_return_path: bool = Tr
 
     # check if file exists and comparing size against cloud file
     if file_path.exists():
-
         logging.info(f"File already found on {file_path}")
 
         file_size = file_path.stat().st_size
