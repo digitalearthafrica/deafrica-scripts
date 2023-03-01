@@ -96,7 +96,6 @@ def generate_buckets_diff(
         orphaned_keys = set()
 
     else:
-
         destination_keys = set(
             ns.Key
             for ns in list_inventory(

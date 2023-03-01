@@ -28,7 +28,6 @@ S3_LANDSAT_GAP_REPORT = URL(REPORT_FOLDER) / FAKE_LANDSAT_GAP_REPORT
 
 
 def test_build_messages():
-
     missing_dict = json.loads(open(str(LANDSAT_GAP_REPORT), "rb").read())
     missing_scene_paths = [
         scene_path.strip() for scene_path in missing_dict["missing"] if scene_path

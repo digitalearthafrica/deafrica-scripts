@@ -21,7 +21,6 @@ DAY = "09"
 
 @moto.mock_s3
 def test_one_month(remote_file_month):
-
     s3_client, s3_dst = bucket_create()
 
     download_and_cog_chirps(YEAR, MONTH, s3_dst, overwrite=True)
@@ -31,7 +30,6 @@ def test_one_month(remote_file_month):
 
 @moto.mock_s3
 def test_one_day(remote_file_day):
-
     s3_client, s3_dst = bucket_create()
 
     download_and_cog_chirps(YEAR, MONTH, s3_dst, day=DAY, overwrite=True)
@@ -41,7 +39,6 @@ def test_one_day(remote_file_day):
 
 @moto.mock_s3
 def test_one_month_non_gz(remote_file_month_non_gz):
-
     s3_client, s3_dst = bucket_create()
 
     download_and_cog_chirps(YEAR, MONTH, s3_dst, overwrite=True)
@@ -51,7 +48,6 @@ def test_one_month_non_gz(remote_file_month_non_gz):
 
 @moto.mock_s3
 def test_one_day_non_gz(remote_file_day_non_gz):
-
     s3_client, s3_dst = bucket_create()
 
     download_and_cog_chirps(YEAR, MONTH, s3_dst, day=DAY, overwrite=True)
@@ -75,7 +71,6 @@ def bucket_create():
 
 
 def check_s3_paths(s3_client, path):
-
     out_data = f"{path}.tif"
     out_stac = f"{path}.stac-item.json"
 
