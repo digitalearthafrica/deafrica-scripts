@@ -150,11 +150,11 @@ def generate_buckets_diff(
 
     if notification_url is not None:
         if not update_stac and (len(missing_scenes) > 200 or len(orphaned_keys) > 200):
-                send_slack_notification(notification_url, "S2 Gap Report", message)
-                raise Exception(f"More than 200 scenes were found \n {message}")
+            send_slack_notification(notification_url, "S2 Gap Report", message)
+            raise Exception(f"More than 200 scenes were found \n {message}")
         else:
-                send_slack_notification(notification_url, "S2 Gap Report", message)
-                raise Exception(f"No missing scenes were found. \n {message}")
+            send_slack_notification(notification_url, "S2 Gap Report", message)
+            raise Exception(f"No missing scenes were found. \n {message}")
 
 
 @click.argument(
