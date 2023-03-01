@@ -202,7 +202,6 @@ def read_mtl(fp: Iterable[Union[str, bytes]], root_element="l1_metadata_file") -
         lines: Iterable[Union[str, bytes]],
         key_transform: Callable[[str], str] = lambda s: s.lower(),
     ) -> dict:
-
         tree = {}
 
         for line in lines:
@@ -365,7 +364,6 @@ def main(
     )
     with rasterio.Env():
         for ds in datasets:
-
             ds_path = _normalise_dataset_path(Path(ds).absolute())
             logging.info("ds_path %s", ds_path)
             (mode, ino, dev, nlink, uid, gid, size, atime, mtime, ctime) = os.stat(ds)

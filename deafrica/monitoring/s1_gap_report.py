@@ -35,7 +35,6 @@ def get_origin_data(
     africa_geometry,
     date: str,
 ):
-
     config = SHConfig()
     config.sh_client_id = SH_CLIENT_ID
     config.sh_client_secret = SH_CLIENT_SECRET
