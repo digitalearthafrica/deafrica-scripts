@@ -67,7 +67,6 @@ def generate_buckets_diff(
     """
     Compare Sentinel-2 buckets in US and Africa and detect differences
     A report containing missing keys will be written to s3://deafrica-sentinel-2/status-report
-
     :param bucket_name: (str) Bucket where the gap report is
     :param update_stac: (bool) Define if the report will contain all scenes from the source for an update
     :param notification_url: (str) Optional slack URL in case of you want to send a slack notification
