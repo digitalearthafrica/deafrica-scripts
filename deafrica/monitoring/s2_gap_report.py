@@ -137,7 +137,10 @@ def generate_buckets_diff(
             ContentType="application/json",
         )
 
-    report_http_link = f"https://{bucket_name}.s3.{SENTINEL_2_REGION}.amazonaws.com/status-report/{output_filename}"
+    if len(missing_scenes) < 200 or len(orphaned_keys) < 200:
+        output_filename = "Missing scenes below threshold"
+
+    report_http_link = f"https://{bucket_name}.s3.{SENTINEL_2_REGION}.amazonaws.com/status-report/ {output_filename}"
     message = dedent(
         f"*SENTINEL 2 GAP REPORT - {environment}*\n"
         f"Missing Scenes: {len(missing_scenes)}\n"
@@ -153,7 +156,6 @@ def generate_buckets_diff(
             raise Exception(f"More than 200 scenes were found \n {message}")
         else:
             send_slack_notification(notification_url, "S2 Gap Report", message)
-            raise Exception(f"Missing scenes below threshold. \n {message}")
 
 
 @click.argument(
