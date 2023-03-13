@@ -67,7 +67,6 @@ def generate_buckets_diff(
     """
     Compare Sentinel-2 buckets in US and Africa and detect differences
     A report containing missing keys will be written to s3://deafrica-sentinel-2/status-report
-
     :param bucket_name: (str) Bucket where the gap report is
     :param update_stac: (bool) Define if the report will contain all scenes from the source for an update
     :param notification_url: (str) Optional slack URL in case of you want to send a slack notification
@@ -150,8 +149,17 @@ def generate_buckets_diff(
 
     if not update_stac and (len(missing_scenes) > 200 or len(orphaned_keys) > 200):
         if notification_url is not None:
-            send_slack_notification(notification_url, "S2 Gap Report", message)
+            send_slack_notification(
+                notification_url, "S2 Gap Report - Exception", message
+            )
         raise Exception(f"More than 200 scenes were found \n {message}")
+    else:
+        if notification_url is not None:
+            send_slack_notification(
+                notification_url,
+                "S2 Gap Report - Success",
+                message + "\n Missing scenes below threshold",
+            )
 
 
 @click.argument(
