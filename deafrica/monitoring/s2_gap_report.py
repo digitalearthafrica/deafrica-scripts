@@ -1,6 +1,6 @@
 import json
 import re
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from textwrap import dedent
 
 import click
@@ -16,6 +16,7 @@ from deafrica.utils import (
     send_slack_notification,
     setup_logging,
 )
+import datacube
 
 SENTINEL_2_INVENTORY_PATH = URL(
     "s3://deafrica-sentinel-2-inventory/deafrica-sentinel-2/deafrica-sentinel-2-inventory/"
@@ -23,7 +24,7 @@ SENTINEL_2_INVENTORY_PATH = URL(
 SOURCE_INVENTORY_PATH = URL("s3://sentinel-cogs-inventory/sentinel-cogs/sentinel-cogs/")
 SENTINEL_2_REGION = "af-south-1"
 SOURCE_REGION = "us-west-2"
-BASE_FOLDER_NAME = "sentinel-cogs"
+BASE_FOLDER_NAME = "sentinel-s2-l2a-cogs"
 
 
 def get_and_filter_cogs_keys():
@@ -54,9 +55,28 @@ def get_and_filter_cogs_keys():
         if (
             key.Key.split("/")[-2].split("_")[1] in africa_tile_ids
             # We need to ensure we're ignoring the old format data
-            and re.match(r"sentinel-cogs/\d{4}/", key.Key) is None
+            and re.match(r"sentinel-s2-l2a-cogs/\d{4}/", key.Key) is None
+            and "tileinfo_metadata.json" not in key.Key
         )
     )
+
+
+def get_odc_keys(log) -> set:
+    try:
+        dc = datacube.Datacube()
+        yesterday = date.today() - timedelta(days=1)
+
+        # Skip datasets indexed today and yesterday as they are not in the inventory yet
+        return set(
+            uri.uri.replace("s3://deafrica-sentinel-2/", "")
+            for uri in dc.index.datasets.search_returning(
+                ["uri", "indexed_time"], product="s2_l2a"
+            )
+            if yesterday > uri.indexed_time.date()
+        )
+    except:
+        log.info("Error while searching for datasets in odc")
+        return set()
 
 
 def generate_buckets_diff(
@@ -104,6 +124,8 @@ def generate_buckets_diff(
                 n_threads=200,
             )
         )
+        log.info(f"Retrieving keys from odc")
+        indexed_keys = get_odc_keys(log)
 
         # Keys that are missing, they are in the source but not in the bucket
         missing_scenes = set(
@@ -115,9 +137,21 @@ def generate_buckets_diff(
         # Keys that are lost, they are in the bucket but not found in the source
         orphaned_keys = destination_keys.difference(source_keys)
 
+        missing_odc_scenes = set(
+            key for key in destination_keys if key not in indexed_keys
+        )
+
+        orphaned_odc_scenes = set(
+            key for key in indexed_keys if key not in destination_keys
+        )
     s2_s3 = s3_client(region_name=SENTINEL_2_REGION)
 
-    if len(missing_scenes) > 0 or len(orphaned_keys) > 0:
+    if (
+        len(missing_scenes) > 0
+        or len(orphaned_keys) > 0
+        or (len(missing_odc_scenes) > 0 and len(indexed_keys) > 0)
+        or len(orphaned_odc_scenes) > 0
+    ):
         output_filename = (
             f"{date_string}_gap_report.json"
             if not update_stac
@@ -127,7 +161,12 @@ def generate_buckets_diff(
         log.info(f"File will be saved in {s2_status_report_path}/{output_filename}")
 
         missing_orphan_scenes_json = json.dumps(
-            {"orphan": list(orphaned_keys), "missing": list(missing_scenes)}
+            {
+                "orphan": list(orphaned_keys),
+                "missing": list(missing_scenes),
+                "orphan_odc": list(orphaned_odc_scenes),
+                "missing_odc": list(missing_odc_scenes),
+            }
         )
 
         s3_dump(
@@ -136,18 +175,32 @@ def generate_buckets_diff(
             s3=s2_s3,
             ContentType="application/json",
         )
+    report_http_link = (
+        f"https://{bucket_name}.s3.{SENTINEL_2_REGION}.amazonaws.com/status-report/{output_filename}"
+        if len(missing_scenes) > 0
+        or len(orphaned_keys) > 0
+        or (len(missing_odc_scenes) > 0 and len(indexed_keys) > 0)
+        or len(orphaned_odc_scenes) > 0
+        else output_filename
+    )
 
-    report_http_link = f"https://{bucket_name}.s3.{SENTINEL_2_REGION}.amazonaws.com/status-report/{output_filename}"
     message = dedent(
         f"*SENTINEL 2 GAP REPORT - {environment}*\n"
         f"Missing Scenes: {len(missing_scenes)}\n"
         f"Orphan Scenes: {len(orphaned_keys)}\n"
+        f"Missing ODC Scenes: {len(missing_odc_scenes)}\n"
+        f"Orphan ODC Scenes: {len(orphaned_odc_scenes)}\n"
         f"Report: {report_http_link}\n"
     )
 
     log.info(message)
 
-    if not update_stac and (len(missing_scenes) > 200 or len(orphaned_keys) > 200):
+    if not update_stac and (
+        len(missing_scenes) > 200
+        or len(orphaned_keys) > 200
+        or (len(missing_odc_scenes) > 200 and len(indexed_keys) > 0)
+        or len(orphaned_odc_scenes) > 200
+    ):
         if notification_url is not None:
             send_slack_notification(
                 notification_url, "S2 Gap Report - Exception", message

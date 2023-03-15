@@ -11,7 +11,7 @@ import csv
 import gzip
 import json
 import time
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from pathlib import Path
 from textwrap import dedent
 
@@ -31,6 +31,7 @@ from deafrica.utils import (
     time_process,
     list_inventory,
 )
+import datacube
 
 SUPPORTED_SATELLITES = ("ls8_ls9", "ls7", "ls5")
 FILES = {
@@ -141,6 +142,28 @@ def get_and_filter_keys(satellites: tuple[str, str]) -> set:
     return set(f"{key.Key.rsplit('/', 1)[0]}/" for key in list_json_keys)
 
 
+def get_odc_keys(satellites: tuple[str, str], log) -> set:
+    try:
+        dc = datacube.Datacube()
+        yesterday = date.today() - timedelta(days=1)
+
+        # Skip datasets indexed today and yesterday as they are not in the inventory yet
+        all_odc_keys = []
+        for sat in satellites:
+            indexed_keys = set(
+                uri.uri.replace("s3://deafrica-landsat/", "").rsplit("/", 1)[0] + "/"
+                for uri in dc.index.datasets.search_returning(
+                    ["uri", "indexed_time"], product=sat + "_sr"
+                )
+                if yesterday > uri.indexed_time.date()
+            )
+            all_odc_keys.extend(indexed_keys)
+        return set(all_odc_keys)
+    except:
+        log.info("Error while searching for datasets in odc")
+        return set()
+
+
 def generate_buckets_diff(
     bucket_name: str,
     satellites: str,
@@ -217,14 +240,36 @@ def generate_buckets_diff(
             for path in dest_paths.difference(source_paths)
         ]
 
+        log.info(f"Retrieving keys from odc")
+        all_odc_keys = get_odc_keys(satellites, log)
+
+        missing_odc_scenes = [
+            str(URL(f"s3://{bucket_name}") / path)
+            for path in dest_paths.difference(all_odc_keys)
+        ]
+
+        orphaned_odc_scenes = [
+            str(URL(f"s3://{bucket_name}") / path)
+            for path in set(all_odc_keys).difference(dest_paths)
+        ]
+
         log.info(f"Found {len(missing_scenes)} missing scenes")
         log.info(f"missing_scenes 10 first keys {list(missing_scenes)[0:10]}")
         log.info(f"Found {len(orphaned_scenes)} orphaned scenes")
         log.info(f"orphaned_scenes 10 first keys {list(orphaned_scenes)[0:10]}")
 
+        log.info(f"Found {len(missing_odc_scenes)} missing ODC scenes")
+        log.info(f"missing_odc_scenes 10 first keys {list(missing_odc_scenes)[0:10]}")
+        log.info(f"Found {len(orphaned_odc_scenes)} orphaned ODC scenes")
+        log.info(f"orphaned_odc_scenes 10 first keys {list(orphaned_odc_scenes)[0:10]}")
     landsat_s3 = s3_client(region_name="af-south-1")
 
-    if len(missing_scenes) > 0 or len(orphaned_scenes) > 0:
+    if (
+        len(missing_scenes) > 0
+        or len(orphaned_scenes) > 0
+        or len(missing_odc_scenes) > 0
+        or len(orphaned_odc_scenes) > 0
+    ):
         output_filename = (
             (
                 f"{title}_{date_string}_gap_report.json"
@@ -239,7 +284,12 @@ def generate_buckets_diff(
             f"Report file will be saved in {landsat_status_report_path / output_filename}"
         )
         missing_orphan_scenes_json = json.dumps(
-            {"orphan": orphaned_scenes, "missing": missing_scenes}
+            {
+                "orphan": orphaned_scenes,
+                "missing": missing_scenes,
+                "orphan_odc": orphaned_odc_scenes,
+                "missing_odc": missing_odc_scenes,
+            }
         )
 
         s3_dump(
@@ -251,14 +301,19 @@ def generate_buckets_diff(
 
     report_output = (
         str(landsat_status_report_url / output_filename)
-        if len(missing_scenes) > 0 or len(orphaned_scenes) > 0
+        if len(missing_scenes) > 0
+        or len(orphaned_scenes) > 0
+        or len(missing_odc_scenes) > 0
+        or len(orphaned_odc_scenes) > 0
         else output_filename
     )
 
     message = dedent(
-        f"*{title} GAP REPORT - {environment}*\n "
+        f"*{title} GAP REPORT - {environment}*\n"
         f"Missing Scenes: {len(missing_scenes)}\n"
         f"Orphan Scenes: {len(orphaned_scenes)}\n"
+        f"Missing ODC Scenes: {len(missing_odc_scenes)}\n"
+        f"Orphan ODC Scenes: {len(orphaned_odc_scenes)}\n"
         f"Report: {report_output}\n"
     )
 
