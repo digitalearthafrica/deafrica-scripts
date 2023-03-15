@@ -149,7 +149,7 @@ def generate_buckets_diff(
     if (
         len(missing_scenes) > 0
         or len(orphaned_keys) > 0
-        or len(missing_odc_scenes) > 0
+        or (len(missing_odc_scenes) > 0 and len(indexed_keys) > 0)
         or len(orphaned_odc_scenes) > 0
     ):
         output_filename = (
@@ -179,7 +179,7 @@ def generate_buckets_diff(
         f"https://{bucket_name}.s3.{SENTINEL_2_REGION}.amazonaws.com/status-report/{output_filename}"
         if len(missing_scenes) > 0
         or len(orphaned_keys) > 0
-        or len(missing_odc_scenes) > 0
+        or (len(missing_odc_scenes) > 0 and len(indexed_keys) > 0)
         or len(orphaned_odc_scenes) > 0
         else output_filename
     )
@@ -198,7 +198,7 @@ def generate_buckets_diff(
     if not update_stac and (
         len(missing_scenes) > 200
         or len(orphaned_keys) > 200
-        or len(missing_odc_scenes) > 200
+        or (len(missing_odc_scenes) > 200 and len(indexed_keys) > 0)
         or len(orphaned_odc_scenes) > 200
     ):
         if notification_url is not None:
