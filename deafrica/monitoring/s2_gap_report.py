@@ -61,18 +61,22 @@ def get_and_filter_cogs_keys():
     )
 
 
-def get_odc_keys() -> set:
-    dc = datacube.Datacube()
-    yesterday = date.today() - timedelta(days=1)
+def get_odc_keys(log) -> set:
+    try:
+        dc = datacube.Datacube()
+        yesterday = date.today() - timedelta(days=1)
 
-    # Skip datasets indexed today and yesterday as they are not in the inventory yet
-    return set(
-        uri.uri.replace("s3://deafrica-sentinel-2/", "")
-        for uri in dc.index.datasets.search_returning(
-            ["uri", "indexed_time"], product="s2_l2a"
+        # Skip datasets indexed today and yesterday as they are not in the inventory yet
+        return set(
+            uri.uri.replace("s3://deafrica-sentinel-2/", "")
+            for uri in dc.index.datasets.search_returning(
+                ["uri", "indexed_time"], product="s2_l2a"
+            )
+            if yesterday > uri.indexed_time.date()
         )
-        if yesterday > uri.indexed_time.date()
-    )
+    except:
+        log.info("Error while searching for datasets in odc")
+        return set()
 
 
 def generate_buckets_diff(
@@ -121,7 +125,7 @@ def generate_buckets_diff(
             )
         )
         log.info(f"Retrieving keys from odc")
-        indexed_keys = get_odc_keys()
+        indexed_keys = get_odc_keys(log)
 
         # Keys that are missing, they are in the source but not in the bucket
         missing_scenes = set(

@@ -142,22 +142,26 @@ def get_and_filter_keys(satellites: tuple[str, str]) -> set:
     return set(f"{key.Key.rsplit('/', 1)[0]}/" for key in list_json_keys)
 
 
-def get_odc_keys(satellites: tuple[str, str]) -> set:
-    dc = datacube.Datacube()
-    yesterday = date.today() - timedelta(days=1)
+def get_odc_keys(satellites: tuple[str, str], log) -> set:
+    try:
+        dc = datacube.Datacube()
+        yesterday = date.today() - timedelta(days=1)
 
-    # Skip datasets indexed today and yesterday as they are not in the inventory yet
-    all_odc_keys = []
-    for sat in satellites:
-        indexed_keys = set(
-            uri.uri.replace("s3://deafrica-landsat/", "").rsplit("/", 1)[0] + "/"
-            for uri in dc.index.datasets.search_returning(
-                ["uri", "indexed_time"], product=sat + "_sr"
+        # Skip datasets indexed today and yesterday as they are not in the inventory yet
+        all_odc_keys = []
+        for sat in satellites:
+            indexed_keys = set(
+                uri.uri.replace("s3://deafrica-landsat/", "").rsplit("/", 1)[0] + "/"
+                for uri in dc.index.datasets.search_returning(
+                    ["uri", "indexed_time"], product=sat + "_sr"
+                )
+                if yesterday > uri.indexed_time.date()
             )
-            if yesterday > uri.indexed_time.date()
-        )
-        all_odc_keys.extend(indexed_keys)
-    return set(all_odc_keys)
+            all_odc_keys.extend(indexed_keys)
+        return set(all_odc_keys)
+    except:
+        log.info("Error while searching for datasets in odc")
+        return set()
 
 
 def generate_buckets_diff(
@@ -237,7 +241,7 @@ def generate_buckets_diff(
         ]
 
         log.info(f"Retrieving keys from odc")
-        all_odc_keys = get_odc_keys(satellites)
+        all_odc_keys = get_odc_keys(satellites, log)
 
         missing_odc_scenes = [
             str(URL(f"s3://{bucket_name}") / path)
