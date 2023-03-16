@@ -145,23 +145,19 @@ def get_and_filter_keys(satellites: tuple[str, str]) -> set:
 def get_odc_keys(satellites: tuple[str, str], log) -> set:
     try:
         dc = datacube.Datacube()
-        yesterday = date.today() - timedelta(days=1)
-
-        # Skip datasets indexed today and yesterday as they are not in the inventory yet
-        all_odc_keys = []
+        all_odc_vals = {}
         for sat in satellites:
-            indexed_keys = set(
-                uri.uri.replace("s3://deafrica-landsat/", "").rsplit("/", 1)[0] + "/"
-                for uri in dc.index.datasets.search_returning(
-                    ["uri", "indexed_time"], product=sat + "_sr"
-                )
-                if yesterday > uri.indexed_time.date()
-            )
-            all_odc_keys.extend(indexed_keys)
-        return set(all_odc_keys)
+            for uri in dc.index.datasets.search_returning(
+                ["uri", "indexed_time"], product=sat + "_sr"
+            ):
+                all_odc_vals[
+                    uri.uri.replace("s3://deafrica-landsat/", "").rsplit("/", 1)[0]
+                    + "/"
+                ] = uri.indexed_time
+        return all_odc_vals
     except:
         log.info("Error while searching for datasets in odc")
-        return set()
+        return {}
 
 
 def generate_buckets_diff(
@@ -241,16 +237,20 @@ def generate_buckets_diff(
         ]
 
         log.info(f"Retrieving keys from odc")
-        all_odc_keys = get_odc_keys(satellites, log)
+        all_odc_values = get_odc_keys(satellites, log)
+        all_odc_keys = all_odc_values.keys()
 
         missing_odc_scenes = [
             str(URL(f"s3://{bucket_name}") / path)
             for path in dest_paths.difference(all_odc_keys)
         ]
 
+        yesterday = date.today() - timedelta(days=1)
+
         orphaned_odc_scenes = [
             str(URL(f"s3://{bucket_name}") / path)
             for path in set(all_odc_keys).difference(dest_paths)
+            if yesterday > all_odc_values[path].date()
         ]
 
         log.info(f"Found {len(missing_scenes)} missing scenes")
