@@ -64,19 +64,18 @@ def get_and_filter_cogs_keys():
 def get_odc_keys(log) -> set:
     try:
         dc = datacube.Datacube()
-        yesterday = date.today() - timedelta(days=1)
+        all_odc_vals = {}
 
-        # Skip datasets indexed today and yesterday as they are not in the inventory yet
-        return set(
-            uri.uri.replace("s3://deafrica-sentinel-2/", "")
-            for uri in dc.index.datasets.search_returning(
-                ["uri", "indexed_time"], product="s2_l2a"
-            )
-            if yesterday > uri.indexed_time.date()
-        )
+        for val in dc.index.datasets.search_returning(
+            ["uri", "indexed_time"], product="s2_l2a"
+        ):
+            all_odc_vals[
+                val.uri.replace("s3://deafrica-sentinel-2/", "")
+            ] = val.indexed_time
+        return all_odc_vals
     except:
         log.info("Error while searching for datasets in odc")
-        return set()
+        return {}
 
 
 def generate_buckets_diff(
@@ -125,7 +124,8 @@ def generate_buckets_diff(
             )
         )
         log.info(f"Retrieving keys from odc")
-        indexed_keys = get_odc_keys(log)
+        all_odc_values = get_odc_keys(log)
+        indexed_keys = all_odc_values.keys()
 
         # Keys that are missing, they are in the source but not in the bucket
         missing_scenes = set(
@@ -141,8 +141,12 @@ def generate_buckets_diff(
             key for key in destination_keys if key not in indexed_keys
         )
 
+        yesterday = date.today() - timedelta(days=1)
+
         orphaned_odc_scenes = set(
-            key for key in indexed_keys if key not in destination_keys
+            key
+            for key in indexed_keys
+            if (key not in destination_keys and yesterday > all_odc_values[key].date())
         )
     s2_s3 = s3_client(region_name=SENTINEL_2_REGION)
 
