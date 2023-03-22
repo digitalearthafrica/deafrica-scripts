@@ -380,5 +380,8 @@ xarray==2022.11.0
 zict==2.2.0
     # via distributed
 
+--extra-index-url https://packages.dea.ga.gov.au/
+odc-apps-dc-tools==0.2.5.dev3356
+
 # The following packages are considered to be unsafe in a requirements file:
 # setuptools
