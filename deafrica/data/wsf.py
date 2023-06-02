@@ -21,10 +21,12 @@ MIN_X = -26
 MAX_Y = 38
 MIN_Y = -54
 
+
 def make_directory(directory: Path, log: Logger):
     if not directory.exists():
         log.info(f"Creating directory {directory}")
         directory.mkdir(parents=True)
+
 
 def delete_directory(directory: Path, log: Logger):
     log.info("Deleting directory...")
@@ -32,30 +34,35 @@ def delete_directory(directory: Path, log: Logger):
         log.info(f"Deleting directory {directory}")
         shutil.rmtree(directory)
 
+
 def download_file(url, file_name, log: Logger):
     log.info("Downloading file...")
     with requests.get(url, stream=True, allow_redirects=True) as r:
         with open(file_name, "wb") as f:
             shutil.copyfileobj(r.raw, f)
-                   
-def is_tile_over_africa(workdir, main_folder_name, folder_name, africa_polygon, log:Logger):
+
+
+def is_tile_over_africa(
+    workdir, main_folder_name, folder_name, africa_polygon, log: Logger
+):
     filename = f"{folder_name}_stac.json"
-    
-    location = (f"https://download.geoservice.dlr.de/{main_folder_name}/files/{folder_name}/{filename}")
+
+    location = f"https://download.geoservice.dlr.de/{main_folder_name}/files/{folder_name}/{filename}"
     json_file = workdir / filename
     try:
         download_file(location, json_file, log)
         with open(json_file) as f:
             data = json.load(f)
-            polygon = data["geometry"]['coordinates'][0]
+            polygon = data["geometry"]["coordinates"][0]
             poly = Polygon(polygon)
             return poly.intersects(africa_polygon)
     except Exception:
         return False
-    
+
+
 def download_tif(workdir, main_folder_name, folder_name, log: Logger):
     filename = f"{folder_name}.tif"
-    location = (f"https://download.geoservice.dlr.de/{main_folder_name}/files/{folder_name}/{filename}")
+    location = f"https://download.geoservice.dlr.de/{main_folder_name}/files/{folder_name}/{filename}"
     tif_file = workdir / filename
 
     try:
@@ -68,22 +75,25 @@ def download_tif(workdir, main_folder_name, folder_name, log: Logger):
     except Exception:
         log.info("File failed to download... skipping")
         exit(0)
-    
+
+
 def get_version(edition):
-    if edition == '2015':
-        return 'v2'
-    elif edition == '2019':
-        return 'v1'
-    elif edition == 'evolution':
-        return 'v1'
-    
+    if edition == "2015":
+        return "v2"
+    elif edition == "2019":
+        return "v1"
+    elif edition == "evolution":
+        return "v1"
+
+
 def get_source_main_folder_name(edition):
-    if edition == '2015':
-        return f'WSF{edition}'
-    elif edition == '2019':
-        return f'WSF{edition}'
-    elif edition == 'evolution':
-        return 'WSF_EVO'
+    if edition == "2015":
+        return f"WSF{edition}"
+    elif edition == "2019":
+        return f"WSF{edition}"
+    elif edition == "evolution":
+        return "WSF_EVO"
+
 
 def upload_to_s3(s3_destination, file, log: Logger):
     out_name = os.path.basename(file)
@@ -96,8 +106,11 @@ def upload_to_s3(s3_destination, file, log: Logger):
         ACL="bucket-owner-full-control",
         ContentType=content_type,
     )
-    
-def write_stac(s3_destination: str, folder_name: str, edition: str, tile:str, log: Logger) -> str:
+
+
+def write_stac(
+    s3_destination: str, folder_name: str, edition: str, tile: str, log: Logger
+) -> str:
     stac_href = f"s3://{s3_destination}/{folder_name}.stac-item.json"
     filepath = f"s3://{s3_destination}/{folder_name}.tif"
     log.info(f"Creating STAC file: {stac_href}")
@@ -105,16 +118,15 @@ def write_stac(s3_destination: str, folder_name: str, edition: str, tile:str, lo
     path = f"{folder_name}.tif"
     log.info(path)
     shortname = "World Settlement Footlog.info"
-    
+
     if edition == "evolution":
         product_name = f"wsf_{edition}"
-        start_date = '1985-01-01T00:00:00.000Z'
-        end_date = '2015-12-31T23:59:59.999Z'
+        start_date = "1985-01-01T00:00:00.000Z"
+        end_date = "2015-12-31T23:59:59.999Z"
     else:
         product_name = f"wsf_{edition}"
         start_date = f"{edition}-01-01T00:00:00Z"
         end_date = f"{edition}-12-31T23:59:59Z"
-
     properties = {
         "odc:product": product_name,
         "odc:region_code": tile,
@@ -124,7 +136,9 @@ def write_stac(s3_destination: str, folder_name: str, edition: str, tile:str, lo
 
     assets = {}
     href = f"s3://{s3_destination}/{path}"
-    assets[product_name] = pystac.Asset(href=href, media_type=pystac.MediaType.COG, roles=["data"])
+    assets[product_name] = pystac.Asset(
+        href=href, media_type=pystac.MediaType.COG, roles=["data"]
+    )
 
     item = create_stac_item(
         filepath,
@@ -143,19 +157,27 @@ def write_stac(s3_destination: str, folder_name: str, edition: str, tile:str, lo
     )
     log.info(item)
     log.info(f"STAC written to {item.self_href}")
-    
 
-def processTile(edition, tile, base_dir, s3_destination, update_metadata:bool, africa_polygon, log: Logger):
+
+def processTile(
+    edition,
+    tile,
+    base_dir,
+    s3_destination,
+    update_metadata: bool,
+    africa_polygon,
+    log: Logger,
+):
     workdir = base_dir / tile / "wrk"
-    
+
     version = get_version(edition)
     main_folder_name = get_source_main_folder_name(edition)
     folder_name = f"WSF{edition}_{version}_{tile}"
-    
+
     s3_destination = f"{s3_destination}/{tile}"
-    
+
     stac_href = f"s3://{s3_destination}/{folder_name}.stac-item.json"
-    
+
     if s3_head_object(stac_href) is not None and not update_metadata:
         log.info(f"{stac_href} already exists, skipping")
         return
@@ -169,11 +191,12 @@ def processTile(edition, tile, base_dir, s3_destination, update_metadata:bool, a
             return
         else:
             log.info(f"{file_href} does not exist, continuing with data creation.")
-
     try:
         log.info(f"Starting up process for tile {tile}")
         make_directory(workdir, log)
-        if is_tile_over_africa(workdir, main_folder_name, folder_name, africa_polygon, log):
+        if is_tile_over_africa(
+            workdir, main_folder_name, folder_name, africa_polygon, log
+        ):
             tif_file = download_tif(workdir, main_folder_name, folder_name, log)
             if tif_file:
                 upload_to_s3(s3_destination, tif_file, log)
@@ -183,6 +206,7 @@ def processTile(edition, tile, base_dir, s3_destination, update_metadata:bool, a
         log.info(f"Job failed for tile {tile}")
         exit(1)
 
+
 def run(
     edition: str,
     base_dir: Path,
@@ -191,13 +215,22 @@ def run(
     log: Logger,
 ):
     json = requests.get(AFRICA_EXTENT).json()
-    africa_polygon = Polygon(json['features'][0]['geometry']['coordinates'][0])
-    
+    africa_polygon = Polygon(json["features"][0]["geometry"]["coordinates"][0])
+
     for x in range(MIN_X, MAX_X, 2):
         for y in range(MIN_Y, MAX_Y, 2):
             tile = f"{x}_{y}"
-            processTile(edition, tile, base_dir, s3_destination, update_metadata, africa_polygon, log)
-            
+            processTile(
+                edition,
+                tile,
+                base_dir,
+                s3_destination,
+                update_metadata,
+                africa_polygon,
+                log,
+            )
+
+
 @click.command("download-wsf")
 @click.option(
     "--edition",
