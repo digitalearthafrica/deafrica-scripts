@@ -68,7 +68,7 @@ def download_tif(workdir, main_folder_name, folder_name, log: Logger):
     try:
         if not tif_file.exists():
             log.info(f"Downloading file: {location}")
-            download_file(location, tif_file)
+            download_file(location, tif_file, log)
         else:
             log.info("Skipping download, file already exists")
         return tif_file
@@ -115,8 +115,6 @@ def write_stac(
     filepath = f"s3://{s3_destination}/{folder_name}.tif"
     log.info(f"Creating STAC file: {stac_href}")
 
-    path = f"{folder_name}.tif"
-    log.info(path)
     shortname = "World Settlement Footlog.info"
 
     if edition == "evolution":
@@ -135,9 +133,8 @@ def write_stac(
     }
 
     assets = {}
-    href = f"s3://{s3_destination}/{path}"
     assets[product_name] = pystac.Asset(
-        href=href, media_type=pystac.MediaType.COG, roles=["data"]
+        href=filepath, media_type=pystac.MediaType.COG, roles=["data"]
     )
 
     item = create_stac_item(
@@ -177,6 +174,7 @@ def processTile(
     s3_destination = f"{s3_destination}/{tile}"
 
     stac_href = f"s3://{s3_destination}/{folder_name}.stac-item.json"
+    log.info(f"checking if json exists in bucket: {stac_href}")
 
     if s3_head_object(stac_href) is not None and not update_metadata:
         log.info(f"{stac_href} already exists, skipping")
@@ -197,6 +195,7 @@ def processTile(
         if is_tile_over_africa(
             workdir, main_folder_name, folder_name, africa_polygon, log
         ):
+            log.info(f"Tile {tile} exists")
             tif_file = download_tif(workdir, main_folder_name, folder_name, log)
             if tif_file:
                 upload_to_s3(s3_destination, tif_file, log)
