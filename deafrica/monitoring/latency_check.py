@@ -8,10 +8,11 @@ from textwrap import dedent
 from typing import Optional
 
 import datacube
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import click
 import os
+import boto3
 
 from deafrica import __version__
 from deafrica.utils import (
@@ -23,6 +24,7 @@ from deafrica.utils import (
 
 def latency_check_slack(
     sensor: str,
+    exceeded: str,
     notification_url: str = None,
 ) -> None:
     """
@@ -34,13 +36,42 @@ def latency_check_slack(
     log = setup_logging()
 
     log.info(f"Satellite: {sensor}")
+    log.info(f"Exceeded: {exceeded}")
     log.info(f"Notification URL: {notification_url}")
 
     message = dedent(f"Data Latency Checker - Latency Exceed on {sensor}!\n")
+    message += f"Exceeded: {exceeded}\n"
+
 
     log.info(message)
     if notification_url is not None:
         send_slack_notification(notification_url, "Data Latency Checker", message)
+
+def s3_latency(bucket_name: str, prefix: str) -> Optional[int]:
+    """
+    Function to check the latency of the latest object in an S3 bucket
+    :param bucket_name: (str) Name of the S3 bucket
+    :param prefix: (str) Prefix of the objects in the bucket
+    :return: (Optional[int]) The S3 latency in days, or None if no objects found
+    """
+    s3 = boto3.client("s3")
+
+    current_time = datetime.now(timezone.utc)
+    latency_threshold = timedelta(days=3)
+
+    response = s3.list_objects_v2(Bucket="deafrica-landsat", Prefix="collection02/level-2/standard/etm/2023")
+    objects = response.get("Contents", [])
+
+    if objects:
+        latest_object = max(objects, key=lambda obj: obj["LastModified"])
+        last_modified = latest_object["LastModified"]
+
+        elapsed_time = current_time - last_modified
+
+        if elapsed_time < latency_threshold:
+            return elapsed_time
+
+    return None
 
 
 def latency_checker(
@@ -78,19 +109,32 @@ def latency_checker(
             ds = dc.find_datasets(product=satellite, **query)
             print("Datasets since ", date_n_days_ago, " : ", len(ds))
 
-            if len(ds) <= 0:
-                latency_check_slack(
-                    sensor=satellite, notification_url=notification_slack_url
-                )
-            else:
-                print("Latency on ", satellite, " valid.")
-            return 0
+
+        if len(ds) <= 0 and s3_latency is not None and s3_latency > latency:
+            # Latency exceeded in both Data Cube and S3 bucket
+            latency_check_slack(
+                sensor=satellite,
+                exceeded="Latency exceeded in Data Cube and S3 bucket",
+                notification_url=notification_slack_url,
+            )
+        elif len(ds) <= 0:
+            # Latency exceeded in Data Cube
+            latency_check_slack(
+                sensor=satellite,
+                exceeded="Latency exceeded in Data Cube",
+                notification_url=notification_slack_url,
+            )
+        elif s3_latency is not None and s3_latency > latency:
+            # Latency exceeded in S3 bucket
+            latency_check_slack(
+                sensor=satellite,
+                exceeded="Latency exceeded in S3 bucket",
+                notification_url=notification_slack_url,
+            ) 
         else:
-            print("Invalid Product!")
-            return -1
-    else:
-        print("Invalid Latency!")
-        return -1
+            print("Latency on ", satellite, " valid.")
+
+    return 0
 
 
 @click.argument(
