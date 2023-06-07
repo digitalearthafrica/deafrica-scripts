@@ -42,10 +42,10 @@ def latency_check_slack(
     message = dedent(f"Data Latency Checker - Latency Exceed on {sensor}!\n")
     message += f"Exceeded: {exceeded}\n"
 
-
     log.info(message)
     if notification_url is not None:
         send_slack_notification(notification_url, "Data Latency Checker", message)
+
 
 def s3_latency(bucket_name: str, prefix: str) -> Optional[int]:
     """
@@ -59,7 +59,9 @@ def s3_latency(bucket_name: str, prefix: str) -> Optional[int]:
     current_time = datetime.now(timezone.utc)
     latency_threshold = timedelta(days=3)
 
-    response = s3.list_objects_v2(Bucket="deafrica-landsat", Prefix="collection02/level-2/standard/etm/2023")
+    response = s3.list_objects_v2(
+        Bucket="deafrica-landsat", Prefix="collection02/level-2/standard/etm/2023"
+    )
     objects = response.get("Contents", [])
 
     if objects:
@@ -109,7 +111,6 @@ def latency_checker(
             ds = dc.find_datasets(product=satellite, **query)
             print("Datasets since ", date_n_days_ago, " : ", len(ds))
 
-
         if len(ds) <= 0 and s3_latency is not None and s3_latency > latency:
             # Latency exceeded in both Data Cube and S3 bucket
             latency_check_slack(
@@ -130,7 +131,7 @@ def latency_checker(
                 sensor=satellite,
                 exceeded="Latency exceeded in S3 bucket",
                 notification_url=notification_slack_url,
-            ) 
+            )
         else:
             print("Latency on ", satellite, " valid.")
 
