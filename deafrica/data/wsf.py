@@ -109,13 +109,14 @@ def upload_to_s3(s3_destination, file, log: Logger):
 
 
 def write_stac(
-    s3_destination: str, folder_name: str, edition: str, tile: str, log: Logger
+    s3_destination: str, folder_name: str, edition: str, tile: str, log: Logger, path
 ) -> str:
     stac_href = f"s3://{s3_destination}/{folder_name}.stac-item.json"
     filepath = f"s3://{s3_destination}/{folder_name}.tif"
     log.info(f"Creating STAC file: {stac_href}")
-
-    shortname = "World Settlement Footlog.info"
+    if not path:
+        path = filepath
+    shortname = "wsf"
 
     if edition == "evolution":
         product_name = f"wsf_{edition}"
@@ -138,21 +139,20 @@ def write_stac(
     )
 
     item = create_stac_item(
-        filepath,
+        path,
         id=str(odc_uuid(shortname, "1", [], year=edition, tile=tile)),
         properties=properties,
         assets=assets,
         with_proj=True,
     )
     item.set_self_href(stac_href)
-
+    log.info("Storing stac item")
     s3_dump(
         json.dumps(item.to_dict(), indent=2),
         item.self_href,
         ContentType="application/json",
         ACL="bucket-owner-full-control",
     )
-    log.info(item)
     log.info(f"STAC written to {item.self_href}")
 
 
@@ -185,7 +185,7 @@ def processTile(
 
         if s3_head_object(file_href) is not None:
             log.info(f"{file_href} exists, updating metadata only")
-            write_stac(s3_destination, folder_name, edition, tile, log)
+            write_stac(s3_destination, folder_name, edition, tile, log, None)
             return
         else:
             log.info(f"{file_href} does not exist, continuing with data creation.")
@@ -199,7 +199,7 @@ def processTile(
             tif_file = download_tif(workdir, main_folder_name, folder_name, log)
             if tif_file:
                 upload_to_s3(s3_destination, tif_file, log)
-                write_stac(s3_destination, folder_name, edition, tile, log)
+                write_stac(s3_destination, folder_name, edition, tile, log, tif_file)
         delete_directory(base_dir / tile, log)
     except Exception:
         log.info(f"Job failed for tile {tile}")
