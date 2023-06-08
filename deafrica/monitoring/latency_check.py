@@ -134,8 +134,10 @@ def latency_checker(
             )
         else:
             print("Latency on ", satellite, " valid.")
-
-    return 0
+            return 0
+    else:
+        print("Invalid Latency/Product!")
+        return -1
 
 
 @click.argument(
