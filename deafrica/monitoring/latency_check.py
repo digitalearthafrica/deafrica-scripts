@@ -111,7 +111,10 @@ def latency_checker(
             ds = dc.find_datasets(product=satellite, **query)
             print("Datasets since ", date_n_days_ago, " : ", len(ds))
 
-            s3_latency =s3_latency_check(Bucket="deafrica-landsat", Prefix="collection02/level-2/standard/etm/2023")
+            s3_latency = s3_latency_check(
+                Bucket="deafrica-landsat",
+                Prefix="collection02/level-2/standard/etm/2023",
+            )
 
         if len(ds) <= 0 and s3_latency is not None and s3_latency > latency:
             # Latency exceeded in both Data Cube and S3 bucket
@@ -177,7 +180,6 @@ def cli(
         satellite=satellite,
         latency=latency,
         notification_slack_url=slack_url,
-        Bucket= Bucket,
+        Bucket=Bucket,
         Prefix=Prefix,
-        
     )
