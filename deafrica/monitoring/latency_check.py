@@ -47,7 +47,7 @@ def latency_check_slack(
         send_slack_notification(notification_url, "Data Latency Checker", message)
 
 
-def s3_latency(bucket_name: str, prefix: str) -> Optional[int]:
+def s3_latency_check(bucket_name: str, prefix: str) -> Optional[int]:
     """
     Function to check the latency of the latest object in an S3 bucket
     :param bucket_name: (str) Name of the S3 bucket
@@ -110,6 +110,8 @@ def latency_checker(
         if satellite in pl.name:
             ds = dc.find_datasets(product=satellite, **query)
             print("Datasets since ", date_n_days_ago, " : ", len(ds))
+
+            s3_latency =s3_latency_check(Bucket="deafrica-landsat", Prefix="collection02/level-2/standard/etm/2023")
 
         if len(ds) <= 0 and s3_latency is not None and s3_latency > latency:
             # Latency exceeded in both Data Cube and S3 bucket
@@ -175,4 +177,7 @@ def cli(
         satellite=satellite,
         latency=latency,
         notification_slack_url=slack_url,
+        Bucket= Bucket,
+        Prefix=Prefix,
+        
     )
