@@ -77,7 +77,11 @@ def s3_latency_check(Bucket: str, Prefix: str) -> Optional[int]:
 
 
 def latency_checker(
-    satellite: str, latency: int = 3, notification_slack_url: str = None , Bucket: str = "deafrica-landsat", Prefix: str = "collection02/level-2/standard/etm/2023"
+    satellite: str,
+    latency: int = 3,
+    notification_slack_url: str = None,
+    Bucket: str = "deafrica-landsat",
+    Prefix: str = "collection02/level-2/standard/etm/2023",
 ) -> int:
     """
     Function to detect and send a slack message to the given URL reporting higher than specified latency on the given sensor
