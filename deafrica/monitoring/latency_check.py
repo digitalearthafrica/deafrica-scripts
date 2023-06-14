@@ -112,8 +112,8 @@ def latency_checker(
             print("Datasets since ", date_n_days_ago, " : ", len(ds))
 
             s3_latency = s3_latency_check(
-                Bucket="deafrica-landsat",
-                Prefix="collection02/level-2/standard/etm/2023",
+                Bucket="Bucket",
+                Prefix="Prefix",
             )
 
         if len(ds) <= 0 and s3_latency is not None and s3_latency > latency:
@@ -158,6 +158,20 @@ def latency_checker(
     nargs=1,
     required=True,
     default=3,
+)
+@click.argument(
+    "Bucket",
+    type=str,
+    nargs=1,
+    required=True,
+    default="Bucket",
+)
+@click.argument(
+    "Prefix",
+    type=str,
+    nargs=1,
+    required=True,
+    default="Prefix",
 )
 @slack_url
 @click.option("--version", is_flag=True, default=False)
