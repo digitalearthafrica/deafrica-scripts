@@ -163,20 +163,6 @@ def latency_checker(
     required=True,
     default=3,
 )
-@click.argument(
-    "Bucket",
-    type=str,
-    nargs=1,
-    required=True,
-    default="Bucket",
-)
-@click.argument(
-    "Prefix",
-    type=str,
-    nargs=1,
-    required=True,
-    default="Prefix",
-)
 @slack_url
 @click.option("--version", is_flag=True, default=False)
 @click.command("latency-check")
