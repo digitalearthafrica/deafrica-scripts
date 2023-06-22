@@ -47,7 +47,7 @@ def latency_check_slack(
         send_slack_notification(notification_url, "Data Latency Checker", message)
 
 
-def s3_latency(bucket_name: str, prefix: str) -> Optional[int]:
+def s3_latency_check(Bucket: str, Prefix: str) -> Optional[int]:
     """
     Function to check the latency of the latest object in an S3 bucket
     :param bucket_name: (str) Name of the S3 bucket
@@ -77,7 +77,11 @@ def s3_latency(bucket_name: str, prefix: str) -> Optional[int]:
 
 
 def latency_checker(
-    satellite: str, latency: int = 3, notification_slack_url: str = None
+    satellite: str,
+    latency: int = 3,
+    notification_slack_url: str = None,
+    Bucket: str = "deafrica-landsat",
+    Prefix: str = "collection02/level-2/standard/etm/2023",
 ) -> int:
     """
     Function to detect and send a slack message to the given URL reporting higher than specified latency on the given sensor
@@ -110,6 +114,8 @@ def latency_checker(
         if satellite in pl.name:
             ds = dc.find_datasets(product=satellite, **query)
             print("Datasets since ", date_n_days_ago, " : ", len(ds))
+
+            s3_latency = s3_latency_check(Bucket, Prefix)
 
         if len(ds) <= 0 and s3_latency is not None and s3_latency > latency:
             # Latency exceeded in both Data Cube and S3 bucket
@@ -154,6 +160,20 @@ def latency_checker(
     required=True,
     default=3,
 )
+@click.argument(
+    "Bucket",
+    type=str,
+    nargs=1,
+    required=True,
+    default="bucket name",
+)
+@click.argument(
+    "Prefix",
+    type=str,
+    nargs=1,
+    required=True,
+    default="prefix",
+)
 @slack_url
 @click.option("--version", is_flag=True, default=False)
 @click.command("latency-check")
@@ -162,6 +182,8 @@ def cli(
     latency: int = 3,
     slack_url: str = None,
     version: bool = False,
+    Bucket: str = "deafrica-landsat",
+    Prefix: str = "collection02/level-2/standard/etm/2023",
 ):
     """
     Post a high latency warning message on Slack given a latency on a product or satellite
@@ -170,5 +192,9 @@ def cli(
     if version:
         click.echo(__version__)
     res = latency_checker(
-        satellite=satellite, latency=latency, notification_slack_url=slack_url
+        satellite=satellite,
+        latency=latency,
+        notification_slack_url=slack_url,
+        Bucket=Bucket,
+        Prefix=Prefix,
     )
