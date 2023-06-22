@@ -42,9 +42,7 @@ def download_file(url, file_name, log: Logger):
             shutil.copyfileobj(r.raw, f)
 
 
-def is_tile_over_africa(
-    workdir, source_url, folder_name, africa_polygon, log: Logger
-):
+def is_tile_over_africa(workdir, source_url, folder_name, africa_polygon, log: Logger):
     filename = f"{folder_name}_stac.json"
 
     location = f"{source_url}{filename}"
@@ -94,12 +92,12 @@ def get_source_main_folder_name(edition):
     elif edition == "evolution":
         return "WSF_EVO"
 
+
 def get_source_url(edition, main_folder_name, folder_name):
     if edition == "2019":
         return f"https://download.geoservice.dlr.de/{main_folder_name}/files/"
     else:
         return f"https://download.geoservice.dlr.de/{main_folder_name}/files/{folder_name}/"
-
 
 
 def upload_to_s3(s3_destination, file, log: Logger):
@@ -200,9 +198,7 @@ def processTile(
     try:
         log.info(f"Starting up process for tile {tile}")
         make_directory(workdir, log)
-        if is_tile_over_africa(
-            workdir, source_url, folder_name, africa_polygon, log
-        ):
+        if is_tile_over_africa(workdir, source_url, folder_name, africa_polygon, log):
             log.info(f"Tile {tile} exists")
             tif_file = download_tif(workdir, source_url, folder_name, log)
             if tif_file:
