@@ -115,7 +115,7 @@ def latency_checker(
             ds = dc.find_datasets(product=satellite, **query)
             print("Datasets since ", date_n_days_ago, " : ", len(ds))
 
-            s3_latency = s3_latency_check(Bucket,Prefix)
+            s3_latency = s3_latency_check(Bucket, Prefix)
 
         if len(ds) <= 0 and s3_latency is not None and s3_latency > latency:
             # Latency exceeded in both Data Cube and S3 bucket
