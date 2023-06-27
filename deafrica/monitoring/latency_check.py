@@ -47,7 +47,7 @@ def latency_check_slack(
         send_slack_notification(notification_url, "Data Latency Checker", message)
 
 
-def s3_latency_check(Bucket: str, Prefix: str) -> Optional[int]:
+def s3_latency_check(bucket: str, prefix: str) -> Optional[int]:
     """
     Function to check the latency of the latest object in an S3 bucket
     :param bucket_name: (str) Name of the S3 bucket
@@ -60,7 +60,7 @@ def s3_latency_check(Bucket: str, Prefix: str) -> Optional[int]:
     latency_threshold = timedelta(days=3)
 
     response = s3.list_objects_v2(
-        Bucket="deafrica-landsat", Prefix="collection02/level-2/standard/etm/2023"
+        bucket="deafrica-landsat", prefix="collection02/level-2/standard/etm/2023"
     )
     objects = response.get("Contents", [])
 
@@ -80,8 +80,8 @@ def latency_checker(
     satellite: str,
     latency: int = 3,
     notification_slack_url: str = None,
-    Bucket: str = "deafrica-landsat",
-    Prefix: str = "collection02/level-2/standard/etm/2023",
+    bucket: str = "deafrica-landsat",
+    prefix: str = "collection02/level-2/standard/etm/2023",
 ) -> int:
     """
     Function to detect and send a slack message to the given URL reporting higher than specified latency on the given sensor
@@ -115,7 +115,7 @@ def latency_checker(
             ds = dc.find_datasets(product=satellite, **query)
             print("Datasets since ", date_n_days_ago, " : ", len(ds))
 
-            s3_latency = s3_latency_check(Bucket, Prefix)
+            s3_latency = s3_latency_check(bucket, prefix)
 
         if len(ds) <= 0 and s3_latency is not None and s3_latency > latency:
             # Latency exceeded in both Data Cube and S3 bucket
@@ -161,14 +161,14 @@ def latency_checker(
     default=3,
 )
 @click.argument(
-    "Bucket",
+    "bucket",
     type=str,
     nargs=1,
     required=True,
-    default="bucket name",
+    default="bucket",
 )
 @click.argument(
-    "Prefix",
+    "prefix",
     type=str,
     nargs=1,
     required=True,
@@ -182,8 +182,8 @@ def cli(
     latency: int = 3,
     slack_url: str = None,
     version: bool = False,
-    Bucket: str = "deafrica-landsat",
-    Prefix: str = "collection02/level-2/standard/etm/2023",
+    bucket: str = "deafrica-landsat",
+    prefix: str = "collection02/level-2/standard/etm/2023",
 ):
     """
     Post a high latency warning message on Slack given a latency on a product or satellite
@@ -195,6 +195,6 @@ def cli(
         satellite=satellite,
         latency=latency,
         notification_slack_url=slack_url,
-        Bucket=Bucket,
-        Prefix=Prefix,
+        bucket=bucket,
+        prefix=prefix,
     )
