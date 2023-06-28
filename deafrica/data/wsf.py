@@ -119,16 +119,15 @@ def write_stac(
     stac_href = f"s3://{s3_destination}/{folder_name}.stac-item.json"
     filepath = f"s3://{s3_destination}/{folder_name}.tif"
     log.info(f"Creating STAC file: {stac_href}")
-    if not path:
-        path = filepath
+
     shortname = "wsf"
+    product_name = f"wsf_{edition}"
+    asset_name = f"wsf{edition}"
 
     if edition == "evolution":
-        product_name = f"wsf{edition}"
         start_date = "1985-01-01T00:00:00.000Z"
         end_date = "2015-12-31T23:59:59.999Z"
     else:
-        product_name = f"wsf{edition}"
         start_date = f"{edition}-01-01T00:00:00Z"
         end_date = f"{edition}-12-31T23:59:59Z"
     properties = {
@@ -139,7 +138,7 @@ def write_stac(
     }
 
     assets = {}
-    assets[product_name] = pystac.Asset(
+    assets[asset_name] = pystac.Asset(
         href=filepath, media_type=pystac.MediaType.COG, roles=["data"]
     )
 
@@ -191,7 +190,12 @@ def processTile(
 
         if s3_head_object(file_href) is not None:
             log.info(f"{file_href} exists, updating metadata only")
-            write_stac(s3_destination, folder_name, edition, tile, log, None)
+            splited_s3 = s3_destination.split("/")
+            s3_main_folder = splited_s3[0]
+            s3_product_folder = splited_s3[1]
+
+            path = f"https://{s3_main_folder}.s3.af-south-1.amazonaws.com/{s3_product_folder}/{tile}/{folder_name}.tif"
+            write_stac(s3_destination, folder_name, edition, tile, log, path)
             return
         else:
             log.info(f"{file_href} does not exist, continuing with data creation.")
