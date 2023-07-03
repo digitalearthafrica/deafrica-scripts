@@ -91,13 +91,13 @@ def latency_checker(
     :return:(None)
     """
 
-    if latency > 0:
-        today = date.today()
-        date_n_days_ago = today - timedelta(days=latency)
+    today = date.today()
+    date_n_days_ago = today - timedelta(days=latency)
 
-        dc = datacube.Datacube()
-        pl = dc.list_products()
+    dc = datacube.Datacube()
+    pl = dc.list_products()
 
+    if satellite in pl.name:
         central_lat = 0
         central_lon = 0
         buffer = 90
@@ -111,11 +111,10 @@ def latency_checker(
             "group_by": "solar_day",
         }
 
-        if satellite in pl.name:
-            ds = dc.find_datasets(product=satellite, **query)
-            print("Datasets since ", date_n_days_ago, " : ", len(ds))
+        ds = dc.find_datasets(product=satellite, **query)
+        print("Datasets since ", date_n_days_ago, " : ", len(ds))
 
-            s3_latency = s3_latency_check(bucket, prefix)
+        s3_latency = s3_latency_check(bucket, prefix)
 
         if len(ds) <= 0 and s3_latency is not None and s3_latency > latency:
             # Latency exceeded in both Data Cube and S3 bucket
