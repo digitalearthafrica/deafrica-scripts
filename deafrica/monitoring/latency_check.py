@@ -96,6 +96,9 @@ def latency_checker(
 
     dc = datacube.Datacube()
     pl = dc.list_products()
+    satellite
+    prefix
+    bucket
 
     if satellite in pl.name:
         central_lat = 0
