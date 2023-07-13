@@ -183,10 +183,10 @@ def latency_checker(
 def cli(
     satellite: str = None,
     latency: int = 3,
-    slack_url: str = None,
-    version: bool = False,
     bucket: str = "deafrica-landsat",
     prefix: str = "collection02/level-2/standard/etm/2023",
+    slack_url: str = None,
+    version: bool = False,
 ):
     """
     Post a high latency warning message on Slack given a latency on a product or satellite
@@ -197,7 +197,7 @@ def cli(
     res = latency_checker(
         satellite=satellite,
         latency=latency,
-        notification_slack_url=slack_url,
         bucket=bucket,
         prefix=prefix,
+        notification_slack_url=slack_url,
     )
