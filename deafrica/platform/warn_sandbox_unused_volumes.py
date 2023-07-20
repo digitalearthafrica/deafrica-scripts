@@ -2,6 +2,7 @@ import boto3
 import click as click
 from datetime import datetime
 from datetime import timedelta
+
 # from kubernetes import config, client
 import os
 
@@ -14,41 +15,38 @@ import os
 # SECRET_KEY = "qpiDzSbso/epMmmGMrl28CfVCRvLhFfEV+iPD7U7"
 
 # PROD
-ACCESS_KEY="AKIAYHJMCO7PBQFK6XMY"
-SECRET_KEY="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"
+ACCESS_KEY = "AKIAYHJMCO7PBQFK6XMY"
+SECRET_KEY = "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"
+
 
 def get_all_users():
-        
     users = []
     next_page = None
-    kwargs = {
-        'UserPoolId': "us-west-2_v9nJrst3o"
-    }
+    kwargs = {"UserPoolId": "us-west-2_v9nJrst3o"}
 
     users_remain = True
     while users_remain:
         if next_page:
-            kwargs['PaginationToken'] = next_page
+            kwargs["PaginationToken"] = next_page
         response = cognito_client.list_users(**kwargs)
-        users.extend(response['Users'])
-        next_page = response.get('PaginationToken', None)
+        users.extend(response["Users"])
+        next_page = response.get("PaginationToken", None)
         users_remain = next_page is not None
-
     return users
 
-def WarnTests():
 
+def WarnTests():
     os.environ["AWS_ACCESS_KEY_ID"] = ACCESS_KEY
     os.environ["AWS_SECRET_ACCESS_KEY"] = SECRET_KEY
     os.environ["AWS_DEFAULT_REGION"] = "af-south-1"
 
-    #configure boto3 client
+    # configure boto3 client
     ec2_resource = boto3.resource("ec2")
-    ec2_client = boto3.client('ec2')
+    ec2_client = boto3.client("ec2")
     ct_client = boto3.client("cloudtrail")
-    ses_client = boto3.client('ses')
+    ses_client = boto3.client("ses")
 
-    cluster_name="deafrica-prod-af-eks"
+    cluster_name = "deafrica-prod-af-eks"
     k8s_namespace = "sandbox"
     daysback = 90
 
@@ -88,56 +86,48 @@ def WarnTests():
             for event in response["Events"]
             if event.get("EventName") == "AttachVolume"
         ]
-        
-        if len(attach_events)>0:
+
+        if len(attach_events) > 0:
             tz_info = attach_events[0]["EventTime"].tzinfo
-            last_logged_in.append(datetime.now(tz_info)-attach_events[0]["EventTime"])
+            last_logged_in.append(datetime.now(tz_info) - attach_events[0]["EventTime"])
         else:
             last_logged_in.append(timedelta(days=100))
-        
         if len(attach_events) == 0 and volume.state == "available":
             volume_ids_warn.append(volume.id)
-            
     print(volume_ids_warn)
 
-    print('30 to 60 days unused:')
+    print("30 to 60 days unused:")
     for i in last_logged_in:
-        if (i>timedelta(days=30)) and (i<timedelta(days=60)):
-            print(i, ' Time Left: ',timedelta(days=90)-i)
-
-    print('60 to 90 days unused:')
+        if (i > timedelta(days=30)) and (i < timedelta(days=60)):
+            print(i, " Time Left: ", timedelta(days=90) - i)
+    print("60 to 90 days unused:")
     for i in last_logged_in:
-        if (i>timedelta(days=60)) and (i<timedelta(days=90)):
-            print(i, ' Time Left: ',timedelta(days=90)-i)
-
-    volume_desc=ec2_client.describe_volumes(VolumeIds=volume_ids_warn)
+        if (i > timedelta(days=60)) and (i < timedelta(days=90)):
+            print(i, " Time Left: ", timedelta(days=90) - i)
+    volume_desc = ec2_client.describe_volumes(VolumeIds=volume_ids_warn)
     # print(volume_desc)
 
     claims_warn = []
 
     for volume in volume_desc["Volumes"]:
         for tag in volume["Tags"]:
-            if tag["Key"]=="kubernetes.io/created-for/pvc/name":
+            if tag["Key"] == "kubernetes.io/created-for/pvc/name":
                 claims_warn.append(tag["Value"][6:])
-                
     print(claims_warn)
-            
+
     os.environ["AWS_DEFAULT_REGION"] = "us-west-2"
     cognito_client = boto3.client("cognito-idp")
 
-    
-            
-    all_users=get_all_users()
+    all_users = get_all_users()
     print(all_users[0])
     print(len(all_users))
 
     claims_warn_mod = []
 
     for claim in claims_warn:
-        claim1=claim.replace("-40","@")
-        claim2=claim1.replace("-2e",".")
+        claim1 = claim.replace("-40", "@")
+        claim2 = claim1.replace("-2e", ".")
         claims_warn_mod.append(claim2)
-        
     print(claims_warn_mod)
 
     users_warn = []
@@ -146,18 +136,16 @@ def WarnTests():
     for user in all_users:
         email_address = "NULL"
         for attribute in user["Attributes"]:
-            if attribute["Name"]=="email":
-                email_address=attribute["Value"]
+            if attribute["Name"] == "email":
+                email_address = attribute["Value"]
         if email_address in claims_warn_mod:
             for attribute in user["Attributes"]:
-                if attribute["Name"]=="name":
+                if attribute["Name"] == "name":
                     users_warn.append(attribute["Value"])
                     email_warn.append(email_address)
-                    
     print(users_warn)
     print(email_warn)
-                    
-        
+
     # for instance in ec2_resource.instances.all():
     #      print(
     #          "Id: {0}\nPlatform: {1}\nType: {2}\nPublic IPv4: {3}\nAMI: {4}\nState: {5}\n".format(
@@ -176,7 +164,6 @@ def WarnTests():
     #     ]
     # )
     # print(verification_response)
-
 
     # response = ses_client.send_email(
     #     Destination={
@@ -210,6 +197,7 @@ def WarnTests():
     # )
 
     # print(response)
+
 
 @click.command("warn-unused-volumes")
 def cli():
