@@ -7,7 +7,6 @@ from datetime import timedelta
 import os
 
 
-
 def get_all_users():
     users = []
     next_page = None
