@@ -6,17 +6,6 @@ from datetime import timedelta
 # from kubernetes import config, client
 import os
 
-# PDS
-# ACCESS_KEY="AKIAX5HBFNR6TAMMGBUR"
-# SECRET_KEY="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"
-
-# DEV
-# ACCESS_KEY = "AKIA2OGNIYV6SUU35AGA"
-# SECRET_KEY = "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"
-
-# PROD
-ACCESS_KEY = "AKIAYHJMCO7PBQFK6XMY"
-SECRET_KEY = "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"
 
 
 def get_all_users():
@@ -36,9 +25,6 @@ def get_all_users():
 
 
 def WarnTests():
-    os.environ["AWS_ACCESS_KEY_ID"] = ACCESS_KEY
-    os.environ["AWS_SECRET_ACCESS_KEY"] = SECRET_KEY
-    os.environ["AWS_DEFAULT_REGION"] = "af-south-1"
 
     # configure boto3 client
     ec2_resource = boto3.resource("ec2")
