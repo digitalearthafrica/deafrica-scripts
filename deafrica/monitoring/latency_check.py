@@ -150,18 +150,11 @@ def latency_checker(
 
 
 @click.argument(
-    "satellite",
+    "prefix",
     type=str,
     nargs=1,
     required=True,
-    default="satellite or product name",
-)
-@click.argument(
-    "latency",
-    type=int,
-    nargs=1,
-    required=True,
-    default=3,
+    default="prefix",
 )
 @click.argument(
     "bucket",
@@ -171,20 +164,27 @@ def latency_checker(
     default="bucket",
 )
 @click.argument(
-    "prefix",
+    "latency",
+    type=int,
+    nargs=1,
+    required=True,
+    default=3,
+)
+@click.argument(
+    "satellite",
     type=str,
     nargs=1,
     required=True,
-    default="prefix",
+    default="satellite or product name",
 )
 @slack_url
 @click.option("--version", is_flag=True, default=False)
 @click.command("latency-check")
 def cli(
-    satellite: str = None,
-    latency: int = 3,
-    bucket: str = "deafrica-landsat",
     prefix: str = "collection02/level-2/standard/etm/2023",
+    bucket: str = "deafrica-landsat",
+    latency: int = 3,
+    satellite: str = None,
     slack_url: str = None,
     version: bool = False,
 ):
@@ -195,9 +195,9 @@ def cli(
     if version:
         click.echo(__version__)
     res = latency_checker(
-        satellite=satellite,
-        latency=latency,
-        bucket=bucket,
         prefix=prefix,
+        bucket=bucket,
+        latency=latency,
+        satellite=satellite,
         notification_slack_url=slack_url,
     )
