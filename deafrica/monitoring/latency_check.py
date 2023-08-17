@@ -80,7 +80,7 @@ def latency_checker(
     latency: int = 3,
     notification_slack_url: str = None,
     bucket_name: str = "deafrica-landsat",
-    prefix: str = "collection02/level-2/standard/etm/2023",
+    prefix: str = "collection02/level-2/standard/oli-tirs/2023/",
 ) -> int:
     """
     Function to detect and send a slack message to the given URL reporting higher than specified latency on the given sensor
@@ -156,7 +156,7 @@ def latency_checker(
     type=str,
     nargs=1,
     required=True,
-    default="collection02/level-2/standard/etm/2023",
+    default="collection02/level-2/standard/oli-tirs/2023/",
 )
 @click.argument(
     "bucket-name",
