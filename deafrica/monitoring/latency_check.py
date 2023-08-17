@@ -76,7 +76,7 @@ def s3_latency_check(bucket_name: str, prefix: str) -> Optional[int]:
 
 
 def latency_checker(
-    satellite: str = 'ls9_sr',
+    satellite: str = "ls9_sr",
     latency: int = 3,
     notification_slack_url: str = None,
     bucket_name: str = "deafrica-landsat",
@@ -195,7 +195,7 @@ def cli(
     \b
     PREFIX is the prefix of the objects in the bucket.
     BUCKET_NAME is the name of the S3 bucket.
-    LATENCY is the maximum latency for the satellite or product in days. 
+    LATENCY is the maximum latency for the satellite or product in days.
     SATELLITE is the name of the satellite or product.
     """
 
@@ -206,4 +206,5 @@ def cli(
         latency=latency,
         notification_slack_url=slack_url,
         bucket_name=bucket_name,
-        prefix=prefix)
+        prefix=prefix,
+    )
