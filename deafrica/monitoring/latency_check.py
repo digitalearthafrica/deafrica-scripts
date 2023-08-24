@@ -13,6 +13,8 @@ from datetime import date, datetime, timedelta, timezone
 import click
 import os
 import boto3
+from botocore import UNSIGNED
+from botocore.config import Config
 
 from deafrica import __version__
 from deafrica.utils import (
@@ -55,7 +57,8 @@ def s3_latency_check(bucket_name: str, prefix: str) -> Optional[int]:
     :param prefix: (str) Prefix of the objects in the bucket
     :return: (Optional[int]) The S3 latency in days, or None if no objects found
     """
-    s3 = boto3.client("s3")
+    # Do not sign requests.
+    s3 = boto3.client('s3', config=Config(signature_version=UNSIGNED))
 
     current_time = datetime.now(timezone.utc)
     latency_threshold = timedelta(days=3)
