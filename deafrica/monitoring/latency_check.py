@@ -58,7 +58,7 @@ def s3_latency_check(bucket_name: str, prefix: str) -> Optional[int]:
     :return: (Optional[int]) The S3 latency in days, or None if no objects found
     """
     # Do not sign requests.
-    s3 = boto3.client('s3', config=Config(signature_version=UNSIGNED))
+    s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
 
     current_time = datetime.now(timezone.utc)
     latency_threshold = timedelta(days=3)
