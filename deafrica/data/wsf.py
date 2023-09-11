@@ -154,7 +154,6 @@ def write_stac(
         assets[name] = pystac.Asset(
             href=href, media_type=pystac.MediaType.COG, roles=["data"]
         )
-
     item = create_stac_item(
         path,
         id=str(odc_uuid(shortname, "1", [], year=edition, tile=tile)),
@@ -183,8 +182,8 @@ def processTile(
     log: Logger,
 ):
     workdir = base_dir / tile / "wrk"
-    tif_files=[]
-    folder_names=[]
+    tif_files = []
+    folder_names = []
 
     version = get_version(edition)
     main_folder_name = get_source_main_folder_name(edition)
@@ -221,9 +220,14 @@ def processTile(
         if is_tile_over_africa(workdir, source_url, folder_name, africa_polygon, log):
             log.info(f"Tile {tile} exists")
             download_tif(workdir, source_url, folder_name, tif_files)
-            if(edition == 'evolution'):
+            if edition == "evolution":
                 evo_folder_name = f"IDC_Score_{tile}"
-                download_tif(workdir, get_source_url(edition, main_folder_name, 'idcscore'), evo_folder_name, tif_files)
+                download_tif(
+                    workdir,
+                    get_source_url(edition, main_folder_name, "idcscore"),
+                    evo_folder_name,
+                    tif_files,
+                )
                 folder_names.append(evo_folder_name)
             if tif_files[0]:
                 upload_to_s3(s3_destination, tif_files)
