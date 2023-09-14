@@ -74,9 +74,10 @@ def delete_directories(directories: Tuple[Path, Path], log):
 def download_files(workdir, year, tile, log):
     if int(year) > 2010:
         filename = f"{tile}_{year[-2:]}_MOS_F02DAR.zip"
+    elif int(year) > 2000:
+        filename = f"{tile}_{year[-2:]}_MOS_F__DAR.zip"
     else:
         filename = f"{tile}_{year[-2:]}_MOS.tar.gz"
-
     log.info(f"Downloading file: {filename}")
     if int(year) > 2010:
         ftp_location = f"ftp://ftp.eorc.jaxa.jp/pub/ALOS-2/ext1/PALSAR-2_MSC/25m_MSC/{year}/{filename}"
@@ -99,8 +100,7 @@ def download_files(workdir, year, tile, log):
     except subprocess.CalledProcessError:
         log.warning("File failed to download... skipping")
         exit(0)
-
-    if int(year) > 2010:
+    if int(year) > 2000:
         log.info("Unzipping file")
         subprocess.check_call(["unzip", "-o", tar_file, "-d", workdir])
     else:
@@ -124,7 +124,7 @@ def combine_cog(PATH, OUTPATH, tile, year, log):
         all_files = []
         for path, _, files in os.walk(gtiff_abs_path):
             for fname in files:
-                if int(year) > 2010:
+                if int(year) > 2000:
                     if "_{}_".format(band) in fname and not fname.endswith(".hdr"):
                         in_filename = os.path.join(path, fname)
                         all_files.append(in_filename)
@@ -132,13 +132,16 @@ def combine_cog(PATH, OUTPATH, tile, year, log):
                     if "_{}".format(band) in fname and not fname.endswith(".hdr"):
                         in_filename = os.path.join(path, fname)
                         all_files.append(in_filename)
-
         # Create the VRT
         log.info("Building VRT for {} with {} files found".format(band, len(all_files)))
         vrt_path = os.path.join(gtiff_abs_path, "{}.vrt".format(band))
         if int(year) > 2010:
             cog_filename = os.path.join(
                 outtiff_abs_path, "{}_{}_sl_{}_F02DAR.tif".format(tile, year[-2:], band)
+            )
+        elif int(year) > 2000:
+            cog_filename = os.path.join(
+                outtiff_abs_path, "{}_{}_sl_{}_F__DAR.tif".format(tile, year[-2:], band)
             )
         else:
             cog_filename = os.path.join(
@@ -151,7 +154,6 @@ def combine_cog(PATH, OUTPATH, tile, year, log):
         resampling = "nearest"
         if band in ["HH", "HV", "linci"]:
             resampling = "average"
-
         cog_translate(
             vrt_path,
             cog_filename,
@@ -163,7 +165,6 @@ def combine_cog(PATH, OUTPATH, tile, year, log):
         )
 
         output_cogs.append(cog_filename)
-
     # Return the list of written files
     return output_cogs
 
@@ -206,18 +207,22 @@ def write_stac(
         datepath = f"{file_key}_sl_date_F02DAR.tif"
         launch_date = "2014-05-24"
         shortname = "alos"
+    elif int(year) > 2000:
+        hhpath = f"{file_key}_sl_HH_F__DAR.tif"
+        hvpath = f"{file_key}_sl_HV_F__DAR.tif"
+        lincipath = f"{file_key}_sl_linci_F__DAR.tif"
+        maskpath = f"{file_key}_sl_mask_F__DAR.tif"
+        datepath = f"{file_key}_sl_date_F__DAR.tif"
+        launch_date = "2006-01-24"
+        shortname = "alos"
     else:
         hhpath = f"{file_key}_sl_HH.tif"
         hvpath = f"{file_key}_sl_HV.tif"
         lincipath = f"{file_key}_sl_linci.tif"
         maskpath = f"{file_key}_sl_mask.tif"
         datepath = f"{file_key}_sl_date.tif"
-        if int(year) > 2000:
-            launch_date = "2006-01-24"
-            shortname = "alos"
-        else:
-            launch_date = "1992-02-11"
-            shortname = "jers"
+        launch_date = "1992-02-11"
+        shortname = "jers"
     if shortname == "alos":
         product_name = "alos_palsar_mosaic"
         platform = "ALOS/ALOS-2"
@@ -241,7 +246,6 @@ def write_stac(
             "mask": maskpath,
             "date": datepath,
         }
-
     properties = {
         "odc:product": product_name,
         "odc:region_code": region_code,
@@ -259,7 +263,6 @@ def write_stac(
         assets[name] = pystac.Asset(
             href=href, media_type=pystac.MediaType.COG, roles=["data"]
         )
-
     item = create_stac_item(
         file_path,
         id=str(odc_uuid(shortname, "1", [], year=year, tile=file_key.split("_")[0])),
@@ -321,6 +324,8 @@ def run_one(
     elif update_metadata:
         if int(year) > 2010:
             name = "{}_{}_sl_{}_F02DAR.tif".format(tile, year[-2:], "HH")
+        elif int(year) > 2000:
+            name = "{}_{}_sl_{}_F__DAR.tif".format(tile, year[-2:], "HH")
         else:
             name = "{}_{}_sl_{}.tif".format(tile, year[-2:], "HH")
         one_file = f"s3://{s3_destination}/{name}"
@@ -334,7 +339,6 @@ def run_one(
         else:
             # Nothing to see here, keep on walking!
             log.info(f"{one_file} does not exist, continuing with data creation.")
-
     try:
         log.info(f"Starting up process for tile {tile_string}")
         make_directories([workdir, outdir], log)
