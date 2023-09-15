@@ -58,7 +58,7 @@ def is_tile_over_africa(workdir, source_url, folder_name, africa_polygon, log: L
         return False
 
 
-def download_tif(workdir, source_url, folder_name, log: Logger):
+def download_tif(workdir, source_url, folder_name, tif_files, log: Logger):
     filename = f"{folder_name}.tif"
     location = f"{source_url}{filename}"
     tif_file = workdir / filename
@@ -69,6 +69,7 @@ def download_tif(workdir, source_url, folder_name, log: Logger):
             download_file(location, tif_file, log)
         else:
             log.info("Skipping download, file already exists")
+        tif_files.append(tif_file)
         return tif_file
     except Exception:
         log.info("File failed to download... skipping")
@@ -100,25 +101,28 @@ def get_source_url(edition, main_folder_name, folder_name):
         return f"https://download.geoservice.dlr.de/{main_folder_name}/files/{folder_name}/"
 
 
-def upload_to_s3(s3_destination, file, log: Logger):
-    out_name = os.path.basename(file)
-    dest = f"S3://{s3_destination}/{out_name}"
-    log.info(f"Uploading file to {dest}")
-    content_type = "image/tiff"
-    s3_dump(
-        data=open(file, "rb").read(),
-        url=dest,
-        ACL="bucket-owner-full-control",
-        ContentType=content_type,
-    )
+def upload_to_s3(s3_destination, files, log: Logger):
+    for file in files:
+        out_name = os.path.basename(file)
+        dest = f"S3://{s3_destination}/{out_name}"
+        log.info(f"Uploading file to {dest}")
+        content_type = "image/tiff"
+        s3_dump(
+            data=open(file, "rb").read(),
+            url=dest,
+            ACL="bucket-owner-full-control",
+            ContentType=content_type,
+        )
 
 
 def write_stac(
-    s3_destination: str, folder_name: str, edition: str, tile: str, log: Logger, path
+    s3_destination: str, folder_names: str, edition: str, tile: str, log: Logger, path
 ) -> str:
-    stac_href = f"s3://{s3_destination}/{folder_name}.stac-item.json"
-    filepath = f"s3://{s3_destination}/{folder_name}.tif"
-    log.info(f"Creating STAC file: {stac_href}")
+    stac_href = f"s3://{s3_destination}/{folder_names[0]}.stac-item.json"
+    filepaths = []
+    for folder_name in folder_names:
+        filepaths.append(f"s3://{s3_destination}/{folder_name}.tif")
+    print(f"Creating STAC file: {stac_href}")
 
     shortname = "wsf"
     product_name = f"wsf_{edition}"
@@ -127,9 +131,16 @@ def write_stac(
     if edition == "evolution":
         start_date = "1985-01-01T00:00:00.000Z"
         end_date = "2015-12-31T23:59:59.999Z"
+        bandpaths = {
+            "wsfevolution": filepaths[0],
+            "idc_score": filepaths[1],
+        }
     else:
         start_date = f"{edition}-01-01T00:00:00Z"
         end_date = f"{edition}-12-31T23:59:59Z"
+        bandpaths = {
+            {asset_name}: filepaths[0],
+        }
     properties = {
         "odc:product": product_name,
         "odc:region_code": tile,
@@ -138,10 +149,11 @@ def write_stac(
     }
 
     assets = {}
-    assets[asset_name] = pystac.Asset(
-        href=filepath, media_type=pystac.MediaType.COG, roles=["data"]
-    )
-
+    for name, path in bandpaths.items():
+        href = {path}
+        assets[name] = pystac.Asset(
+            href=href, media_type=pystac.MediaType.COG, roles=["data"]
+        )
     item = create_stac_item(
         path,
         id=str(odc_uuid(shortname, "1", [], year=edition, tile=tile)),
@@ -170,10 +182,13 @@ def processTile(
     log: Logger,
 ):
     workdir = base_dir / tile / "wrk"
+    tif_files = []
+    folder_names = []
 
     version = get_version(edition)
     main_folder_name = get_source_main_folder_name(edition)
     folder_name = f"WSF{edition}_{version}_{tile}"
+    folder_names.append(folder_name)
     source_url = get_source_url(edition, main_folder_name, folder_name)
 
     s3_destination = f"{s3_destination}/{tile}"
@@ -195,7 +210,7 @@ def processTile(
             s3_product_folder = splited_s3[1]
 
             path = f"https://{s3_main_folder}.s3.af-south-1.amazonaws.com/{s3_product_folder}/{tile}/{folder_name}.tif"
-            write_stac(s3_destination, folder_name, edition, tile, log, path)
+            write_stac(s3_destination, folder_names, edition, tile, log, path)
             return
         else:
             log.info(f"{file_href} does not exist, continuing with data creation.")
@@ -204,11 +219,20 @@ def processTile(
         make_directory(workdir, log)
         if is_tile_over_africa(workdir, source_url, folder_name, africa_polygon, log):
             log.info(f"Tile {tile} exists")
-            tif_file = download_tif(workdir, source_url, folder_name, log)
-            if tif_file:
-                upload_to_s3(s3_destination, tif_file, log)
-                write_stac(s3_destination, folder_name, edition, tile, log, tif_file)
-        delete_directory(base_dir / tile, log)
+            download_tif(workdir, source_url, folder_name, tif_files)
+            if edition == "evolution":
+                evo_folder_name = f"IDC_Score_{tile}"
+                download_tif(
+                    workdir,
+                    get_source_url(edition, main_folder_name, "idcscore"),
+                    evo_folder_name,
+                    tif_files,
+                )
+                folder_names.append(evo_folder_name)
+            if tif_files[0]:
+                upload_to_s3(s3_destination, tif_files)
+                write_stac(s3_destination, folder_names, edition, tile, tif_files[0])
+        delete_directory(base_dir / tile)
     except Exception:
         log.info(f"Job failed for tile {tile}")
         exit(1)
