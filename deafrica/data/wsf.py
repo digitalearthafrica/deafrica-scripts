@@ -219,7 +219,7 @@ def processTile(
         make_directory(workdir, log)
         if is_tile_over_africa(workdir, source_url, folder_name, africa_polygon, log):
             log.info(f"Tile {tile} exists")
-            download_tif(workdir, source_url, folder_name, tif_files)
+            download_tif(workdir, source_url, folder_name, tif_files, log)
             if edition == "evolution":
                 evo_folder_name = f"IDC_Score_{tile}"
                 download_tif(
@@ -227,12 +227,15 @@ def processTile(
                     get_source_url(edition, main_folder_name, "idcscore"),
                     evo_folder_name,
                     tif_files,
+                    log,
                 )
                 folder_names.append(evo_folder_name)
             if tif_files[0]:
-                upload_to_s3(s3_destination, tif_files)
-                write_stac(s3_destination, folder_names, edition, tile, tif_files[0])
-        delete_directory(base_dir / tile)
+                upload_to_s3(s3_destination, tif_files, log)
+                write_stac(
+                    s3_destination, folder_names, edition, tile, log, tif_files[0]
+                )
+        delete_directory(base_dir / tile, log)
     except Exception:
         log.info(f"Job failed for tile {tile}")
         exit(1)
