@@ -149,8 +149,8 @@ def write_stac(
     }
 
     assets = {}
-    for name, path in bandpaths.items():
-        href = {path}
+    for name, s3_path in bandpaths.items():
+        href = {s3_path}
         assets[name] = pystac.Asset(
             href=href, media_type=pystac.MediaType.COG, roles=["data"]
         )
