@@ -44,6 +44,12 @@ def delete_volumes(cluster_name, dryrun):
                 k8s_namespace,
             ],
         },
+        {
+            "Name": "tag:Name",
+            "Values": [
+                "kubernetes-dynamic-pvc-*",
+            ],
+        },
     ]
     count = 0
 
