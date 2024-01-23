@@ -33,12 +33,6 @@ def delete_volumes(cluster_name, dryrun):
     time_back = time_now - timedelta(days=90)
     filters = [
         {
-            "Name": f"tag:kubernetes.io/cluster/{cluster_name}",
-            "Values": [
-                "owned",
-            ],
-        },
-        {
             "Name": "tag:kubernetes.io/created-for/pvc/namespace",
             "Values": [
                 k8s_namespace,
