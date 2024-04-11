@@ -2,14 +2,18 @@ import boto3
 import click as click
 from datetime import datetime
 from datetime import timedelta
-from deafrica.utils import setup_logging
+import json
+import logging
 from kubernetes import config, client
 
+#from deafrica.utils import setup_logging
+
 # Set log level to info
-log = setup_logging()
+#log = setup_logging()
+log = logging.getLogger()
+logging.basicConfig(level=logging.INFO)
 
-
-def delete_volumes(cluster_name, dryrun):
+def delete_volumes(cluster_name, dryrun, ebs_tag_filter_str, tojson):
     """
     Cleanup sandbox unused Volumes, k8s PVs & PVCs by
     looking into CloudTrail "AttachVolume" events over the past 90 days
@@ -39,20 +43,27 @@ def delete_volumes(cluster_name, dryrun):
             ],
         },
         {
-            "Name": "tag:Name",
+            "Name": "tag:kubernetes.io/created-for/pvc/name",
             "Values": [
-                "kubernetes-dynamic-pvc-*",
+                ebs_tag_filter_str,
             ],
         },
     ]
-    count = 0
+    del_count = 0
+    ignore_count = 0
+    fail_count = 0
 
+    if tojson:
+        jsondata = [] # array to store data to write
+
+    log.info(f'dryrun : {dryrun}')
     for volume in ec2_resource.volumes.filter(Filters=filters):
+        # cloud logs only go back 90 days
         response = ct_client.lookup_events(
             LookupAttributes=[
                 {"AttributeKey": "ResourceName", "AttributeValue": volume.id},
             ],
-            MaxResults=10,
+            MaxResults=20,
             StartTime=time_back,
             EndTime=time_now,
         )
@@ -64,29 +75,58 @@ def delete_volumes(cluster_name, dryrun):
         ]
 
         try:
+            # collect some properties
+            pv_name, pvc_name = get_user_claim(volume)
+            props = {
+                    'action' : None, # either DELETE, DRY_RUN_DELETE, IGNORE
+                    'volume_id' : volume.id,
+                    'volume_size' : volume.size,
+                    'volume_state' : volume.state,
+                    'volume_created' : volume.create_time.strftime("%Y/%m/%d, %H:%M:%S"),
+                    'volume_last_attached' : None, # None implies > 90 days, if logs exist replaced below
+                    'volume_last_attached_days' : None,
+                    'pv_name' : pv_name,
+                    'pvc_name' : pvc_name,
+            }
+
             # Cleanup Volume, k8s PV & PVC
             if len(attach_events) == 0 and volume.state == "available":
-                delete(dryrun, k8s_api, k8s_namespace, volume)
-                count += 1
+                # no attachments in last 90 days and ebs is not in use
+                props['action'] = 'DELETE' if not dryrun else 'DRY_RUN_DELETE'
+                log.info(log_string(props))
+                delete(dryrun, k8s_api, k8s_namespace, volume, props)
+                del_count += 1
+            
             else:
-                pv_name, pvc_name = get_user_claim(volume)
-                log.info(
-                    f"Skip PVC {pvc_name}, PV {pv_name} and EBS volume {volume.id} ({volume.size} GiB) -> {volume.state})"
-                )
+                # attachments in last 90s or ebs in use
+                props['action'] = 'IGNORE'
+                props['volume_last_attached'] = attach_events[0]['EventTime'].strftime("%Y/%m/%d, %H:%M:%S")
+                props['volume_last_attached_days'] = abs(attach_events[0]['EventTime'].replace(tzinfo=None) - time_now).days
+                log.info(log_string(props))
+                ignore_count += 1
+        
         except Exception as e:
-            log.exception(
-                f"Failed to Delete Volume {volume.id} ({volume.size} GiB) -> {volume.state}: {e}"
-            )
+            props['action'] = 'FAILED_TO_DELETE'
+            log.warning(log_string(props))
+            log.exception(e)
+            fail_count +=1
             pass
 
-    log.info(f"Total Volumes Deleted -> {count}")
+        if tojson:
+            jsondata.append(props)
 
+    if dryrun:
+        log.info(f"Volumes not deleted on dryrun")
+    log.info(f"Total Volumes Deleted -> {del_count}")
+    log.info(f"Total Volumes Ignored -> {ignore_count}")
+    log.info(f"Total Failed Volume Deletion -> {fail_count}")
+    
+    if tojson:
+        log.info(f"Saving output to {tojson}")
+        with open(tojson, "w") as outfile: 
+            json.dump(jsondata, outfile)
 
-def delete(dryrun, k8s_api, k8s_namespace, volume):
-    pv_name, pvc_name = get_user_claim(volume)
-    log.info(
-        f"Deleting PVC {pvc_name}, PV {pv_name} and EBS volume {volume.id} ({volume.size} GiB) -> {volume.state})"
-    )
+def delete(dryrun, k8s_api, k8s_namespace, volume, props):
     if not dryrun:
         # cleanup k8s PVC/PV
         if (
@@ -96,32 +136,31 @@ def delete(dryrun, k8s_api, k8s_namespace, volume):
                     for pvc in k8s_api.list_namespaced_persistent_volume_claim(
                         k8s_namespace
                     ).items
-                    if pvc.spec.volume_name == pv_name
+                    if pvc.spec.volume_name == props['pv_name']
                 ]
             )
             > 0
         ):
-            log.info(f"Delete PVC: {volume.id}")
-            k8s_api.delete_namespaced_persistent_volume_claim(pvc_name, k8s_namespace)
-        elif (
+            log.info(f"Delete PVC: {props['pvc_name']}")
+            k8s_api.delete_namespaced_persistent_volume_claim(props['pvc_name'], k8s_namespace)
+        if (
             len(
                 [
                     pv
                     for pv in k8s_api.list_persistent_volume().items
-                    if pv.metadata.name == pv_name
+                    if pv.metadata.name == props['pv_name']
                 ]
             )
             > 0
         ):
-            log.info(f"Delete PV: {pv_name}")
-            k8s_api.delete_persistent_volume(pv_name)
+            log.info(f"Delete PV: {props['pv_name']}")
+            k8s_api.delete_persistent_volume(props['pv_name'])
 
         # cleanup volume
         # NOTE: k8s ebs storageclass volume reclaimPolicy:retain so explicit cleanup required
         log.info(f"Delete volume: {volume.id}")
         volume.delete()
         log.info("Deletion Completed Successfully")
-
 
 def get_user_claim(volume):
     pvc_name = ""
@@ -133,6 +172,13 @@ def get_user_claim(volume):
             pv_name = tags["Value"]
     return pv_name, pvc_name
 
+def log_string(props):
+    """
+    create a string to print for logging
+    """
+    keys = sorted(props.keys())
+    print_str = "".join([f'{key} : {props[key]}, ' for key in keys])
+    return print_str
 
 @click.command("delete-sandbox-volumes")
 @click.option(
@@ -141,12 +187,30 @@ def get_user_claim(volume):
     help="Provide a cluster name e.g. deafrica-dev-eks",
 )
 @click.option(
+    "--ebs-tag-filter-str",
+    default="*",
+    help="""
+        Filter to delete specific ebs volumes. Default gets all in sandbox namespace.
+        The filter is run on ebs tag:kubernetes.io/created-for/pvc/name.
+        e.g. claim-alex-2ebradley-* will limit the volume search to such strings.
+        useful for testing on specific volumes
+        """
+)
+@click.option(
+    "--tojson",
+    default='',
+    help="Name of .json file for debug. Write ebs actions to a json file.",
+)
+@click.option(
     "--dryrun",
     is_flag=True,
     help="Do not run delete, just print the action",
 )
-def cli(cluster_name, dryrun):
+def cli(cluster_name, dryrun, ebs_tag_filter_str, tojson):
     """
     Delete sandbox unused volumes using CloudTrail events
     """
-    delete_volumes(cluster_name, dryrun)
+    delete_volumes(cluster_name, dryrun, ebs_tag_filter_str, tojson)
+
+if __name__ == "__main__":
+    cli()
