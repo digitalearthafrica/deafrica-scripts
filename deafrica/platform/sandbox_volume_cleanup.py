@@ -3,15 +3,16 @@ import click as click
 from datetime import datetime
 from datetime import timedelta
 import json
-import logging
 from kubernetes import config, client
 
-#from deafrica.utils import setup_logging
+from deafrica.utils import setup_logging
 
-# Set log level to info
-#log = setup_logging()
-log = logging.getLogger()
-logging.basicConfig(level=logging.INFO)
+log = setup_logging()
+
+# local testing
+# import logging
+# log = logging.getLogger()
+# logging.basicConfig(level=logging.INFO)
 
 def delete_volumes(namespace, dryrun, ebs_tag_filter_debug, tojson):
     """
