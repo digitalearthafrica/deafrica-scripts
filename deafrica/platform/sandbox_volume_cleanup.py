@@ -13,7 +13,7 @@ from kubernetes import config, client
 log = logging.getLogger()
 logging.basicConfig(level=logging.INFO)
 
-def delete_volumes(cluster_name, dryrun, ebs_tag_filter_str, tojson):
+def delete_volumes(namespace, dryrun, ebs_tag_filter_debug, tojson):
     """
     Cleanup sandbox unused Volumes, k8s PVs & PVCs by
     looking into CloudTrail "AttachVolume" events over the past 90 days
@@ -27,7 +27,6 @@ def delete_volumes(cluster_name, dryrun, ebs_tag_filter_str, tojson):
         except config.ConfigException:
             log.exception("Could not configure kubernetes python client")
     k8s_api = client.CoreV1Api()
-    k8s_namespace = "sandbox"
 
     # configure boto3 client
     ec2_resource = boto3.resource("ec2")
@@ -39,13 +38,13 @@ def delete_volumes(cluster_name, dryrun, ebs_tag_filter_str, tojson):
         {
             "Name": "tag:kubernetes.io/created-for/pvc/namespace",
             "Values": [
-                k8s_namespace,
+                namespace,
             ],
         },
         {
             "Name": "tag:kubernetes.io/created-for/pvc/name",
             "Values": [
-                ebs_tag_filter_str,
+                ebs_tag_filter_debug,
             ],
         },
     ]
@@ -63,7 +62,7 @@ def delete_volumes(cluster_name, dryrun, ebs_tag_filter_str, tojson):
             LookupAttributes=[
                 {"AttributeKey": "ResourceName", "AttributeValue": volume.id},
             ],
-            MaxResults=20,
+            MaxResults=100,
             StartTime=time_back,
             EndTime=time_now,
         )
@@ -94,11 +93,11 @@ def delete_volumes(cluster_name, dryrun, ebs_tag_filter_str, tojson):
                 # no attachments in last 90 days and ebs is not in use
                 props['action'] = 'DELETE' if not dryrun else 'DRY_RUN_DELETE'
                 log.info(log_string(props))
-                delete(dryrun, k8s_api, k8s_namespace, volume, props)
+                delete(dryrun, k8s_api, namespace, volume, props)
                 del_count += 1
             
             else:
-                # attachments in last 90s or ebs in use
+                # attachments in last 90d or ebs in use
                 props['action'] = 'IGNORE'
                 props['volume_last_attached'] = attach_events[0]['EventTime'].strftime("%Y/%m/%d, %H:%M:%S")
                 props['volume_last_attached_days'] = abs(attach_events[0]['EventTime'].replace(tzinfo=None) - time_now).days
@@ -126,7 +125,7 @@ def delete_volumes(cluster_name, dryrun, ebs_tag_filter_str, tojson):
         with open(tojson, "w") as outfile: 
             json.dump(jsondata, outfile)
 
-def delete(dryrun, k8s_api, k8s_namespace, volume, props):
+def delete(dryrun, k8s_api, namespace, volume, props):
     if not dryrun:
         # cleanup k8s PVC/PV
         if (
@@ -134,7 +133,7 @@ def delete(dryrun, k8s_api, k8s_namespace, volume, props):
                 [
                     pvc
                     for pvc in k8s_api.list_namespaced_persistent_volume_claim(
-                        k8s_namespace
+                        namespace
                     ).items
                     if pvc.spec.volume_name == props['pv_name']
                 ]
@@ -142,7 +141,7 @@ def delete(dryrun, k8s_api, k8s_namespace, volume, props):
             > 0
         ):
             log.info(f"Delete PVC: {props['pvc_name']}")
-            k8s_api.delete_namespaced_persistent_volume_claim(props['pvc_name'], k8s_namespace)
+            k8s_api.delete_namespaced_persistent_volume_claim(props['pvc_name'], namespace)
         if (
             len(
                 [
@@ -182,18 +181,19 @@ def log_string(props):
 
 @click.command("delete-sandbox-volumes")
 @click.option(
-    "--cluster-name",
-    default="deafrica-dev-eks",
-    help="Provide a cluster name e.g. deafrica-dev-eks",
+    "--namespace",
+    default="sandbox",
+    help="Provide a namespace. default sandbox",
 )
 @click.option(
-    "--ebs-tag-filter-str",
+    "--ebs-tag-filter-debug",
     default="*",
     help="""
+        Add an extra degug filter on default sandbox filter.  
         Filter to delete specific ebs volumes. Default gets all in sandbox namespace.
         The filter is run on ebs tag:kubernetes.io/created-for/pvc/name.
         e.g. claim-alex-2ebradley-* will limit the volume search to such strings.
-        useful for testing on specific volumes
+        useful for testing on specific volumes. 
         """
 )
 @click.option(
@@ -206,11 +206,11 @@ def log_string(props):
     is_flag=True,
     help="Do not run delete, just print the action",
 )
-def cli(cluster_name, dryrun, ebs_tag_filter_str, tojson):
+def cli(namespace, dryrun, ebs_tag_filter_debug, tojson):
     """
     Delete sandbox unused volumes using CloudTrail events
     """
-    delete_volumes(cluster_name, dryrun, ebs_tag_filter_str, tojson)
+    delete_volumes(namespace, dryrun, ebs_tag_filter_debug, tojson)
 
 if __name__ == "__main__":
     cli()
