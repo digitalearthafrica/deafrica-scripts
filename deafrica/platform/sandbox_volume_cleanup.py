@@ -58,7 +58,8 @@ def delete_volumes(namespace, dryrun, ebs_tag_filter_debug, tojson):
 
     log.info(f'dryrun : {dryrun}')
     for volume in ec2_resource.volumes.filter(Filters=filters):
-        # cloud logs only go back 90 days
+        # cloud logs only go back 90 days. 
+        # call last 90 days explicitly incase a change is made
         response = ct_client.lookup_events(
             LookupAttributes=[
                 {"AttributeKey": "ResourceName", "AttributeValue": volume.id},
@@ -187,6 +188,11 @@ def log_string(props):
     help="Provide a namespace. default sandbox",
 )
 @click.option(
+    "--dryrun",
+    is_flag=True,
+    help="Do not run delete, just print the action",
+)
+@click.option(
     "--ebs-tag-filter-debug",
     default="*",
     help="""
@@ -202,11 +208,7 @@ def log_string(props):
     default='',
     help="Name of .json file for debug. Write ebs actions to a json file.",
 )
-@click.option(
-    "--dryrun",
-    is_flag=True,
-    help="Do not run delete, just print the action",
-)
+
 def cli(namespace, dryrun, ebs_tag_filter_debug, tojson):
     """
     Delete sandbox unused volumes using CloudTrail events
