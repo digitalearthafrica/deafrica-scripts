@@ -9,11 +9,6 @@ from deafrica.utils import setup_logging
 
 log = setup_logging()
 
-# local testing
-# import logging
-# log = logging.getLogger()
-# logging.basicConfig(level=logging.INFO)
-
 
 def delete_volumes(namespace, dryrun, ebs_tag_filter_debug, tojson):
     """
@@ -224,7 +219,3 @@ def cli(namespace, dryrun, ebs_tag_filter_debug, tojson):
     Delete sandbox unused volumes using CloudTrail events
     """
     delete_volumes(namespace, dryrun, ebs_tag_filter_debug, tojson)
-
-
-# if __name__ == "__main__":
-#     cli()
