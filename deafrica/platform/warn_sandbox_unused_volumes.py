@@ -2,15 +2,25 @@ import boto3
 import click as click
 from datetime import datetime
 from datetime import timedelta
-
-# from kubernetes import config, client
 import os
 
+from deafrica.utils import setup_logging
 
-def get_all_users():
+log = setup_logging()
+
+class HTTPError(Exception):
+    pass
+
+def get_all_cognito_users(cognito_client, cluster_name):
+    """get a list of all deafrica users from cognito"""
     users = []
     next_page = None
-    kwargs = {"UserPoolId": "us-west-2_v9nJrst3o"}
+    if cluster_name == "deafrica-prod-af-eks":
+        kwargs = {"UserPoolId": "us-west-2_v9nJrst3o"} # prod
+    elif cluster_name == "deafrica-dev-eks":
+        kwargs = {"UserPoolId": "us-west-2_MuvLWwMvg"} # dev
+    else:
+        raise NameError(f'cognito group for cluster unknown : {cluster_name}')
 
     users_remain = True
     while users_remain:
@@ -22,45 +32,134 @@ def get_all_users():
         users_remain = next_page is not None
     return users
 
+def find_cognito_user(all_cognito_users, pvc_email):
+    """find cognito user based on pvc email"""
+    for user in all_cognito_users:
+        email_address = None
+        name = None
+        for attribute in user["Attributes"]:
+            if attribute["Name"] == "email":
+                email_address = attribute["Value"]
+        if email_address == pvc_email:
+            for attribute in user["Attributes"]:
+                if attribute["Name"] == "name":
+                    name = attribute["Value"]
+            break
+    
+    return name, email_address
 
-def WarnTests():
-    # configure boto3 client
+def get_user_claim(volume):
+    """get the pvc and pv from volume tags"""
+    pvc_name = ""
+    pv_name = ""
+    for tags in volume.tags:
+        if tags["Key"] == "kubernetes.io/created-for/pvc/name":
+            pvc_name = tags["Value"]
+        if tags["Key"] == "kubernetes.io/created-for/pv/name":
+            pv_name = tags["Value"]
+    return pv_name, pvc_name
+
+def log_string(props):
+    """create a string to print for logging"""
+    keys = sorted(props.keys())
+    print_str = "".join([f"{key} : {props[key]}, " for key in keys])
+    return print_str
+
+def send_warning_email(
+        ses_client, 
+        cluster_name, 
+        days_to_delete, 
+        BccAddresses, 
+        CcAddresses = [], 
+        ToAddresses = [],
+        SourceAdress = 'systems@digitalearthafrica.org'):
+    """
+    send an email warning for impending deletion.
+    """
+    
+    if cluster_name == "deafrica-prod-af-eks":
+        env_str1 = ' '
+        env_str2 = ' '
+    elif cluster_name == "deafrica-dev-eks":
+        # add strings for the development server for internal users
+        env_str1 = ' Development '
+        env_str2 = ' at https://sandbox.dev.digitalearth.africa '
+        
+    
+    response = ses_client.send_email(
+        Destination={
+            'BccAddresses':BccAddresses,
+            'CcAddresses': CcAddresses,
+            'ToAddresses': ToAddresses
+        },
+        Message={
+            'Body': {
+                'Html': {
+                    'Charset': 'utf-8',
+                    'Data': f'Good Day. \n Your{env_str1}Digital Earth Africa Sandbox Volume will be eligible for deletion in {days_to_delete} days! Please login to your DE Africa Sandbox{env_str2}to prevent your data being lost.',
+                },
+                'Text': {
+                    'Charset': 'utf-8',
+                    'Data': f'Good Day. \n Your{env_str1}Digital Earth Africa Sandbox  Volume will be eligible for deletion in {days_to_delete} days! Please login to your DE Africa Sandbox{env_str2}to prevent your data being lost.',
+                },
+            },
+            'Subject': {
+                'Charset': 'utf-8',
+                'Data': f'Warning - Your{env_str1}Digital Earth Africa Sandbox Volume will be eligible for deletion in {days_to_delete} days!',
+            },
+        },
+        Source=SourceAdress
+    )
+
+    if int(response['ResponseMetadata']['HTTPStatusCode']) != 200:
+        raise HTTPError("HTTP response is not 200")
+    else:
+        log.info(f'{days_to_delete} day warning email successfully send')
+        
+def WarnTests(cluster_name, cron_schedule, dryrun):
+    
+    log.info(f"dryrun : {dryrun}")
+    # configure boto3 clients
     ec2_resource = boto3.resource("ec2")
-    ec2_client = boto3.client("ec2")
     ct_client = boto3.client("cloudtrail")
     ses_client = boto3.client("ses")
 
-    cluster_name = "deafrica-prod-af-eks"
+    cluster_name = "deafrica-dev-eks"
     k8s_namespace = "sandbox"
     daysback = 90
 
     time_now = datetime.now()
     time_back = time_now - timedelta(days=daysback)
-    filters = [
-        {
-            "Name": f"tag:kubernetes.io/cluster/{cluster_name}",
-            "Values": [
-                "owned",
-            ],
-        },
+    filters = filters = [
         {
             "Name": "tag:kubernetes.io/created-for/pvc/namespace",
             "Values": [
                 k8s_namespace,
             ],
         },
+        {
+            "Name": "tag:kubernetes.io/created-for/pvc/name",
+            "Values": [
+                "*",
+            ],
+        },
     ]
+
+    # get all users from cogneto
+    os.environ["AWS_DEFAULT_REGION"] = "us-west-2"
+    cognito_client = boto3.client("cognito-idp")
+    all_cognito_users = get_all_cognito_users(cognito_client, cluster_name)
+
+    volume_warnings = [] # collect some information about the volumes
     count = 0
 
-    volume_ids_warn = []
-    last_logged_in = []
-
     for volume in ec2_resource.volumes.filter(Filters=filters):
+        count +=1 
         response = ct_client.lookup_events(
             LookupAttributes=[
                 {"AttributeKey": "ResourceName", "AttributeValue": volume.id},
             ],
-            MaxResults=1000,
+            MaxResults=100,
             StartTime=time_back,
             EndTime=time_now,
         )
@@ -68,124 +167,102 @@ def WarnTests():
         attach_events = [
             event
             for event in response["Events"]
-            if event.get("EventName") == "AttachVolume"
+            if event.get("EventName") in ["AttachVolume","DetachVolume"]
         ]
 
-        if len(attach_events) > 0:
-            tz_info = attach_events[0]["EventTime"].tzinfo
-            last_logged_in.append(datetime.now(tz_info) - attach_events[0]["EventTime"])
-        else:
-            last_logged_in.append(timedelta(days=100))
         if len(attach_events) == 0 and volume.state == "available":
-            volume_ids_warn.append(volume.id)
-    print(volume_ids_warn)
+            # no attachments in last 90 days and ebs is not in use
+            volume_last_attach_detach = None
+            volume_last_attach_detach_delta =  None
+        if len(attach_events) > 0:
+            # attach events in the last 90 days
+            volume_last_attach_detach = attach_events[0]["EventTime"]
+            volume_last_attach_detach_delta = (
+                datetime.now(volume_last_attach_detach.tzinfo) - volume_last_attach_detach
+            )
 
-    print("30 to 60 days unused:")
-    for i in last_logged_in:
-        if (i > timedelta(days=30)) and (i < timedelta(days=60)):
-            print(i, " Time Left: ", timedelta(days=90) - i)
-    print("60 to 90 days unused:")
-    for i in last_logged_in:
-        if (i > timedelta(days=60)) and (i < timedelta(days=90)):
-            print(i, " Time Left: ", timedelta(days=90) - i)
-    volume_desc = ec2_client.describe_volumes(VolumeIds=volume_ids_warn)
-    # print(volume_desc)
+        # get the persistant volume (pv) and persistant volume claim (pvc)
+        pv_name, pvc_name = get_user_claim(volume)
+        # get the email from the pvc
+        pvc_email = pvc_name[6:].replace("-40", "@").replace("-2e", ".")
+        # find the user for email
+        user, user_email = find_cognito_user(all_cognito_users, pvc_email)
 
-    claims_warn = []
+        # get number of days to delete (i.e. when volume is 90 days unused)
+        time_to_delete = timedelta(days=90) - volume_last_attach_detach_delta if \
+            volume_last_attach_detach is not None else 0
+        
+        # note, the deletion script is currently run monthly so the volumes
+        # may actually last longer than the warning states. hence warning acts as a minimum
+        if cron_schedule == 'daily':
+            # emails are being sent daily, therefore we collect users with exactly
+            # 5 and 30 days until deletion 
+            if int(time_to_delete.days) == 5:
+                action = '5 Day Warning'
+            elif int(time_to_delete.days) == 30:
+                action = '30 Day Warning'
+            else:
+                action = None
+        elif cron_schedule == 'weekly':
+            # emails are being sent weekly, therefore warn between (5 to <12) days for
+            # 5 day warning, (30 to < 37 days) days for 30 day warning
+            if (int(time_to_delete.days) >= 5) and (int(time_to_delete.days) < 12):
+                action = '5 Day Warning'
+            elif (int(time_to_delete.days) >= 30) and (int(time_to_delete.days) < 37):
+                action = '30 Day Warning'
+            else:
+                action = None
 
-    for volume in volume_desc["Volumes"]:
-        for tag in volume["Tags"]:
-            if tag["Key"] == "kubernetes.io/created-for/pvc/name":
-                claims_warn.append(tag["Value"][6:])
-    print(claims_warn)
+        
+        props = {
+                'action' : action,
+                'volume_id' : volume.id,
+                'volume_last_attach_detach' : volume_last_attach_detach,
+                'time_to_delete' : time_to_delete,
+                'days_to_delete' : time_to_delete.days,
+                'user' : user,
+                'user_email' : user_email
+            }
+        
+        volume_warnings.append(props)
+        log.info(log_string(props))
 
-    os.environ["AWS_DEFAULT_REGION"] = "us-west-2"
-    cognito_client = boto3.client("cognito-idp")
+    if not dryrun:
 
-    all_users = get_all_users()
-    print(all_users[0])
-    print(len(all_users))
+        # send a 5 day warning to users
+        five_day_emails = [user['user_email'] for user in volume_warnings if user['action']=='5 Day Warning']
+        log.info('Users receiving 5 day warning emails')
+        log.info(five_day_emails)
+        send_warning_email(ses_client, cluster_name, days_to_delete=5, BccAddresses=five_day_emails)
 
-    claims_warn_mod = []
-
-    for claim in claims_warn:
-        claim1 = claim.replace("-40", "@")
-        claim2 = claim1.replace("-2e", ".")
-        claims_warn_mod.append(claim2)
-    print(claims_warn_mod)
-
-    users_warn = []
-    email_warn = []
-
-    for user in all_users:
-        email_address = "NULL"
-        for attribute in user["Attributes"]:
-            if attribute["Name"] == "email":
-                email_address = attribute["Value"]
-        if email_address in claims_warn_mod:
-            for attribute in user["Attributes"]:
-                if attribute["Name"] == "name":
-                    users_warn.append(attribute["Value"])
-                    email_warn.append(email_address)
-    print(users_warn)
-    print(email_warn)
-
-    # for instance in ec2_resource.instances.all():
-    #      print(
-    #          "Id: {0}\nPlatform: {1}\nType: {2}\nPublic IPv4: {3}\nAMI: {4}\nState: {5}\n".format(
-    #          instance.id, instance.platform, instance.instance_type, instance.public_ip_address, instance.image.id, instance.state
-    #          )
-    #      )
-
-    SMTP_SECRET = "BImXMTqWUCAx2u0ru/yGiwwmY9bzQ1QKplWk+9KK4xZl"
-
-    ses_send_quota = ses_client.get_send_quota()
-    print(ses_send_quota)
-
-    # verification_response = ses_client.get_identity_verification_attributes(
-    #     Identities=[
-    #         'schowdhury@sansa.org.za',
-    #     ]
-    # )
-    # print(verification_response)
-
-    # response = ses_client.send_email(
-    #     Destination={
-    #         'BccAddresses': [
-    #             'schowdhury@sansa.org.za',
-    #             'kmithi@sansa.org.za',
-    #             'leon@kartoza.com',
-    #             'bhaskar@kartoza.com'
-    #         ],
-    #         'CcAddresses': [
-    #         ],
-    #         'ToAddresses': email_warn
-    #     },
-    #     Message={
-    #         'Body': {
-    #             'Html': {
-    #                 'Charset': 'utf-8',
-    #                 'Data': 'Good Day. \n Your Digital Earth Africa Sandbox Volume will be deleted in 30 days! Please login to your DE Africa Sandbox to prevent this from happening.',
-    #             },
-    #             'Text': {
-    #                 'Charset': 'utf-8',
-    #                 'Data': 'Good Day. \n Your Digital Earth Africa Sandbox Volume will be deleted in 30 days! Please login to your DE Africa Sandbox to prevent this from happening.',
-    #             },
-    #         },
-    #         'Subject': {
-    #             'Charset': 'utf-8',
-    #             'Data': 'Warning - Your Digital Earth Africa Sandbox Volume will be deleted in 30 days!',
-    #         },
-    #     },
-    #     Source='systems@digitalearthafrica.org'
-    # )
-
-    # print(response)
+        # send a 30 day warning to uesers
+        thirty_day_emails = [user['user_email'] for user in volume_warnings if user['action']=='30 Day Warning']
+        log.info('Users receiving 30 day warning emails')
+        log.info(thirty_day_emails)
+        send_warning_email(ses_client, cluster_name, days_to_delete=30, BccAddresses=thirty_day_emails)
 
 
 @click.command("warn-unused-volumes")
-def cli():
+@click.option(
+    "--cluster-name",
+    default="deafrica-dev-eks",
+    help="Provide the cluster name. default to dev cluster",
+)
+@click.option(
+    "--cron-schedule",
+    help="""
+    How often this script is run to warn users. Protection to not spam
+    users. Must be 'daily' or 'weekly'. 
+    """
+)
+@click.option(
+    "--dryrun",
+    is_flag=True,
+    help="Do not send emails, just print the action",
+)
+def cli(cluster_name, cron_schedule, dryrun):
     """
     Warn sandbox unused volume owners via email
     """
-    WarnTests()
+    assert cron_schedule in ['daily','weekly'], '--cron-schedule must be "daily" or "weekly"'
+    WarnTests(cluster_name, cron_schedule, dryrun)
