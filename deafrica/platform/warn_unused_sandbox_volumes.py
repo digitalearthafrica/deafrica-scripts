@@ -13,6 +13,7 @@ class HTTPError(Exception):
 
 def get_all_cognito_users(cognito_client, cluster_name):
     """get a list of all deafrica users from cognito"""
+    log.info('Getting users from cognito')
     users = []
     next_page = None
     if cluster_name == "deafrica-prod-af-eks":
@@ -84,7 +85,6 @@ def send_warning_email(
         # add strings for the development server for internal users
         env_str1 = ' Development '
         env_str2 = ' at https://sandbox.dev.digitalearth.africa '
-        
     
     response = ses_client.send_email(
         Destination={
@@ -116,7 +116,7 @@ def send_warning_email(
     else:
         log.info(f'{days_to_delete} day warning email successfully send')
         
-def WarnTests(cluster_name, cron_schedule, dryrun):
+def warn_unused_sandbox_volumes(cluster_name, cron_schedule, dryrun):
     
     log.info(f"dryrun : {dryrun}")
     # configure boto3 clients
@@ -124,7 +124,6 @@ def WarnTests(cluster_name, cron_schedule, dryrun):
     ct_client = boto3.client("cloudtrail")
     ses_client = boto3.client("ses")
 
-    cluster_name = "deafrica-dev-eks"
     k8s_namespace = "sandbox"
     daysback = 90
 
@@ -190,7 +189,7 @@ def WarnTests(cluster_name, cron_schedule, dryrun):
 
         # get number of days to delete (i.e. when volume is 90 days unused)
         time_to_delete = timedelta(days=90) - volume_last_attach_detach_delta if \
-            volume_last_attach_detach is not None else 0
+            volume_last_attach_detach is not None else timedelta(days=0)
         
         # note, the deletion script is currently run monthly so the volumes
         # may actually last longer than the warning states. hence warning acts as a minimum
@@ -265,4 +264,4 @@ def cli(cluster_name, cron_schedule, dryrun):
     Warn sandbox unused volume owners via email
     """
     assert cron_schedule in ['daily','weekly'], '--cron-schedule must be "daily" or "weekly"'
-    WarnTests(cluster_name, cron_schedule, dryrun)
+    warn_unused_sandbox_volumes(cluster_name, cron_schedule, dryrun)
