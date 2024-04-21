@@ -90,7 +90,7 @@ def send_warning_email(
         env_str2 = " "
     elif cluster_name == "deafrica-dev-eks":
         # add strings for the development server for internal users
-        env_str1 = " Development "
+        env_str1 = " Internal Development "
         env_str2 = " at https://sandbox.dev.digitalearth.africa "
 
     response = ses_client.send_email(
