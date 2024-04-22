@@ -93,7 +93,6 @@ def send_warning_email(
         env_str1 = " Internal Development "
         env_str2 = " at https://sandbox.dev.digitalearth.africa "
 
-    # fmt: off
     response = ses_client.send_email(
         Destination={
             "BccAddresses": BccAddresses,
@@ -118,7 +117,6 @@ def send_warning_email(
         },
         Source=SourceAdress,
     )
-    # fmt: on
 
     if int(response["ResponseMetadata"]["HTTPStatusCode"]) != 200:
         raise HTTPError("HTTP response is not 200")
