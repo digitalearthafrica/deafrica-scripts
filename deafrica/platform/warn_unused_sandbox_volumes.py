@@ -119,9 +119,9 @@ def send_warning_email(
     )
 
     if int(response["ResponseMetadata"]["HTTPStatusCode"]) != 200:
-        raise HTTPError("HTTP response is not 200")
+        raise HTTPError(f"{days_to_delete} day warning email failed to send")
     else:
-        log.info(f"{days_to_delete} day warning email successfully send")
+        log.info(f"{days_to_delete} day warning email successfully sent")
 
 
 def warn_unused_sandbox_volumes(cluster_name, cron_schedule, dryrun):
