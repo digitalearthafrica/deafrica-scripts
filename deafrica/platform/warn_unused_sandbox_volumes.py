@@ -103,16 +103,16 @@ def send_warning_email(
             "Body": {
                 "Html": {
                     "Charset": "utf-8",
-                    "Data": f"Good Day. \n Your{env_str1}Digital Earth Africa Sandbox Volume will be eligible for deletion in {days_to_delete} days! Please login to your DE Africa Sandbox{env_str2}to prevent your data being lost.",
+                    "Data": f"Good Day. \n Your{env_str1}Digital Earth Africa Sandbox Volume will be scheduled for deletion in {days_to_delete} days! Please login to your DE Africa Sandbox{env_str2}to prevent your data being lost.",
                 },
                 "Text": {
                     "Charset": "utf-8",
-                    "Data": f"Good Day. \n Your{env_str1}Digital Earth Africa Sandbox  Volume will be eligible for deletion in {days_to_delete} days! Please login to your DE Africa Sandbox{env_str2}to prevent your data being lost.",
+                    "Data": f"Good Day. \n Your{env_str1}Digital Earth Africa Sandbox  Volume will be scheduled for deletion in {days_to_delete} days! Please login to your DE Africa Sandbox{env_str2}to prevent your data being lost.",
                 },
             },
             "Subject": {
                 "Charset": "utf-8",
-                "Data": f"Warning - Your{env_str1}Digital Earth Africa Sandbox Volume will be eligible for deletion in {days_to_delete} days!",
+                "Data": f"Warning - Your{env_str1}Digital Earth Africa Sandbox Volume will be scheduled for deletion in {days_to_delete} days!",
             },
         },
         Source=SourceAdress,
