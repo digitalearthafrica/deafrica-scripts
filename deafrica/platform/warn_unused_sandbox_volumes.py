@@ -203,8 +203,8 @@ def warn_unused_sandbox_volumes(cluster_name, cron_schedule, dryrun):
             else timedelta(days=0)
         )
 
-        # note, the deletion script is currently run monthly so the volumes
-        # may actually last longer than the warning states. hence warning acts as a minimum
+        # note, the deletion script may be run on a different schedule (e.g. monthly)
+        # volumes will therefore last longer than the warning states. hence warning acts as a minimum
         if cron_schedule == "daily":
             # emails are being sent daily, therefore we collect users with exactly
             # 5 and 30 days until deletion
