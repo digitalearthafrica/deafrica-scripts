@@ -79,7 +79,7 @@ def send_warning_email(
     BccAddresses,
     CcAddresses=[],
     ToAddresses=[],
-    SourceAdress="systems@digitalearthafrica.org",
+    SourceAdress="info@digitalearthafrica.org",
 ):
     """
     send an email warning for impending deletion.
@@ -245,11 +245,15 @@ def warn_unused_sandbox_volumes(cluster_name, cron_schedule, dryrun):
             for user in volume_warnings
             if user["action"] == "5 Day Warning"
         ]
-        log.info("Users receiving 5 day warning emails")
-        log.info(five_day_emails)
-        send_warning_email(
-            ses_client, cluster_name, days_to_delete=5, BccAddresses=five_day_emails
-        )
+
+        if len(five_day_emails) > 0:
+            log.info("Users receiving 5 day warning emails")
+            log.info(five_day_emails)
+            send_warning_email(
+                ses_client, cluster_name, days_to_delete=5, BccAddresses=five_day_emails
+            )
+        else:
+            log.info("No 5 Day Warnings required for users")
 
         # send a 30 day warning to uesers
         thirty_day_emails = [
@@ -257,11 +261,18 @@ def warn_unused_sandbox_volumes(cluster_name, cron_schedule, dryrun):
             for user in volume_warnings
             if user["action"] == "30 Day Warning"
         ]
-        log.info("Users receiving 30 day warning emails")
-        log.info(thirty_day_emails)
-        send_warning_email(
-            ses_client, cluster_name, days_to_delete=30, BccAddresses=thirty_day_emails
-        )
+
+        if len(thirty_day_emails) > 0:
+            log.info("Users receiving 30 day warning emails")
+            log.info(thirty_day_emails)
+            send_warning_email(
+                ses_client,
+                cluster_name,
+                days_to_delete=30,
+                BccAddresses=thirty_day_emails,
+            )
+        else:
+            log.info("No 30 Day Warnings required for users")
 
 
 @click.command("warn-unused-volumes")
