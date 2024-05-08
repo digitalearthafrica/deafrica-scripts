@@ -159,6 +159,8 @@ def warn_unused_sandbox_volumes(cluster_name, cron_schedule, dryrun):
 
     volume_warnings = []  # collect some information about the volumes
     count = 0
+    valid_count = 0
+    invalid_count = 0
 
     for volume in ec2_resource.volumes.filter(Filters=filters):
         count += 1
@@ -191,10 +193,29 @@ def warn_unused_sandbox_volumes(cluster_name, cron_schedule, dryrun):
 
         # get the persistant volume (pv) and persistant volume claim (pvc)
         pv_name, pvc_name = get_user_claim(volume)
-        # get the email from the pvc
-        pvc_email = pvc_name[6:].replace("-40", "@").replace("-2e", ".")
-        # find the user for email
-        user, user_email = find_cognito_user(all_cognito_users, pvc_email)
+        # get the email from the pvc, replace strings with characters
+        pvc_email = (
+            pvc_name[6:]
+            .replace("-40", "@")
+            .replace("-2e", ".")
+            .replace("-2d", "-")
+            .replace("-5f", "_")
+            .replace("-2b", "+")
+        )
+        # check for a valid email address
+        if "@" not in pvc_email:
+            # for example pvc_name=hub-db-dir created in dev testing
+            user, user_email = pvc_name, None
+            invalid_count += 1
+        else:
+            # find the user for email
+            user, user_email = find_cognito_user(all_cognito_users, pvc_email)
+            if user_email is None:
+                # cognito email could not be found
+                user, user_email = None, None
+                invalid_count += 1
+            else:
+                valid_count += 1
 
         # get number of days to delete (i.e. when volume is 90 days unused)
         time_to_delete = (
@@ -234,8 +255,13 @@ def warn_unused_sandbox_volumes(cluster_name, cron_schedule, dryrun):
             "user_email": user_email,
         }
 
-        volume_warnings.append(props)
+        if user_email is not None:
+            # only consider valid emails
+            volume_warnings.append(props)
         log.info(log_string(props))
+
+    log.info(f"Count of valid emails : {valid_count}")
+    log.info(f"Count of invalid emails : {invalid_count}")
 
     if not dryrun:
 
