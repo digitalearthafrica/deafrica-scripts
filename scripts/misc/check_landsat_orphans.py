@@ -5,6 +5,7 @@ check orphan scenes and generate report for cleanup
 import json
 from datetime import datetime
 from odc.aws import s3_client, s3_fetch, s3_ls, s3_dump, s3_ls_dir
+import re
 
 DEAFRICA_AWS_REGION = "af-south-1"
 DEAFRICA_LANDSAT_BUCKET_NAME = "deafrica-landsat"
@@ -19,6 +20,12 @@ USGS_S3_BUCKET_NAME = "usgs-landsat"
 PUBLISH_TO_S3 = True
 
 
+def find_date(text):
+    date_pattern = re.compile(r"(\d{4}-\d{2}-\d{2})")
+    date = re.search(date_pattern, text).group(0)
+    return date
+
+
 def get_orphans():
     s3 = s3_client(region_name=DEAFRICA_AWS_REGION)
 
@@ -30,15 +37,15 @@ def get_orphans():
 
     # fetch the latest report: Landsat 5, Landsat 7 and Landsat 8
     report_files_json.sort()
-    landsat_8_report = [
-        report_file for report_file in report_files_json if "landsat_8" in report_file
-    ][-1]
-    landsat_7_report = [
-        report_file for report_file in report_files_json if "landsat_7" in report_file
-    ][-1]
-    landsat_5_report = [
-        report_file for report_file in report_files_json if "landsat_5" in report_file
-    ][-1]
+    landsat_8_report = sorted([
+        report_file for report_file in report_files_json if "landsat_8" in report_file.lower()
+    ], key=lambda x: find_date(x))[-1]
+    landsat_7_report = sorted([
+        report_file for report_file in report_files_json if "landsat_7" in report_file.lower()
+    ], key=lambda x: find_date(x))[-1]
+    landsat_5_report = sorted([
+        report_file for report_file in report_files_json if "landsat_5" in report_file.lower()
+    ], key=lambda x: find_date(x))[-1]
 
     # collect orphan paths
     list_orphan_paths = []
@@ -75,12 +82,12 @@ def publish_to_s3(data: list, output_filename: str, content_type: str = "text/pl
     s3 = s3_client(region_name=DEAFRICA_AWS_REGION)
     s3_dump(
         data=data,
-        url=str(DEAFRICA_ORPHAN_REPORT_S3_PATH / output_filename),
+        url=str(DEAFRICA_ORPHAN_REPORT_S3_PATH + output_filename),
         s3=s3,
         ContentType=content_type,
     )
     print(
-        f"Report can be accessed from {DEAFRICA_ORPHAN_REPORT_S3_PATH / output_filename}"
+        f"Report can be accessed from {DEAFRICA_ORPHAN_REPORT_S3_PATH + output_filename}"
     )
 
 
