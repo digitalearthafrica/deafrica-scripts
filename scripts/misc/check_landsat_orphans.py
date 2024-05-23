@@ -2,6 +2,7 @@
 Read latest landsat gap reports(i.e. Landsat 5, Landsat 7 and Landsat 8),
 check orphan scenes and generate report for cleanup
 """
+
 import json
 from datetime import datetime
 from odc.aws import s3_client, s3_fetch, s3_ls, s3_dump, s3_ls_dir
@@ -37,15 +38,30 @@ def get_orphans():
 
     # fetch the latest report: Landsat 5, Landsat 7 and Landsat 8
     report_files_json.sort()
-    landsat_8_report = sorted([
-        report_file for report_file in report_files_json if "landsat_8" in report_file.lower()
-    ], key=lambda x: find_date(x))[-1]
-    landsat_7_report = sorted([
-        report_file for report_file in report_files_json if "landsat_7" in report_file.lower()
-    ], key=lambda x: find_date(x))[-1]
-    landsat_5_report = sorted([
-        report_file for report_file in report_files_json if "landsat_5" in report_file.lower()
-    ], key=lambda x: find_date(x))[-1]
+    landsat_8_report = sorted(
+        [
+            report_file
+            for report_file in report_files_json
+            if "landsat_8" in report_file.lower()
+        ],
+        key=lambda x: find_date(x),
+    )[-1]
+    landsat_7_report = sorted(
+        [
+            report_file
+            for report_file in report_files_json
+            if "landsat_7" in report_file.lower()
+        ],
+        key=lambda x: find_date(x),
+    )[-1]
+    landsat_5_report = sorted(
+        [
+            report_file
+            for report_file in report_files_json
+            if "landsat_5" in report_file.lower()
+        ],
+        key=lambda x: find_date(x),
+    )[-1]
 
     # collect orphan paths
     list_orphan_paths = []
