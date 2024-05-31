@@ -31,35 +31,37 @@ VALID_YEARS = [
     "2020",
 ]
 LOCAL_DIR = Path(os.getcwd())
-SOURCE_URL_PATH = URL("https://wcmc.io/")
-FILE_NAME = "GMW_{year}"
+SOURCE_URL_PATH = URL("https://zenodo.org/records/6894273/files/")
+FILE_NAME = "gmw_v3_{year}_gtiff.zip"
 
 # Set log level to info
 log = setup_logging()
 
 
-def download_and_unzip_gmw(local_filename: str) -> str:
+def download_and_unzip_gmw(year: str) -> str:
     import requests
     import shutil
     from zipfile import ZipFile
 
-    url = SOURCE_URL_PATH / local_filename
+    url = SOURCE_URL_PATH / FILE_NAME.format(year=year)
+
+    local_filename = FILE_NAME.format(year=year)
 
     with requests.get(url, stream=True, allow_redirects=True) as r:
         with open(local_filename, "wb") as f:
             shutil.copyfileobj(r.raw, f)
     with ZipFile(local_filename) as z:
         z.extractall()
-    return [f for f in z.namelist() if f.endswith(".shp")][0]
+    return [f for f in z.namelist() if f.endswith(".tif")][0]
 
 
-def create_and_upload_stac(cog_file: Path, s3_dst: str, year) -> Item:
+def create_and_upload_stac(tif_file: Path, s3_dst: str, year) -> Item:
     out_path = URL(f"{s3_dst}/{year}/")
 
     log.info("Item base creation")
     item = create_stac_item(
-        str(cog_file),
-        id=str(odc_uuid("gmw", "3.0", [cog_file.name.replace("tif", "")])),
+        str(tif_file),
+        id=str(odc_uuid("gmw", "3.0", [tif_file.name.replace("tif", "")])),
         with_proj=True,
         input_datetime=datetime(int(year), 12, 31),
         properties={
@@ -82,22 +84,14 @@ def create_and_upload_stac(cog_file: Path, s3_dst: str, year) -> Item:
         ]
     )
 
-    out_data = out_path / cog_file.name
-    # Remove asset created by create_stac_item and add our own
-    del item.assets["asset"]
-    item.assets["mangrove"] = pystac.Asset(
-        href=str(out_data),
-        title="gmw-v3.0",
-        media_type=pystac.MediaType.COG,
-        roles=["data"],
-    )
+    out_data = out_path / tif_file.name
 
     log.info(f"Item created {item.to_dict()}")
     log.info(f"Item validated {item.validate()}")
 
-    log.info(f"Dump the data to S3 {str(cog_file)}")
+    log.info(f"Dump the data to S3 {str(tif_file)}")
     s3_dump(
-        data=open(str(cog_file), "rb").read(),
+        data=open(str(tif_file), "rb").read(),
         url=str(out_data),
         ACL="bucket-owner-full-control",
         ContentType="image/tiff",
@@ -122,7 +116,7 @@ def gmw_download_stac_cog(year: str, s3_dst: str, slack_url: str = None) -> None
 
     """
 
-    gmw_shp = ""
+    tif_file = ""
 
     try:
         if year not in VALID_YEARS:
@@ -132,46 +126,17 @@ def gmw_download_stac_cog(year: str, s3_dst: str, slack_url: str = None) -> None
         log.info(f"Starting GMW downloader for year {year}")
 
         log.info("download extents if needed")
-        if year == "2018":
-            gmw_shp = f"GMW_v3_{year}/00_Data/gmw_v3_{year}.shp"
-        else:
-            gmw_shp = f"gmw_v3_{year}_vec.shp"
-        local_filename = FILE_NAME.format(year=year)
-        if not os.path.exists(gmw_shp):
-            gmw_shp = download_and_unzip_gmw(local_filename=local_filename)
-        local_extracted_file_path = LOCAL_DIR / gmw_shp
+        tif_file = f"gmw_v3_{year}.tif"
+        if not os.path.exists(tif_file):
+            tif_file = download_and_unzip_gmw(year=year)
+        local_extracted_file_path = LOCAL_DIR / tif_file
 
-        output_file = LOCAL_DIR / gmw_shp.replace(".shp", ".tif")
-        log.info(f"Output TIF file is {output_file}")
-        log.info(f"Extracted SHP file is {local_extracted_file_path}")
-        log.info("Start gdal_rasterize")
-        cmd = (
-            "gdal_rasterize "
-            "-a_nodata 0 "
-            "-ot Byte "
-            "-a pxlval "
-            "-of GTiff "
-            "-tr 0.0002 0.0002 "
-            f"{local_extracted_file_path} {output_file} "
-            "-te -26.36 -47.97 64.50 38.35"
-        )
-        check_output(cmd, stderr=STDOUT, shell=True)
-
-        log.info(f"File {output_file} rasterized successfully")
-
-        # Create cloud optimised GeoTIFF
-        cloud_optimised_file = LOCAL_DIR / f"deafrica_gmw_{year}.tif"
-        cmd = f"rio cogeo create --overview-resampling nearest {output_file} {cloud_optimised_file}"
-        check_output(cmd, stderr=STDOUT, shell=True)
-
-        log.info(f"File {cloud_optimised_file} cloud optimised successfully")
-
-        create_and_upload_stac(cog_file=cloud_optimised_file, s3_dst=s3_dst, year=year)
+        create_and_upload_stac(tif_file=local_extracted_file_path, s3_dst=s3_dst, year=year)
 
         # All done!
         log.info(f"Completed work on {s3_dst}/{year}")
     except Exception as e:
-        message = f"Failed to handle GMW {gmw_shp} with error {e}"
+        message = f"Failed to handle GMW {tif_file} with error {e}"
 
         if slack_url is not None:
             send_slack_notification(slack_url, "GMW", message)
