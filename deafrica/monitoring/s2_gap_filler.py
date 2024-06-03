@@ -133,9 +133,9 @@ def send_messages(
     log = setup_logging()
 
     latest_report = find_latest_report(
-        report_folder_path=S3_BUCKET_PATH, 
+        report_folder_path=S3_BUCKET_PATH,
         not_contains="orphaned",
-        contains='gap_report'
+        contains="gap_report",
     )
 
     log.info(f"Latest report: {latest_report}")
