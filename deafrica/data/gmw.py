@@ -22,6 +22,7 @@ from odc.aws import s3_dump
 from pystac import Item
 from rio_stac import create_stac_item
 from urlpath import URL
+from typing import List, Set
 
 from deafrica.utils import odc_uuid, send_slack_notification, setup_logging, slack_url
 
@@ -47,7 +48,7 @@ AFRICA_EXTENT_URL = "https://raw.githubusercontent.com/digitalearthafrica/deafri
 log = setup_logging()
 
 
-def download_and_unzip_gmw(year: str) -> list[str]:
+def download_and_unzip_gmw(year: str) -> List[float]:
     """
     Download and unzip the Global Mangrove Watch (GMW) files
     for a year.
@@ -79,7 +80,7 @@ def download_and_unzip_gmw(year: str) -> list[str]:
     return gmw_tiles
 
 
-def get_gmw_africa_tiles() -> set[str]:
+def get_gmw_africa_tiles() -> Set[str]:
     """
     Get a set of the labels for Global Mangrove Watch tiles over Africa.
     Returns
