@@ -7,3 +7,6 @@ write_to = "deafrica/_version.py"
 
 [tool.black]
 exclude = "deafrica/platform/warn_unused_sandbox_volumes.py"
+
+[tool.isort]
+profile = "black"
