@@ -6,10 +6,16 @@ import logging
 import sys
 from textwrap import dedent
 from typing import Dict, Optional
+import rasterio
+from rasterio.session import AWSSession
+import requests
+import ntpath
+import os
 
 import click
 from odc.aws import s3_fetch, s3_client
 from odc.aws.queue import get_queue, publish_messages
+from stac_sentinel import sentinel_s2_l2a
 
 from deafrica import __version__
 from deafrica.utils import (
@@ -21,21 +27,40 @@ from deafrica.utils import (
     slack_url,
 )
 
-PRODUCT_NAME = "s2_l2a"
 SOURCE_REGION = "us-west-2"
 S3_BUCKET_PATH = "s3://deafrica-sentinel-2/status-report/"
 
 
-def get_common_message_attributes(stac_doc: Dict) -> Dict:
+def get_cog_shape_transform(cog_url: str):
+    """get the shape and transform of a cog
+
+    Args:
+        cog_url (str): url to the AWS hosted COG
+
+    Returns:
+        tuple: tuple (shape, transform)
     """
-    Returns common message attributes dict
+
+    # Open the COG file from URL
+    with rasterio.Env(AWSSession()) as env:
+        with rasterio.open(cog_url) as src:
+            # Get the shape of the raster
+            shape = src.shape
+            # Get the projection of the raster
+            transform = src.transform
+
+    return shape, transform
+
+
+def get_common_message_attributes(stac_doc: Dict, product_name: str) -> Dict:
+    """
     :param stac_doc: STAC dict
     :return: common message attributes dict
     """
     msg_attributes = {
         "product": {
             "Type": "String",
-            "Value": PRODUCT_NAME,
+            "Value": product_name,
         }
     }
 
@@ -82,7 +107,118 @@ def get_common_message_attributes(stac_doc: Dict) -> Dict:
     return msg_attributes
 
 
-def prepare_message(scene_paths: list, log: Optional[logging.Logger] = None):
+def prepare_s2_l2a_stac(src_stac_doc: Dict):
+    """Prepares the appopriate STAC data to send with the sqs message
+    the original stac_doc must be modified with the appropriate
+    fields.
+
+    Args:
+        src_stac_doc: Original STAC doc/json from gap report
+    """
+
+    # change the properties to align with original sqs message
+    tileinfo_url = src_stac_doc["assets"]["tileinfo_metadata"]["href"]
+    tileinfo = requests.get(tileinfo_url, stream=True)
+    tileinfo = json.loads(tileinfo.text)
+
+    # update the base url to generate STAC metadata for source
+    base_url = f"https://roda.sentinel-hub.com/sentinel-s2-l2a/{tileinfo['path']}"
+    tileinfo_metadata = sentinel_s2_l2a(tileinfo, base_url=base_url)
+
+    # add the links from the tileinfo
+    relevant_links = ["self", "canonical", "derived_from"]
+    links = [x for x in src_stac_doc["links"] if x["rel"] in relevant_links]
+
+    # update the link path to the origin
+    SENTINEL_2_COGS_URL = "https://sentinel-cogs.s3.us-west-2.amazonaws.com"
+    for link in links:
+        link["href"] = link["href"].replace("s3://sentinel-cogs", SENTINEL_2_COGS_URL)
+        if link["rel"] == "derived_from":
+            # add the title and modift type
+            link["title"] = "Source STAC Item"
+            link["type"] = "application/json"
+
+    # add links
+    tileinfo_metadata["links"] = links
+
+    # get the proj:shape, href, and proj:transform from tileinfo
+    asset_dict = {}  # store in a dict for mapping based on file, e.g. B02.tif
+    for asset in list(src_stac_doc["assets"].keys()):
+        _, asset_file = ntpath.split(src_stac_doc["assets"][asset]["href"])
+        if "proj:shape" in src_stac_doc["assets"][asset].keys():
+            asset_dict[asset_file] = {
+                "proj:shape": src_stac_doc["assets"][asset]["proj:shape"],
+                "proj:transform": src_stac_doc["assets"][asset]["proj:transform"],
+                "href": src_stac_doc["assets"][asset]["href"],
+                "type": src_stac_doc["assets"][asset]["type"],
+            }
+            # projection format [320, 0, 399960, 0, -320, 3500040] ->
+            # [320, 0, 399960, 0, -320, 3500040, 0, 0, 1]
+            if len(asset_dict[asset_file]["proj:transform"]) == 6:
+                asset_dict[asset_file]["proj:transform"] += [0, 0, 1]
+
+    # add this data to our STAC doccument
+    for asset in list(tileinfo_metadata["assets"].keys()):
+        _, asset_file = ntpath.split(tileinfo_metadata["assets"][asset]["href"])
+        asset_file = asset_file.replace("jp2", "tif")
+        # set the proj:shape and proj:transform for each asset
+        if asset_file in asset_dict:
+            tileinfo_metadata["assets"][asset]["proj:shape"] = asset_dict[asset_file][
+                "proj:shape"
+            ]
+            tileinfo_metadata["assets"][asset]["proj:transform"] = asset_dict[
+                asset_file
+            ]["proj:transform"]
+            tileinfo_metadata["assets"][asset]["href"] = asset_dict[asset_file]["href"]
+            tileinfo_metadata["assets"][asset]["type"] = asset_dict[asset_file]["type"]
+
+    # fix the PVI / Overview Asset
+    asset_base_url, _ = ntpath.split(tileinfo_metadata["assets"]["B01"]["href"])
+    asset_type = tileinfo_metadata["assets"]["B01"]["type"]
+    tileinfo_metadata["assets"]["overview"]["href"] = os.path.join(
+        asset_base_url, "L2A_PVI.tif"
+    )
+    tileinfo_metadata["assets"]["overview"]["type"] = asset_type
+    shape, transform = get_cog_shape_transform(
+        tileinfo_metadata["assets"]["overview"]["href"]
+    )
+    transform = list(transform) + [0, 0, 1] if len(transform) == 6 else transform
+    tileinfo_metadata["assets"]["overview"]["proj:shape"] = shape
+    tileinfo_metadata["assets"]["overview"]["proj:transform"] = list(transform)
+
+    # remove un-needed assets
+    tileinfo_metadata["assets"].pop("visual_20m")
+    tileinfo_metadata["assets"].pop("visual_60m")
+
+    # add links for stac_extensions
+    stac_ext_links = []
+    for ext in tileinfo_metadata["stac_extensions"]:
+        for ext_link in src_stac_doc["stac_extensions"]:
+            if ext in ext_link:
+                stac_ext_links.append(ext_link)
+    tileinfo_metadata["stac_extensions"] = stac_ext_links
+
+    # add some extra properties
+    tileinfo_metadata["properties"]["sentinel:valid_cloud_cover"] = True
+    tileinfo_metadata["properties"]["sentinel:processing_baseline"] = src_stac_doc[
+        "properties"
+    ]["s2:processing_baseline"]
+    tileinfo_metadata["properties"]["sentinel:boa_offset_applied"] = src_stac_doc[
+        "properties"
+    ]["earthsearch:boa_offset_applied"]
+
+    # # update collection to cogs
+    tileinfo_metadata["collection"] = "sentinel-s2-l2a-cogs"
+
+    # set the final stac metadata doc
+    stac_metadata = tileinfo_metadata
+
+    return stac_metadata
+
+
+def prepare_message(
+    scene_paths: list, product_name: str, log: Optional[logging.Logger] = None
+):
     """
     Prepare a single message for each stac file
     """
@@ -95,28 +231,42 @@ def prepare_message(scene_paths: list, log: Optional[logging.Logger] = None):
             contents = s3_fetch(url=s3_path, s3=s3)
             contents_dict = json.loads(contents)
 
-            attributes = get_common_message_attributes(contents_dict)
+            if product_name == "s2_l2a":
+                stac_metadata = prepare_s2_l2a_stac(contents_dict)
+                attributes = get_common_message_attributes(stac_metadata, product_name)
+
+            if product_name == "s2_l2a_c1":
+                # TODO something different will need to be done here
+                attributes = get_common_message_attributes(contents_dict, product_name)
+                stac_metadata = contents_dict
 
             message = {
                 "Id": str(message_id),
                 "MessageBody": json.dumps(
                     {
-                        "Message": json.dumps(contents_dict),
+                        "Message": json.dumps(stac_metadata),
                         "MessageAttributes": attributes,
                     }
                 ),
             }
+            # with open(f"sent_message_raw.json", "w") as json_file:
+            #     json.dump(message, json_file)
+            # with open("STAC_data.json", "w") as outfile:
+            #     json.dump(stac_metadata, outfile)
+            # with open("STAC_original.json", "w") as outfile:
+            #     json.dump(contents_dict, outfile)
             message_id += 1
             yield message
         except Exception as exc:
             if log:
-                log.error(f"{s3_path} does not exist - {exc}")
+                log.error(f"{exc}")
 
 
 def send_messages(
     idx: int,
     queue_name: str,
     max_workers: int = 2,
+    product_name: str = "s2_l2a",
     limit: int = None,
     slack_url: str = None,
 ) -> None:
@@ -138,6 +288,7 @@ def send_messages(
         contains="gap_report",
     )
 
+    log.info("working")
     log.info(f"Latest report: {latest_report}")
 
     if "update" in latest_report:
@@ -147,6 +298,9 @@ def send_messages(
     log.info(f"Number of workers: {max_workers}")
 
     files = read_report_missing_scenes(report_path=latest_report, limit=limit)
+    files = [
+        "s3://sentinel-cogs/sentinel-s2-l2a-cogs/33/R/VQ/2024/5/S2B_33RVQ_20240513_0_L2A/S2B_33RVQ_20240513_0_L2A.json"
+    ]
 
     log.info(f"Number of scenes found {len(files)}")
     log.info(f"Example scenes: {files[0:10]}")
@@ -162,7 +316,9 @@ def send_messages(
         sys.exit(0)
 
     log.info(f"Executing worker {idx}")
-    messages = prepare_message(scene_paths=split_list_scenes[idx], log=log)
+    messages = prepare_message(
+        scene_paths=split_list_scenes[idx], product_name=product_name, log=log
+    )
 
     queue = get_queue(queue_name=queue_name)
 
@@ -209,6 +365,7 @@ def send_messages(
 @click.argument(
     "sync_queue_name", type=str, nargs=1, default="deafrica-pds-sentinel-2-sync-scene"
 )
+@click.argument("product_name", type=str, nargs=1, default="s2_l2a")
 @click.option(
     "--limit",
     "-l",
@@ -221,6 +378,7 @@ def cli(
     idx: int,
     max_workers: int = 2,
     sync_queue_name: str = "deafrica-pds-sentinel-2-sync-scene",
+    product_name: str = "s2_l2a",
     limit: int = None,
     slack_url: str = None,
     version: bool = False,
@@ -242,6 +400,10 @@ def cli(
     if version:
         click.echo(__version__)
 
+    valid_product_name = ["s2_l2a", "s2_l2a_c1"]
+    if product_name not in valid_product_name:
+        raise ValueError(f"Product name must be on of {valid_product_name}")
+
     if limit is not None:
         try:
             limit = int(limit)
@@ -255,7 +417,8 @@ def cli(
     send_messages(
         idx=idx,
         queue_name=sync_queue_name,
-        limit=limit,
         max_workers=max_workers,
+        product_name=product_name,
+        limit=limit,
         slack_url=slack_url,
     )
