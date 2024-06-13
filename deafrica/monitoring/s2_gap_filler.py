@@ -31,8 +31,10 @@ SOURCE_REGION = "us-west-2"
 S3_BUCKET_PATH = "s3://deafrica-sentinel-2/status-report/"
 
 import warnings
+
 # supress a FutureWarning from pyproj
-warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.simplefilter(action="ignore", category=FutureWarning)
+
 
 def get_cog_shape_transform(cog_url: str):
     """get the shape and transform of a cog
@@ -121,11 +123,11 @@ def prepare_s2_l2a_stac(src_stac_doc: Dict):
     """
 
     # change the properties to align with original sqs message
-    # read in the tileinfo.json file and create a STAC document 
+    # read in the tileinfo.json file and create a STAC document
     # based off of this using the sentinel_s2_l2a package
-    # this will form the basis of our SNS message body as it is 
+    # this will form the basis of our SNS message body as it is
     # most closely aligned with the original message
-    if 'tileinfo_metadata' in list(src_stac_doc["assets"].keys()):
+    if "tileinfo_metadata" in list(src_stac_doc["assets"].keys()):
         tileinfo_url = src_stac_doc["assets"]["tileinfo_metadata"]["href"]
     else:
         tileinfo_url = src_stac_doc["assets"]["info"]["href"]
@@ -285,8 +287,9 @@ def prepare_message(
             yield message
         except Exception as exc:
             if log:
-                log.error(f'Error generating message for : {s3_path}')
+                log.error(f"Error generating message for : {s3_path}")
                 log.error(f"{exc}")
+
 
 def send_messages(
     idx: int,
