@@ -11,7 +11,6 @@ import os
 import shutil
 from datetime import datetime
 from pathlib import Path
-from subprocess import STDOUT, check_output
 from typing import List, Set
 from zipfile import ZipFile
 
@@ -19,7 +18,9 @@ import click
 import geopandas as gpd
 import pystac
 import requests
+import rioxarray
 from odc.aws import s3_dump
+from odc.geo.xr import assign_crs, write_cog
 from pystac import Item
 from rio_stac import create_stac_item
 from urlpath import URL
@@ -134,7 +135,7 @@ def gmw_download_stac_cog(year: str, s3_dst: str, slack_url: str = None) -> None
                 URL(s3_dst) / str(year) / region_code / f"{filename}.stac-item.json"
             )
 
-            ## Create and upload COG.
+            # Create and upload COG
 
             ds = rioxarray.open_rasterio(local_file).squeeze(dim="band")
             # Subset to Africa
@@ -156,7 +157,7 @@ def gmw_download_stac_cog(year: str, s3_dst: str, slack_url: str = None) -> None
             )
             log.info(f"COG written to {out_cog}")
 
-            ## Create and upload STAC.
+            # Create and upload STAC.
 
             # Base item creation.
             item = create_stac_item(
