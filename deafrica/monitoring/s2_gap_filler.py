@@ -30,6 +30,9 @@ from deafrica.utils import (
 SOURCE_REGION = "us-west-2"
 S3_BUCKET_PATH = "s3://deafrica-sentinel-2/status-report/"
 
+import warnings
+# supress a FutureWarning from pyproj
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 def get_cog_shape_transform(cog_url: str):
     """get the shape and transform of a cog
@@ -110,14 +113,23 @@ def get_common_message_attributes(stac_doc: Dict, product_name: str) -> Dict:
 def prepare_s2_l2a_stac(src_stac_doc: Dict):
     """Prepares the appopriate STAC data to send with the sqs message
     the original stac_doc must be modified with the appropriate
-    fields.
+    fields. Metadata changes across time which makes this a bit
+    messy for edge cases.
 
     Args:
         src_stac_doc: Original STAC doc/json from gap report
     """
 
     # change the properties to align with original sqs message
-    tileinfo_url = src_stac_doc["assets"]["tileinfo_metadata"]["href"]
+    # read in the tileinfo.json file and create a STAC document 
+    # based off of this using the sentinel_s2_l2a package
+    # this will form the basis of our SNS message body as it is 
+    # most closely aligned with the original message
+    if 'tileinfo_metadata' in list(src_stac_doc["assets"].keys()):
+        tileinfo_url = src_stac_doc["assets"]["tileinfo_metadata"]["href"]
+    else:
+        tileinfo_url = src_stac_doc["assets"]["info"]["href"]
+
     tileinfo = requests.get(tileinfo_url, stream=True)
     tileinfo = json.loads(tileinfo.text)
 
@@ -179,12 +191,16 @@ def prepare_s2_l2a_stac(src_stac_doc: Dict):
         asset_base_url, "L2A_PVI.tif"
     )
     tileinfo_metadata["assets"]["overview"]["type"] = asset_type
-    shape, transform = get_cog_shape_transform(
-        tileinfo_metadata["assets"]["overview"]["href"]
-    )
-    transform = list(transform) + [0, 0, 1] if len(transform) == 6 else transform
-    tileinfo_metadata["assets"]["overview"]["proj:shape"] = shape
-    tileinfo_metadata["assets"]["overview"]["proj:transform"] = list(transform)
+
+    # fix the shape/transform for extra bands
+    # for whatever reason, this is incorrect in the src_stac_file...
+    for asset in ["overview", "WVP", "AOT"]:
+        shape, transform = get_cog_shape_transform(
+            tileinfo_metadata["assets"][asset]["href"]
+        )
+        transform = list(transform) + [0, 0, 1] if len(transform) == 6 else transform
+        tileinfo_metadata["assets"][asset]["proj:shape"] = shape
+        tileinfo_metadata["assets"][asset]["proj:transform"] = list(transform)
 
     # remove un-needed assets
     tileinfo_metadata["assets"].pop("visual_20m")
@@ -199,13 +215,29 @@ def prepare_s2_l2a_stac(src_stac_doc: Dict):
     tileinfo_metadata["stac_extensions"] = stac_ext_links
 
     # add some extra properties
+    # replace cc, 0 in tileinfo. Note this value is slighlty different to the value
+    # that comes with the original SNS message, unsure why
+    # eo:cloud_cover should be only difference to original STAC SNS
+    tileinfo_metadata["properties"]["eo:cloud_cover"] = src_stac_doc["properties"][
+        "eo:cloud_cover"
+    ]
     tileinfo_metadata["properties"]["sentinel:valid_cloud_cover"] = True
-    tileinfo_metadata["properties"]["sentinel:processing_baseline"] = src_stac_doc[
-        "properties"
-    ]["s2:processing_baseline"]
-    tileinfo_metadata["properties"]["sentinel:boa_offset_applied"] = src_stac_doc[
-        "properties"
-    ]["earthsearch:boa_offset_applied"]
+    if "s2:processing_baseline" in list(src_stac_doc["properties"].keys()):
+        tileinfo_metadata["properties"]["sentinel:processing_baseline"] = src_stac_doc[
+            "properties"
+        ]["s2:processing_baseline"]
+    else:
+        tileinfo_metadata["properties"]["sentinel:processing_baseline"] = src_stac_doc[
+            "properties"
+        ]["sentinel:processing_baseline"]
+    if "earthsearch:boa_offset_applied" in list(src_stac_doc["properties"].keys()):
+        tileinfo_metadata["properties"]["sentinel:boa_offset_applied"] = src_stac_doc[
+            "properties"
+        ]["earthsearch:boa_offset_applied"]
+    else:
+        tileinfo_metadata["properties"]["sentinel:boa_offset_applied"] = src_stac_doc[
+            "properties"
+        ]["sentinel:boa_offset_applied"]
 
     # # update collection to cogs
     tileinfo_metadata["collection"] = "sentinel-s2-l2a-cogs"
@@ -249,18 +281,12 @@ def prepare_message(
                     }
                 ),
             }
-            # with open(f"sent_message_raw.json", "w") as json_file:
-            #     json.dump(message, json_file)
-            # with open("STAC_data.json", "w") as outfile:
-            #     json.dump(stac_metadata, outfile)
-            # with open("STAC_original.json", "w") as outfile:
-            #     json.dump(contents_dict, outfile)
             message_id += 1
             yield message
         except Exception as exc:
             if log:
+                log.error(f'Error generating message for : {s3_path}')
                 log.error(f"{exc}")
-
 
 def send_messages(
     idx: int,
@@ -269,6 +295,7 @@ def send_messages(
     product_name: str = "s2_l2a",
     limit: int = None,
     slack_url: str = None,
+    dryrun: bool = False,
 ) -> None:
     """
     Publish a list of missing scenes to an specific queue and by the end of that it's able to notify slack the result
@@ -281,6 +308,9 @@ def send_messages(
     :param slack_url: (str) Optional slack URL in case of you want to send a slack notification
     """
     log = setup_logging()
+
+    if dryrun:
+        log.info("dryrun, messages not sent")
 
     latest_report = find_latest_report(
         report_folder_path=S3_BUCKET_PATH,
@@ -298,9 +328,6 @@ def send_messages(
     log.info(f"Number of workers: {max_workers}")
 
     files = read_report_missing_scenes(report_path=latest_report, limit=limit)
-    files = [
-        "s3://sentinel-cogs/sentinel-s2-l2a-cogs/33/R/VQ/2024/5/S2B_33RVQ_20240513_0_L2A/S2B_33RVQ_20240513_0_L2A.json"
-    ]
 
     log.info(f"Number of scenes found {len(files)}")
     log.info(f"Example scenes: {files[0:10]}")
@@ -316,6 +343,7 @@ def send_messages(
         sys.exit(0)
 
     log.info(f"Executing worker {idx}")
+
     messages = prepare_message(
         scene_paths=split_list_scenes[idx], product_name=product_name, log=log
     )
@@ -330,7 +358,8 @@ def send_messages(
         try:
             batch.append(message)
             if len(batch) == 10:
-                publish_messages(queue=queue, messages=batch)
+                if not dryrun:
+                    publish_messages(queue=queue, messages=batch)
                 batch = []
                 sent += 10
         except Exception as exc:
@@ -339,7 +368,8 @@ def send_messages(
             batch = []
 
     if len(batch) > 0:
-        publish_messages(queue=queue, messages=batch)
+        if not dryrun:
+            publish_messages(queue=queue, messages=batch)
         sent += len(batch)
 
     environment = "DEV" if "dev" in queue_name else "PDS"
@@ -347,10 +377,12 @@ def send_messages(
 
     message = dedent(
         f"{error_flag}*Sentinel 2 GAP Filler - {environment}*\n"
+        f"Attempted messages prepared: {len(files)}\n"
+        f"Failed messages prepared: {len(files) - sent}\n"
         f"Sent Messages: {sent}\n"
         f"Failed Messages: {failed}\n"
     )
-    if slack_url is not None:
+    if (slack_url is not None) and (not dryrun):
         send_slack_notification(slack_url, "S2 Gap Filler", message)
 
     log.info(message)
@@ -374,6 +406,7 @@ def send_messages(
 )
 @slack_url
 @click.option("--version", is_flag=True, default=False)
+@click.option("--dryrun", is_flag=True, default=False)
 def cli(
     idx: int,
     max_workers: int = 2,
@@ -382,6 +415,7 @@ def cli(
     limit: int = None,
     slack_url: str = None,
     version: bool = False,
+    dryrun: bool = False,
 ):
     """
     Publish missing scenes
@@ -421,4 +455,5 @@ def cli(
         product_name=product_name,
         limit=limit,
         slack_url=slack_url,
+        dryrun=dryrun,
     )
