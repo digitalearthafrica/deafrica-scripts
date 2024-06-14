@@ -194,6 +194,7 @@ def prepare_s2_l2a_stac(src_stac_doc: Dict):
     )
     tileinfo_metadata["assets"]["overview"]["type"] = asset_type
 
+    # TODO this can be removed if fixed by provider
     # fix the shape/transform for the extra bands
     # for whatever reason, these are incorrect in the src_stac_file...
     # code reaches out to cogs for shape and transform
