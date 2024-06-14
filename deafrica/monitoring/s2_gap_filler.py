@@ -133,8 +133,12 @@ def send_messages(
     log = setup_logging()
 
     latest_report = find_latest_report(
-        report_folder_path=S3_BUCKET_PATH, not_contains="orphaned"
+        report_folder_path=S3_BUCKET_PATH,
+        not_contains="orphaned",
+        contains="gap_report",
     )
+
+    log.info(f"Latest report: {latest_report}")
 
     if "update" in latest_report:
         log.info("FORCED UPDATE FLAGGED!")
