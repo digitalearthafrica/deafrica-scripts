@@ -1,6 +1,3 @@
-"""
-"""
-
 import json
 import logging
 import sys
@@ -113,19 +110,22 @@ def get_common_message_attributes(stac_doc: Dict, product_name: str) -> Dict:
 
 
 def prepare_s2_l2a_stac(src_stac_doc: Dict):
-    """Prepares the appopriate STAC data to send with the sqs message
-    the original stac_doc must be modified with the appropriate
-    fields. Metadata changes across time which makes this a bit
-    messy for edge cases.
+    """Prepares the appopriate STAC data to send with the sqs message.
+    The original json/stac_doc must be modified with the appropriate
+    fields. The metadata changes across time which makes this a bit
+    messy for capturing known edge cases.
 
     Args:
         src_stac_doc: Original STAC doc/json from gap report
+
+    Returns:
+        stac_metadata: formatted stacmetadata for the sns message
     """
 
     # change the properties to align with original sqs message
     # read in the tileinfo.json file and create a STAC document
-    # based off of this using the sentinel_s2_l2a package
-    # this will form the basis of our SNS message body as it is
+    # using the sentinel_s2_l2a package.
+    # This will form the basis of our SNS message body as it is
     # most closely aligned with the original message
     if "tileinfo_metadata" in list(src_stac_doc["assets"].keys()):
         tileinfo_url = src_stac_doc["assets"]["tileinfo_metadata"]["href"]
@@ -148,7 +148,7 @@ def prepare_s2_l2a_stac(src_stac_doc: Dict):
     for link in links:
         link["href"] = link["href"].replace("s3://sentinel-cogs", SENTINEL_2_COGS_URL)
         if link["rel"] == "derived_from":
-            # add the title and modift type
+            # add the title and data type
             link["title"] = "Source STAC Item"
             link["type"] = "application/json"
 
@@ -194,8 +194,9 @@ def prepare_s2_l2a_stac(src_stac_doc: Dict):
     )
     tileinfo_metadata["assets"]["overview"]["type"] = asset_type
 
-    # fix the shape/transform for extra bands
-    # for whatever reason, this is incorrect in the src_stac_file...
+    # fix the shape/transform for the extra bands
+    # for whatever reason, these are incorrect in the src_stac_file...
+    # code reaches out to cogs for shape and transform
     for asset in ["overview", "WVP", "AOT"]:
         shape, transform = get_cog_shape_transform(
             tileinfo_metadata["assets"][asset]["href"]
@@ -217,7 +218,7 @@ def prepare_s2_l2a_stac(src_stac_doc: Dict):
     tileinfo_metadata["stac_extensions"] = stac_ext_links
 
     # add some extra properties
-    # replace cc, 0 in tileinfo. Note this value is slighlty different to the value
+    # replace cc, (0 in tileinfo). Note this value is slighlty different to the value
     # that comes with the original SNS message, unsure why
     # eo:cloud_cover should be only difference to original STAC SNS
     tileinfo_metadata["properties"]["eo:cloud_cover"] = src_stac_doc["properties"][
