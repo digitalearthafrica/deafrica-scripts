@@ -330,6 +330,8 @@ sqlalchemy==1.4.43
     # via
     #   datacube
     #   geoalchemy2
+stac-sentinel @ git+https://github.com/stac-utils/stac-sentinel@5cef8ac88f403e9d1879059dd5a9295ef190897b
+    # via git
 tblib==1.7.0
     # via distributed
 tifffile==2022.10.10
