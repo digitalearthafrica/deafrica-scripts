@@ -419,9 +419,10 @@ def send_messages(
     error_flag = ":red_circle:" if failed > 0 else ""
 
     message = dedent(
-        f"{error_flag}*Sentinel 2 GAP Filler - {environment}*\n"
-        f"Attempted messages prepared: {len(files)}\n"
-        f"Failed messages prepared: {len(files) - sent}\n"
+        f"{error_flag}*Sentinel 2 GAP Filler (worker {idx}) - {environment}*\n"
+        f"Total messages: {len(files)}\n"
+        f"Attempted worker messages prepared: {len(split_list_scenes[idx])}\n"
+        f"Failed messages prepared: {len(split_list_scenes[idx]) - sent}\n"
         f"Sent Messages: {sent}\n"
         f"Failed Messages: {failed}\n"
     )
