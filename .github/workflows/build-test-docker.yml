@@ -1,7 +1,7 @@
 name : Scripts Test and Push
 
 env:
-  IMAGE_NAME: digitalearthafrica/deafrica-scripts
+  IMAGE_NAME: victorianeema/deafrica-scripts
 
 on:
   pull_request:
@@ -83,8 +83,8 @@ jobs:
       - name: Login to DockerHub
         uses: docker/login-action@v1
         with:
-          username: ${{ secrets.DEAFRICA_DOCKER_USERNAME }}
-          password: ${{ secrets.DEAFRICA_DOCKER_PASSWORD }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Get version number for tagging the image
         run: |
