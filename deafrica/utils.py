@@ -14,10 +14,13 @@ from types import SimpleNamespace
 from typing import Sequence
 from urllib.parse import urlparse
 from uuid import UUID, uuid5
+import pyarrow.parquet as pq
 
 import click
 import requests
 from odc.aws import s3_client, s3_fetch, s3_ls_dir
+from odc.aws.inventory import  find_latest_manifest
+from xarray.tutorial import file_formats
 
 # GDAL format: [ulx, uly, lrx, lry]
 AFRICA_BBOX = [-26.36, 38.35, 64.50, -47.97]
@@ -268,21 +271,7 @@ limit = click.option(
     default=None,
 )
 
-
-def find_latest_manifest(prefix, s3, **kw) -> str:
-    """
-    Find latest manifest
-    """
-    manifest_dirs = sorted(s3_ls_dir(prefix, s3=s3, **kw), reverse=True)
-
-    for d in manifest_dirs:
-        if d.endswith("/"):
-            leaf = d.split("/")[-2]
-            if leaf.endswith("Z"):
-                return d + "manifest.json"
-
-
-def retrieve_manifest_files(key: str, s3, schema, **kw):
+def retrieve_manifest_files(key: str, s3, schema, file_format, **kw):
     """
     Retrieve manifest file and return a namespace
 
@@ -293,13 +282,20 @@ def retrieve_manifest_files(key: str, s3, schema, **kw):
         Size=<size>
     )
     """
-    bb = s3_fetch(key, s3=s3, **kw)
-    gz = GzipFile(fileobj=BytesIO(bb), mode="r")
-    csv_rdr = csv.reader(f.decode("utf8") for f in gz)
-    for rec in csv_rdr:
-        rec = SimpleNamespace(**{k: v for k, v in zip(schema, rec)})
-        yield rec
-
+    if file_format=="CSV" and schema is not None:
+        bb = s3_fetch(key, s3=s3, **kw)
+        gz = GzipFile(fileobj=BytesIO(bb), mode="r")
+        csv_rdr = csv.reader(line.decode("utf8") for line in gz)
+        for rec in csv_rdr:
+            yield SimpleNamespace(**dict(zip(schema, rec)))
+    elif file_format=="PARQUET" and schema is None:
+        bb = s3_fetch(key, s3=s3, **kw)
+        table = pq.read_table(BytesIO(bb))
+        df = table.to_pandas()
+        assert (table.schema.names == df.columns).all()
+        for row in df.itertuples(index=False):
+            row_as_dict = dict(zip(row._fields, row))
+            yield SimpleNamespace(**row_as_dict)
 
 def test_key(
     key: str,
@@ -329,7 +325,6 @@ def list_inventory(
     prefix: str = "",
     suffix: str = "",
     contains: str = "",
-    multiple_contains: tuple[str, str] = None,
     n_threads: int = None,
     **kw,
 ):
@@ -341,12 +336,13 @@ def list_inventory(
     :param manifest: (str)
     :param s3: (aws client)
     :param prefix: (str)
-    :param prefixes: (List(str)) allow multiple prefixes to be searched
     :param suffix: (str)
     :param contains: (str)
     :param n_threads: (int) number of threads, if not sent does not use threads
     :return: SimpleNamespace
     """
+    # TODO: refactor parallel execution part out of this function
+    # pylint: disable=too-many-locals
     s3 = s3 or s3_client()
 
     if manifest.endswith("/"):
@@ -360,40 +356,46 @@ def list_inventory(
     if missing_keys:
         raise ValueError("Manifest file haven't parsed correctly")
 
-    if info["fileFormat"].upper() != "CSV":
-        raise ValueError("Data is not in CSV format")
+    file_format = info["fileFormat"].upper()
+    accepted_file_formats = ["CSV", "PARQUET"]
+    if file_format not in accepted_file_formats:
+        raise ValueError(f"Data is not in {' or '.join(accepted_file_formats)} format")
 
     s3_prefix = "s3://" + info["destinationBucket"].split(":")[-1] + "/"
     data_urls = [s3_prefix + f["key"] for f in info["files"]]
-    schema = tuple(info["fileSchema"].split(", "))
+
+    if file_format == "CSV":
+        schema = tuple(info["fileSchema"].split(", "))
+    elif file_format == "PARQUET":
+        # Schema parsing is skipped here
+        # as it can be extracted from the parquet file.
+        schema = None
 
     if n_threads:
         with ThreadPoolExecutor(max_workers=1000) as executor:
             tasks = [
-                executor.submit(retrieve_manifest_files, key, s3, schema)
+                executor.submit(retrieve_manifest_files, key, s3, schema, file_format)
                 for key in data_urls
             ]
 
             for future in as_completed(tasks):
                 for namespace in future.result():
-                    key = namespace.Key
-                    if test_key(
-                        key,
-                        prefix=prefix,
-                        suffix=suffix,
-                        contains=contains,
-                        multiple_contains=multiple_contains,
+                    try:
+                        key = namespace.Key
+                    except AttributeError:
+                        key = namespace.key
+                    if (
+                        key.startswith(prefix)
+                        and key.endswith(suffix)
+                        and contains in key
                     ):
                         yield namespace
     else:
         for u in data_urls:
-            for namespace in retrieve_manifest_files(u, s3, schema):
-                key = namespace.Key
-                if test_key(
-                    key,
-                    prefix=prefix,
-                    suffix=suffix,
-                    contains=contains,
-                    multiple_contains=multiple_contains,
-                ):
+            for namespace in retrieve_manifest_files(u, s3, schema, file_format):
+                try:
+                    key = namespace.Key
+                except AttributeError:
+                    key = namespace.key
+                if key.startswith(prefix) and key.endswith(suffix) and contains in key:
                     yield namespace
