@@ -19,7 +19,7 @@ import pyarrow.parquet as pq
 import click
 import requests
 from odc.aws import s3_client, s3_fetch, s3_ls_dir
-from odc.aws.inventory import  find_latest_manifest
+from odc.aws.inventory import find_latest_manifest
 from xarray.tutorial import file_formats
 
 # GDAL format: [ulx, uly, lrx, lry]
@@ -271,6 +271,7 @@ limit = click.option(
     default=None,
 )
 
+
 def retrieve_manifest_files(key: str, s3, schema, file_format, **kw):
     """
     Retrieve manifest file and return a namespace
@@ -282,13 +283,13 @@ def retrieve_manifest_files(key: str, s3, schema, file_format, **kw):
         Size=<size>
     )
     """
-    if file_format=="CSV" and schema is not None:
+    if file_format == "CSV" and schema is not None:
         bb = s3_fetch(key, s3=s3, **kw)
         gz = GzipFile(fileobj=BytesIO(bb), mode="r")
         csv_rdr = csv.reader(line.decode("utf8") for line in gz)
         for rec in csv_rdr:
             yield SimpleNamespace(**dict(zip(schema, rec)))
-    elif file_format=="PARQUET" and schema is None:
+    elif file_format == "PARQUET" and schema is None:
         bb = s3_fetch(key, s3=s3, **kw)
         table = pq.read_table(BytesIO(bb))
         df = table.to_pandas()
@@ -296,6 +297,7 @@ def retrieve_manifest_files(key: str, s3, schema, file_format, **kw):
         for row in df.itertuples(index=False):
             row_as_dict = dict(zip(row._fields, row))
             yield SimpleNamespace(**row_as_dict)
+
 
 def test_key(
     key: str,

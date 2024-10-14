@@ -21,7 +21,9 @@ import datacube
 SENTINEL_2_C1_INVENTORY_PATH = URL(
     "s3://deafrica-sentinel-2-l2a-c1-inventory/deafrica-sentinel-2-l2a-c1/deafrica-sentinel-2-l2a-c1-inventory/"
 )
-SOURCE_INVENTORY_PATH = URL("s3://e84-earth-search-sentinel-data-inventory/e84-earth-search-sentinel-data/primary/")
+SOURCE_INVENTORY_PATH = URL(
+    "s3://e84-earth-search-sentinel-data-inventory/e84-earth-search-sentinel-data/primary/"
+)
 SENTINEL_2_C1_REGION = "af-south-1"
 SOURCE_REGION = "us-west-2"
 BASE_FOLDER_NAME = "sentinel-2-c1-l2a"
@@ -69,9 +71,9 @@ def get_odc_keys(log) -> set:
         for val in dc.index.datasets.search_returning(
             ["uri", "indexed_time"], product="s2_l2a"
         ):
-            all_odc_vals[
-                val.uri.replace("s3://deafrica-sentinel-2-l2a-c1/", "")
-            ] = val.indexed_time
+            all_odc_vals[val.uri.replace("s3://deafrica-sentinel-2-l2a-c1/", "")] = (
+                val.indexed_time
+            )
         return all_odc_vals
     except:
         log.info("Error while searching for datasets in odc")
@@ -110,7 +112,9 @@ def generate_buckets_diff(
 
     if update_stac:
         log.info("FORCED UPDATE ACTIVE!")
-        missing_scenes = set(f"s3://e84-earth-search-sentinel-data/{key}" for key in source_keys)
+        missing_scenes = set(
+            f"s3://e84-earth-search-sentinel-data/{key}" for key in source_keys
+        )
         orphaned_keys = set()
 
     else:
