@@ -24,7 +24,7 @@ jobs:
       uses: psf/black@stable
       id: action_black
       with:
-        options: "deafrica --check --verbose"
+        options: "--check --verbose deafrica"
         version: "24.10.0"
 
     # Set up a cache
