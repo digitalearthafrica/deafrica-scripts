@@ -1,4 +1,4 @@
-FROM ghcr.io/osgeo/gdal:ubuntu-small-3.8.5 AS base
+FROM osgeo/gdal:ubuntu-small-3.4.2 AS base
 
 ENV CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 
