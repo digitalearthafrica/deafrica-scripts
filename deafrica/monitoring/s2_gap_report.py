@@ -69,9 +69,9 @@ def get_odc_keys(log) -> set:
         for val in dc.index.datasets.search_returning(
             ["uri", "indexed_time"], product="s2_l2a"
         ):
-            all_odc_vals[
-                val.uri.replace("s3://deafrica-sentinel-2/", "")
-            ] = val.indexed_time
+            all_odc_vals[val.uri.replace("s3://deafrica-sentinel-2/", "")] = (
+                val.indexed_time
+            )
         return all_odc_vals
     except:
         log.info("Error while searching for datasets in odc")
