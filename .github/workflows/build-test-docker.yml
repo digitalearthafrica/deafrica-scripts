@@ -21,10 +21,11 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Check formatting
-      uses: rickstaa/action-black@v1
+      uses: psf/black@stable
       id: action_black
       with:
-        black_args: "--check deafrica"
+        options: "--check deafrica --verbose"
+        version: "24.10.0"
 
     # Set up a cache
     - name: Set up Docker Buildx
@@ -39,7 +40,7 @@ jobs:
           ${{ runner.os }}-buildx-
 
     - name: Build Test Docker
-      uses: build-push-action@v6
+      uses: docker/build-push-action@v6
       with:
         context: .
         target: base
