@@ -25,8 +25,9 @@ jobs:
       id: action_black
       with:
         options: "--check --verbose "
+        src: "./deafrica"
         version: "24.10.0"
-        working-directory: deafrica
+
 
     # Set up a cache
     - name: Set up Docker Buildx
