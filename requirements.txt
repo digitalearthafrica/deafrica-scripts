@@ -19,15 +19,16 @@ attrs==24.2.0
     # via
     #   cads-api-client
     #   datacube
+    #   fiona
     #   jsonschema
     #   morecantile
     #   rasterio
     #   referencing
-boto3==1.35.42
+boto3==1.35.43
     # via
     #   deafrica (setup.py)
     #   odc-cloud
-botocore==1.35.42
+botocore==1.35.43
     # via
     #   boto3
     #   odc-cloud
@@ -36,6 +37,7 @@ cachetools==5.5.0
     # via
     #   datacube
     #   google-auth
+    #   morecantile
     #   odc-geo
 cads-api-client==1.4.5
     # via cdsapi
@@ -43,17 +45,16 @@ cdsapi==0.7.3
     # via deafrica (setup.py)
 certifi==2024.8.30
     # via
+    #   fiona
     #   kubernetes
     #   netcdf4
-    #   pyogrio
     #   pyproj
-    #   rasterio
     #   requests
 cftime==1.6.4
     # via netcdf4
 charset-normalizer==3.4.0
     # via requests
-click==8.1.7
+click==7.1.2
     # via
     #   click-plugins
     #   cligj
@@ -61,50 +62,52 @@ click==8.1.7
     #   datacube
     #   deafrica (setup.py)
     #   distributed
+    #   fiona
     #   rasterio
     #   rio-cogeo
     #   sentinelhub
 click-plugins==1.1.1
-    # via rasterio
+    # via
+    #   fiona
+    #   rasterio
 cligj==0.7.2
-    # via rasterio
+    # via
+    #   fiona
+    #   rasterio
 cloudpickle==3.1.0
     # via
     #   dask
     #   datacube
     #   distributed
-dask[array,dataframe]==2024.10.0
+dask[array]==2023.4.0
     # via
-    #   dask-expr
     #   dask-image
     #   datacube
     #   distributed
     #   odc-algo
     #   odc-stac
-dask-expr==1.1.16
-    # via dask
-dask-image==2024.5.3
+dask-image==2023.3.0
     # via odc-algo
 dataclasses-json==0.6.7
     # via sentinelhub
-datacube==1.8.19
+datacube==1.8.7
     # via
     #   deafrica (setup.py)
     #   odc-algo
-deprecat==2.1.3
-    # via datacube
-distributed==2024.10.0
+distributed==2021.4.1
     # via
     #   datacube
     #   odc-algo
 durationpy==0.9
     # via kubernetes
+fiona==1.8.22
+    # via geopandas
 fsspec==2024.9.0
     # via dask
-geoalchemy2==0.15.2
-    # via datacube
-geopandas==1.0.1
-    # via deafrica (setup.py)
+geopandas==0.8.1
+    # via
+    #   deafrica (setup.py)
+    #   stac-sentinel
 google-auth==2.35.0
     # via kubernetes
 greenlet==3.1.1
@@ -117,8 +120,6 @@ imageio==2.36.0
     #   scikit-image
 importlib-metadata==8.5.0
     # via dask
-jinja2==3.1.4
-    # via distributed
 jmespath==1.0.1
     # via
     #   boto3
@@ -129,24 +130,22 @@ jsonschema-specifications==2024.10.1
     # via jsonschema
 kubernetes==31.0.0
     # via deafrica (setup.py)
-lark==1.2.2
+lark-parser==0.12.0
     # via datacube
 lazy-loader==0.4
     # via scikit-image
 locket==1.0.0
-    # via
-    #   distributed
-    #   partd
-markupsafe==3.0.1
-    # via jinja2
+    # via partd
 marshmallow==3.23.0
     # via dataclasses-json
-morecantile==5.4.2
+morecantile==3.4.0
     # via rio-cogeo
 msgpack==1.1.0
     # via distributed
 multiurl==0.3.1
     # via cads-api-client
+munch==4.0.0
+    # via fiona
 mypy-extensions==1.0.0
     # via typing-inspect
 netcdf4==1.7.1.post2
@@ -155,13 +154,12 @@ networkx==3.4.1
     # via scikit-image
 numexpr==2.10.1
     # via odc-algo
-numpy==2.1.2
+numpy==1.26.4
     # via
     #   cftime
     #   dask
     #   dask-image
     #   datacube
-    #   geopandas
     #   imageio
     #   netcdf4
     #   numexpr
@@ -171,12 +169,13 @@ numpy==2.1.2
     #   pandas
     #   pims
     #   pyarrow
-    #   pyogrio
     #   rasterio
+    #   rio-cogeo
     #   scikit-image
     #   scipy
     #   sentinelhub
     #   shapely
+    #   snuggs
     #   tifffile
     #   xarray
 oauthlib==3.2.2
@@ -184,7 +183,7 @@ oauthlib==3.2.2
     #   kubernetes
     #   requests-oauthlib
     #   sentinelhub
-odc-algo==0.2.3
+odc-algo==0.2.2
     # via deafrica (setup.py)
 odc-cloud==0.2.5
     # via deafrica (setup.py)
@@ -196,21 +195,14 @@ packaging==24.1
     # via
     #   dask
     #   datacube
-    #   distributed
-    #   geoalchemy2
-    #   geopandas
     #   lazy-loader
     #   marshmallow
     #   pims
-    #   pyogrio
     #   scikit-image
     #   setuptools-scm
     #   xarray
-pandas==2.2.3
+pandas==1.5.3
     # via
-    #   dask
-    #   dask-expr
-    #   dask-image
     #   datacube
     #   deafrica (setup.py)
     #   geopandas
@@ -230,9 +222,7 @@ psutil==6.0.0
 psycopg2==2.9.10
     # via datacube
 pyarrow==17.0.0
-    # via
-    #   dask-expr
-    #   deafrica (setup.py)
+    # via deafrica (setup.py)
 pyasn1==0.6.1
     # via
     #   pyasn1-modules
@@ -245,10 +235,10 @@ pydantic==2.9.2
     #   rio-cogeo
 pydantic-core==2.23.4
     # via pydantic
-pyogrio==0.10.0
-    # via geopandas
 pyparsing==3.2.0
-    # via rasterio
+    # via
+    #   rasterio
+    #   snuggs
 pyproj==3.7.0
     # via
     #   datacube
@@ -261,7 +251,7 @@ pystac==1.11.0
     #   deafrica (setup.py)
     #   odc-stac
     #   rio-stac
-python-dateutil==2.9.0.post0
+python-dateutil==2.8.1
     # via
     #   botocore
     #   datacube
@@ -270,6 +260,7 @@ python-dateutil==2.9.0.post0
     #   pandas
     #   pystac
     #   sentinelhub
+    #   stac-sentinel
 pytz==2024.2
     # via
     #   multiurl
@@ -280,7 +271,7 @@ pyyaml==6.0.2
     #   datacube
     #   distributed
     #   kubernetes
-rasterio==1.4.1
+rasterio==1.1.8
     # via
     #   datacube
     #   deafrica (setup.py)
@@ -288,6 +279,7 @@ rasterio==1.4.1
     #   odc-stac
     #   rio-cogeo
     #   rio-stac
+    #   stac-sentinel
 referencing==0.35.1
     # via
     #   jsonschema
@@ -306,7 +298,7 @@ requests-oauthlib==2.0.0
     # via
     #   kubernetes
     #   sentinelhub
-rio-cogeo==5.3.6
+rio-cogeo==3.4.1
     # via deafrica (setup.py)
 rio-stac==0.9.0
     # via deafrica (setup.py)
@@ -319,9 +311,7 @@ rsa==4.9
 rtree==1.3.0
     # via deafrica (setup.py)
 ruamel-yaml==0.18.6
-    # via
-    #   datacube
-    #   deafrica (setup.py)
+    # via deafrica (setup.py)
 ruamel-yaml-clib==0.2.8
     # via ruamel-yaml
 s3transfer==0.10.3
@@ -344,16 +334,21 @@ shapely==2.0.6
     #   sentinelhub
 six==1.16.0
     # via
+    #   fiona
     #   kubernetes
     #   python-dateutil
 slicerator==1.1.0
-    # via pims
+    # via
+    #   dask-image
+    #   pims
+snuggs==1.4.7
+    # via rasterio
 sortedcontainers==2.4.0
     # via distributed
-sqlalchemy==1.4.54
-    # via
-    #   datacube
-    #   geoalchemy2
+sqlalchemy==2.0.36
+    # via datacube
+stac-sentinel @ git+https://github.com/stac-utils/stac-sentinel.git
+    # via deafrica (setup.py)
 tblib==3.0.0
     # via distributed
 tifffile==2024.9.20
@@ -389,15 +384,13 @@ typing-extensions==4.12.2
     #   pydantic
     #   pydantic-core
     #   sentinelhub
+    #   sqlalchemy
     #   typing-inspect
 typing-inspect==0.9.0
     # via dataclasses-json
-tzdata==2024.2
-    # via pandas
 urllib3==2.2.3
     # via
     #   botocore
-    #   distributed
     #   kubernetes
     #   requests
 urlpath==1.2.0
@@ -406,9 +399,7 @@ utm==0.7.0
     # via sentinelhub
 websocket-client==1.8.0
     # via kubernetes
-wrapt==1.16.0
-    # via deprecat
-xarray==2024.9.0
+xarray==2024.3.0
     # via
     #   datacube
     #   odc-algo
