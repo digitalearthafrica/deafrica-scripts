@@ -339,6 +339,7 @@ def list_inventory(
     prefix: str = "",
     suffix: str = "",
     contains: str = "",
+    multiple_contains: tuple[str, str] = None,
     n_threads: int = None,
     **kw,
 ):
@@ -350,12 +351,12 @@ def list_inventory(
     :param manifest: (str)
     :param s3: (aws client)
     :param prefix: (str)
+    :param prefixes: (List(str)) allow multiple prefixes to be searched
     :param suffix: (str)
     :param contains: (str)
     :param n_threads: (int) number of threads, if not sent does not use threads
     :return: SimpleNamespace
     """
-    # TODO: refactor parallel execution part out of this function
     # pylint: disable=too-many-locals
     s3 = s3 or s3_client()
 
@@ -398,12 +399,15 @@ def list_inventory(
                         key = namespace.Key
                     except AttributeError:
                         key = namespace.key
-                    if (
-                        key.startswith(prefix)
-                        and key.endswith(suffix)
-                        and contains in key
+                    if test_key(
+                        key,
+                        prefix=prefix,
+                        suffix=suffix,
+                        contains=contains,
+                        multiple_contains=multiple_contains,
                     ):
                         yield namespace
+
     else:
         for u in data_urls:
             for namespace in retrieve_manifest_files(u, s3, schema, file_format):
@@ -411,5 +415,11 @@ def list_inventory(
                     key = namespace.Key
                 except AttributeError:
                     key = namespace.key
-                if key.startswith(prefix) and key.endswith(suffix) and contains in key:
+                if test_key(
+                    key,
+                    prefix=prefix,
+                    suffix=suffix,
+                    contains=contains,
+                    multiple_contains=multiple_contains,
+                ):
                     yield namespace
