@@ -19,7 +19,6 @@ import pyarrow.parquet as pq
 import click
 import requests
 from odc.aws import s3_client, s3_fetch, s3_ls_dir
-from odc.aws.inventory import find_latest_manifest
 from xarray.tutorial import file_formats
 
 # GDAL format: [ulx, uly, lrx, lry]
@@ -270,6 +269,19 @@ limit = click.option(
     help="Limit the number of messages to transfer.",
     default=None,
 )
+
+
+def find_latest_manifest(prefix, s3, **kw) -> str:
+    """
+    Find latest manifest
+    """
+    manifest_dirs = sorted(s3_ls_dir(prefix, s3=s3, **kw), reverse=True)
+
+    for d in manifest_dirs:
+        if d.endswith("/"):
+            leaf = d.split("/")[-2]
+            if leaf.endswith("Z"):
+                return d + "manifest.json"
 
 
 def retrieve_manifest_files(key: str, s3, schema, file_format, **kw):
