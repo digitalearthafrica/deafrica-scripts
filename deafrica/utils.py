@@ -326,7 +326,7 @@ def test_key(
         contains = multiple_contains
 
     if key.startswith(prefix) and key.endswith(suffix):
-        for c in multiple_contains:
+        for c in contains:
             if c in key:
                 return True
 
