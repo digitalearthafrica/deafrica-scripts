@@ -6,7 +6,7 @@ from textwrap import dedent
 import click
 import pandas as pd
 from odc.aws import s3_dump, s3_client
-from odc.aws.inventory import list_inventory
+from deafrica.utils import list_inventory
 from urlpath import URL
 from deafrica import __version__
 
@@ -18,13 +18,15 @@ from deafrica.utils import (
 )
 import datacube
 
-SENTINEL_2_INVENTORY_PATH = URL(
-    "s3://deafrica-sentinel-2-inventory/deafrica-sentinel-2/deafrica-sentinel-2-inventory/"
+SENTINEL_2_C1_INVENTORY_PATH = URL(
+    "s3://deafrica-sentinel-2-l2a-c1-inventory/deafrica-sentinel-2-l2a-c1/deafrica-sentinel-2-l2a-c1-inventory/"
 )
-SOURCE_INVENTORY_PATH = URL("s3://sentinel-cogs-inventory/sentinel-cogs/sentinel-cogs/")
-SENTINEL_2_REGION = "af-south-1"
+SOURCE_INVENTORY_PATH = URL(
+    "s3://e84-earth-search-sentinel-data-inventory/e84-earth-search-sentinel-data/primary/"
+)
+SENTINEL_2_C1_REGION = "af-south-1"
 SOURCE_REGION = "us-west-2"
-BASE_FOLDER_NAME = "sentinel-s2-l2a-cogs"
+BASE_FOLDER_NAME = "sentinel-2-c1-l2a"
 
 
 def get_and_filter_cogs_keys():
@@ -50,13 +52,13 @@ def get_and_filter_cogs_keys():
     )
 
     return set(
-        key.Key
+        key.key
         for key in source_keys
         if (
-            key.Key.split("/")[-2].split("_")[1] in africa_tile_ids
+            key.key.split("/")[-2].split("_")[1] in africa_tile_ids
             # We need to ensure we're ignoring the old format data
-            and re.match(r"sentinel-s2-l2a-cogs/\d{4}/", key.Key) is None
-            and "tileinfo_metadata.json" not in key.Key
+            # and re.match(r"sentinel-s2-l2a-cogs/\d{4}/", key.Key) is None
+            and "tileinfo_metadata.json" not in key.key
         )
     )
 
@@ -69,7 +71,7 @@ def get_odc_keys(log) -> set:
         for val in dc.index.datasets.search_returning(
             ["uri", "indexed_time"], product="s2_l2a"
         ):
-            all_odc_vals[val.uri.replace("s3://deafrica-sentinel-2/", "")] = (
+            all_odc_vals[val.uri.replace("s3://deafrica-sentinel-2-l2a-c1/", "")] = (
                 val.indexed_time
             )
         return all_odc_vals
@@ -84,8 +86,8 @@ def generate_buckets_diff(
     notification_url: str = None,
 ) -> None:
     """
-    Compare Sentinel-2 buckets in US and Africa and detect differences
-    A report containing missing keys will be written to s3://deafrica-sentinel-2/status-report
+    Compare Sentinel-2-c1 buckets in US and Africa and detect differences
+    A report containing missing keys will be written to s3://deafrica-sentinel-2-l2a-c1/status-report
     :param bucket_name: (str) Bucket where the gap report is
     :param update_stac: (bool) Define if the report will contain all scenes from the source for an update
     :param notification_url: (str) Optional slack URL in case of you want to send a slack notification
@@ -96,7 +98,7 @@ def generate_buckets_diff(
     log.info("Task started")
 
     # defines where the report will be saved
-    s2_status_report_path = URL(f"s3://{bucket_name}/status-report/")
+    s2_c1_status_report_path = URL(f"s3://{bucket_name}/status-report/")
 
     environment = "DEV" if "dev" in bucket_name else "PDS"
     log.info(f"Environment {environment}")
@@ -110,14 +112,16 @@ def generate_buckets_diff(
 
     if update_stac:
         log.info("FORCED UPDATE ACTIVE!")
-        missing_scenes = set(f"s3://sentinel-cogs/{key}" for key in source_keys)
+        missing_scenes = set(
+            f"s3://e84-earth-search-sentinel-data/{key}" for key in source_keys
+        )
         orphaned_keys = set()
 
     else:
         destination_keys = set(
             ns.Key
             for ns in list_inventory(
-                manifest=f"{SENTINEL_2_INVENTORY_PATH}",
+                manifest=f"{SENTINEL_2_C1_INVENTORY_PATH}",
                 prefix=BASE_FOLDER_NAME,
                 contains=".json",
                 n_threads=200,
@@ -129,7 +133,7 @@ def generate_buckets_diff(
 
         # Keys that are missing, they are in the source but not in the bucket
         missing_scenes = set(
-            f"s3://sentinel-cogs/{key}"
+            f"s3://e84-earth-search-sentinel-data/{key}"
             for key in source_keys
             if key not in destination_keys
         )
@@ -148,7 +152,7 @@ def generate_buckets_diff(
             for key in indexed_keys
             if (key not in destination_keys and yesterday > all_odc_values[key].date())
         )
-    s2_s3 = s3_client(region_name=SENTINEL_2_REGION)
+    s2_s3 = s3_client(region_name=SENTINEL_2_C1_REGION)
 
     if (
         len(missing_scenes) > 0
@@ -162,7 +166,7 @@ def generate_buckets_diff(
             else URL(f"{date_string}_gap_report_update.json")
         )
 
-        log.info(f"File will be saved in {s2_status_report_path}/{output_filename}")
+        log.info(f"File will be saved in {s2_c1_status_report_path}/{output_filename}")
 
         missing_orphan_scenes_json = json.dumps(
             {
@@ -175,12 +179,12 @@ def generate_buckets_diff(
 
         s3_dump(
             data=missing_orphan_scenes_json,
-            url=str(URL(s2_status_report_path) / output_filename),
+            url=str(URL(s2_c1_status_report_path) / output_filename),
             s3=s2_s3,
             ContentType="application/json",
         )
     report_http_link = (
-        f"https://{bucket_name}.s3.{SENTINEL_2_REGION}.amazonaws.com/status-report/{output_filename}"
+        f"https://{bucket_name}.s3.{SENTINEL_2_C1_REGION}.amazonaws.com/status-report/{output_filename}"
         if len(missing_scenes) > 0
         or len(orphaned_keys) > 0
         or (len(missing_odc_scenes) > 0 and len(indexed_keys) > 0)
@@ -189,7 +193,7 @@ def generate_buckets_diff(
     )
 
     message = dedent(
-        f"*SENTINEL 2 GAP REPORT - {environment}*\n"
+        f"*SENTINEL 2 C1 GAP REPORT - {environment}*\n"
         f"Missing Scenes: {len(missing_scenes)}\n"
         f"Orphan Scenes: {len(orphaned_keys)}\n"
         f"Missing ODC Scenes: {len(missing_odc_scenes)}\n"
@@ -207,14 +211,14 @@ def generate_buckets_diff(
     ):
         if notification_url is not None:
             send_slack_notification(
-                notification_url, "S2 Gap Report - Exception", message
+                notification_url, "S2 C1 Gap Report - Exception", message
             )
         raise Exception(f"More than 200 scenes were found \n {message}")
     else:
         if notification_url is not None:
             send_slack_notification(
                 notification_url,
-                "S2 Gap Report - Success",
+                "S2 C1 Gap Report - Success",
                 message + "\n Missing scenes below threshold",
             )
 
@@ -229,7 +233,7 @@ def generate_buckets_diff(
 @update_stac
 @slack_url
 @click.option("--version", is_flag=True, default=False)
-@click.command("s2-gap-report")
+@click.command("s2-c1-gap-report")
 def cli(
     bucket_name: str,
     update_stac: bool = False,
