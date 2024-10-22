@@ -410,6 +410,7 @@ def list_inventory(
 
     else:
         for u in data_urls:
+            logging.info(f"Retrieve manifest files for {u}")
             for namespace in retrieve_manifest_files(u, s3, schema, file_format):
                 try:
                     key = namespace.Key
