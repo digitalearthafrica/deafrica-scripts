@@ -41,7 +41,7 @@ def get_and_filter_cogs_keys():
         s3=s3,
         prefix=BASE_FOLDER_NAME,
         contains=".json",
-        n_threads=None,
+        n_threads=200,
     )
 
     africa_tile_ids = set(
@@ -55,7 +55,7 @@ def get_and_filter_cogs_keys():
         key.key
         for key in source_keys
         if (
-            key.key.split("/")[-2].split("_")[1] in africa_tile_ids
+            key.key.split("/")[-2].split("_")[1].lstrip("T") in africa_tile_ids
             # We need to ensure we're ignoring the old format data
             # and re.match(r"sentinel-s2-l2a-cogs/\d{4}/", key.Key) is None
             and "tileinfo_metadata.json" not in key.key
