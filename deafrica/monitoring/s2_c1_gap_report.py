@@ -55,7 +55,7 @@ def get_and_filter_cogs_keys():
         key.key
         for key in source_keys
         if (
-            key.key.split("/")[-2].split("_")[1] in africa_tile_ids
+            key.key.split("/")[-2].split("_")[1].lstrip("T") in africa_tile_ids
             # We need to ensure we're ignoring the old format data
             # and re.match(r"sentinel-s2-l2a-cogs/\d{4}/", key.Key) is None
             and "tileinfo_metadata.json" not in key.key
@@ -69,7 +69,7 @@ def get_odc_keys(log) -> set:
         all_odc_vals = {}
 
         for val in dc.index.datasets.search_returning(
-            ["uri", "indexed_time"], product="s2_l2a"
+            ["uri", "indexed_time"], product="s2_l2a_c1"
         ):
             all_odc_vals[val.uri.replace("s3://deafrica-sentinel-2-l2a-c1/", "")] = (
                 val.indexed_time
