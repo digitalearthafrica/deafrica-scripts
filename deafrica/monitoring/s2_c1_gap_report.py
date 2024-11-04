@@ -69,7 +69,7 @@ def get_odc_keys(log) -> set:
         all_odc_vals = {}
 
         for val in dc.index.datasets.search_returning(
-            ["uri", "indexed_time"], product="s2_l2a"
+            ["uri", "indexed_time"], product="s2_l2a_c1"
         ):
             all_odc_vals[val.uri.replace("s3://deafrica-sentinel-2-l2a-c1/", "")] = (
                 val.indexed_time
