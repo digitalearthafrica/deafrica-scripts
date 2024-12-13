@@ -24,6 +24,7 @@ current_date = datetime.now().strftime("%Y-%m-%d")
 # Initialize the SES client using Boto3
 ses_client = boto3.client("ses", region_name=AWS_REGION_SES)
 
+
 def fetch_users_from_aws():
     # Run AWS CLI command to fetch users from AWS Cognito
     print("Fetching Cognito users...")
