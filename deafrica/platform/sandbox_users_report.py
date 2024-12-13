@@ -1,6 +1,7 @@
 import json
 import csv
-import smtplib
+import boto3
+import click
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -18,20 +19,29 @@ AWS_REGION = os.getenv("AWS_REGION", "us-west-2")  # Default region or from envi
 USER_POOL_ID = os.getenv("USER_POOL_ID")  # User pool ID from environment
 
 # Email Configuration
-SENDER_EMAIL = os.getenv("SENDER_EMAIL")  # Get email from environment variable
-SENDER_PASSWORD = os.getenv(
-    "SENDER_PASSWORD"
-)  # Get email password from environment variable
-RECEIVER_EMAIL = os.getenv(
-    "RECEIVER_EMAIL"
-)  # Get receiver email from environment variable
-SMTP_SERVER = os.getenv(
-    "SMTP_SERVER", "smtp.gmail.com"
-)  # Default to Gmail if not provided
-SMTP_PORT = int(os.getenv("SMTP_PORT", 587))  # Default to 587 if not provided
+SENDER_EMAIL = "info@digitalearthafrica.org"  # SES-verified sender email
+RECEIVER_EMAIL = "kenneth.mubea@digitalearthafrica.org"
 
 # Get the current date in YYYY-MM-DD format
 current_date = datetime.now().strftime("%Y-%m-%d")
+
+# Initialize the SES client using Boto3
+ses_client = boto3.client(
+    "ses",
+    aws_access_key_id=AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+    region_name="af-south-1",
+)
+
+
+def validate_env_vars():
+    """Ensure all required environment variables are set."""
+    if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY or not USER_POOL_ID:
+        print(
+            "Error: Missing required environment variables. Ensure AWS_ACCESS_KEY_ID, "
+            "AWS_SECRET_ACCESS_KEY, and USER_POOL_ID are set."
+        )
+        exit(1)
 
 
 def fetch_users_from_aws():
@@ -161,19 +171,20 @@ def send_email_with_attachment(csv_filename):
         part.add_header("Content-Disposition", f"attachment; filename={csv_filename}")
         msg.attach(part)
 
-    # Send the email via Gmail SMTP
+    # Send the email via AWS SES
     try:
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-        server.starttls()  # Use TLS for secure connection
-        server.login(SENDER_EMAIL, SENDER_PASSWORD)
-        server.sendmail(SENDER_EMAIL, RECEIVER_EMAIL, msg.as_string())
-        server.quit()
+        response = ses_client.send_raw_email(
+            Source=SENDER_EMAIL,
+            Destinations=[RECEIVER_EMAIL],
+            RawMessage={"Data": msg.as_string()},
+        )
         print("Email sent successfully!")
     except Exception as e:
-        print(f"Error sending email: {e}")
+        print(f"Error sending email via SES: {e}")
 
 
 def main():
+    validate_env_vars()
     # Fetch users from AWS Cognito and save to Users.json
     fetch_users_from_aws()
 
@@ -181,9 +192,18 @@ def main():
     json_filename = "Users.json"
     csv_filename = f"Users_{current_date}.csv"
 
-    print(f"Converting users to CSV file: {csv_filename}...")
+    print(f"Converting JSON to CSV file: {csv_filename}...")
     convert_json_to_csv(json_filename, csv_filename)
 
     # Send the CSV as an email attachment
-    print(f"Sending the CSV report via email...")
+    print(f"Sending email with attached CSV report...")
     send_email_with_attachment(csv_filename)
+
+
+@click.command("sandbox-users-report")
+def cli():
+    main()
+
+
+if __name__ == "__main__":
+    cli()
