@@ -10,13 +10,9 @@ from datetime import datetime
 import subprocess
 import os
 
-# AWS Configuration
-AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")  # Access key from environment
-AWS_SECRET_ACCESS_KEY = os.getenv(
-    "AWS_SECRET_ACCESS_KEY"
-)  # Secret key from environment
-AWS_REGION = os.getenv("AWS_REGION", "us-west-2")  # Default region or from environment
-USER_POOL_ID = os.getenv("USER_POOL_ID")  # User pool ID from environment
+AWS_REGION_COGNITO = "us-west-2"  # AWS region for Cognito User Pool
+AWS_REGION_SES = "af-south-1"  # AWS region for SES
+USER_POOL_ID = "us-west-2_v9nJrst3o"  # User pool ID from environment
 
 # Email Configuration
 SENDER_EMAIL = "info@digitalearthafrica.org"  # SES-verified sender email
@@ -26,23 +22,7 @@ RECEIVER_EMAIL = "kenneth.mubea@digitalearthafrica.org"
 current_date = datetime.now().strftime("%Y-%m-%d")
 
 # Initialize the SES client using Boto3
-ses_client = boto3.client(
-    "ses",
-    aws_access_key_id=AWS_ACCESS_KEY_ID,
-    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-    region_name="af-south-1",
-)
-
-
-def validate_env_vars():
-    """Ensure all required environment variables are set."""
-    if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY or not USER_POOL_ID:
-        print(
-            "Error: Missing required environment variables. Ensure AWS_ACCESS_KEY_ID, "
-            "AWS_SECRET_ACCESS_KEY, and USER_POOL_ID are set."
-        )
-        exit(1)
-
+ses_client = boto3.client("ses", region_name=AWS_REGION_SES)
 
 def fetch_users_from_aws():
     # Run AWS CLI command to fetch users from AWS Cognito
@@ -54,7 +34,7 @@ def fetch_users_from_aws():
         "--user-pool-id",
         USER_POOL_ID,
         "--region",
-        AWS_REGION,
+        AWS_REGION_COGNITO,
     ]
 
     # Execute AWS CLI command and capture output as JSON
@@ -184,7 +164,6 @@ def send_email_with_attachment(csv_filename):
 
 
 def main():
-    validate_env_vars()
     # Fetch users from AWS Cognito and save to Users.json
     fetch_users_from_aws()
 
