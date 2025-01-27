@@ -56,9 +56,8 @@ def get_and_filter_cogs_keys():
         for key in source_keys
         if (
             key.key.split("/")[-2].split("_")[1].lstrip("T") in africa_tile_ids
-            # We need to ensure we're ignoring the old format data
-            # and re.match(r"sentinel-s2-l2a-cogs/\d{4}/", key.Key) is None
             and "tileinfo_metadata.json" not in key.key
+            and "tileInfo.json" not in key.key
         )
     )
 
