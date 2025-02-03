@@ -5,6 +5,7 @@ This DAG runs weekly and creates a gap report in the following location:
 s3://deafrica-landsat-dev/status-report/<satellite_date.csv.gz>
 
 """
+
 from __future__ import annotations
 
 import csv
