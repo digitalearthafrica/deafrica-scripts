@@ -2,6 +2,7 @@
 # Read gap report and generate messages to fill the missing scenes
 
 """
+
 import json
 import logging
 import sys
