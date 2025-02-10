@@ -107,15 +107,6 @@ def generate_buckets_diff(
     # Retrieve keys from inventory bucket
     source_keys = get_and_filter_cogs_keys()
 
-    # Write source keys to text file for debugging
-    import fsspec
-
-    fs = fsspec.filesystem("file")
-    fs.mkdirs(path="/tmp/", exist_ok=True)
-    with fs.open("/tmp/s2_c1_source_keys.txt", "w") as file:
-        for item in list(source_keys):
-            file.write(f"{item}\n")
-
     output_filename = "No missing scenes were found"
 
     if update_stac:
@@ -135,15 +126,6 @@ def generate_buckets_diff(
                 n_threads=200,
             )
         )
-
-        # Write destination keys to text file for debugging
-        import fsspec
-
-        fs = fsspec.filesystem("file")
-        fs.mkdirs(path="/tmp/", exist_ok=True)
-        with fs.open("/tmp/s2_c1_destination_keys_keys.txt", "w") as file:
-            for item in list(destination_keys):
-                file.write(f"{item}\n")
 
         log.info(f"Retrieving keys from odc")
         all_odc_values = get_odc_keys(log)
