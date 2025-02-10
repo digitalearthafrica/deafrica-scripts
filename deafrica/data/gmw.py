@@ -1,20 +1,36 @@
+"""
+Download the Global Mangrove Watch (1996 - 2020) Version 3.0 Dataset
+for a year from Zenodo, convert to CLoud Optimized Geotiff,
+and push to an S3 bucket
+
+Datasource: https://zenodo.org/records/6894273
+"""
+
 import json
 import os
+import shutil
 from datetime import datetime
 from pathlib import Path
-from subprocess import check_output, STDOUT
+from typing import List, Set
+from zipfile import ZipFile
 
 import click
+import geopandas as gpd
 import pystac
+import requests
+import rioxarray
 from odc.aws import s3_dump
-from deafrica.utils import odc_uuid
+from odc.geo.xr import assign_crs, write_cog
 from pystac import Item
 from rio_stac import create_stac_item
 from urlpath import URL
+
 from deafrica.utils import (
+    AFRICA_BBOX,
+    odc_uuid,
+    send_slack_notification,
     setup_logging,
     slack_url,
-    send_slack_notification,
 )
 
 VALID_YEARS = [
@@ -30,90 +46,64 @@ VALID_YEARS = [
     "2019",
     "2020",
 ]
+SOURCE_URL_PATH = URL("https://zenodo.org/records/6894273/files/")
+FILE_NAME = "gmw_v3_{year}_gtiff.zip"
 LOCAL_DIR = Path(os.getcwd())
-SOURCE_URL_PATH = URL("https://wcmc.io/")
-FILE_NAME = "GMW_{year}"
+AFRICA_EXTENT_URL = "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/master/africa-extent-bbox.json"  # noqa E501
 
 # Set log level to info
 log = setup_logging()
 
 
-def download_and_unzip_gmw(local_filename: str) -> str:
-    import requests
-    import shutil
-    from zipfile import ZipFile
+def download_and_unzip_gmw(year: str) -> List[float]:
+    """
+    Download and unzip the Global Mangrove Watch (GMW) files
+    for a year.
 
-    url = SOURCE_URL_PATH / local_filename
+    Parameters
+    ----------
+    year : str
+        Year for which to download Global Mangrove Watch data.
 
-    with requests.get(url, stream=True, allow_redirects=True) as r:
-        with open(local_filename, "wb") as f:
-            shutil.copyfileobj(r.raw, f)
+    Returns
+    -------
+    list[str]
+        GMW TIF files downloaded.
+    """
+    url = SOURCE_URL_PATH / FILE_NAME.format(year=year)
+
+    local_filename = LOCAL_DIR / FILE_NAME.format(year=year)
+
+    if not os.path.exists(local_filename):
+        with requests.get(url, stream=True, allow_redirects=True) as r:
+            with open(local_filename, "wb") as f:
+                shutil.copyfileobj(r.raw, f)
+    else:
+        log.info(f"Skipping download, {local_filename} already exists!")
+
     with ZipFile(local_filename) as z:
         z.extractall()
-    return [f for f in z.namelist() if f.endswith(".shp")][0]
+        gmw_tiles = [f for f in z.namelist() if f.endswith(".tif")]
+    return gmw_tiles
 
 
-def create_and_upload_stac(cog_file: Path, s3_dst: str, year) -> Item:
-    out_path = URL(f"{s3_dst}/{year}/")
-
-    log.info("Item base creation")
-    item = create_stac_item(
-        str(cog_file),
-        id=str(odc_uuid("gmw", "3.0", [cog_file.name.replace("tif", "")])),
-        with_proj=True,
-        input_datetime=datetime(int(year), 12, 31),
-        properties={
-            "odc:product": "gmw",
-            "start_datetime": f"{year}-01-01T00:00:00Z",
-            "end_datetime": f"{year}-12-31T23:59:59Z",
-        },
+def get_gmw_africa_tiles() -> Set[str]:
+    """
+    Get a set of the labels for Global Mangrove Watch tiles over Africa.
+    Returns
+    -------
+    set[str]
+        Labels for Global Mangrove Watch tiles over Africa.
+    """
+    africa_extent = gpd.read_file(AFRICA_EXTENT_URL).to_crs("EPSG:4326")
+    gmw_tiles_url = SOURCE_URL_PATH / "gmw_v3_tiles.geojson"
+    gmw_tiles = gpd.read_file(str(gmw_tiles_url)).to_crs("EPSG:4326")
+    gmw_africa_tiles = set(
+        africa_extent.sjoin(gmw_tiles, how="inner", predicate="intersects")[
+            "tile"
+        ].values
     )
-
-    log.info("links creation")
-    item.set_self_href(str(out_path / f"gmw_{year}_stac-item.json"))
-    item.add_links(
-        [
-            pystac.Link(
-                target=str(SOURCE_URL_PATH / FILE_NAME.format(year=year)),
-                title="Source file",
-                rel=pystac.RelType.DERIVED_FROM,
-                media_type="application/zip",
-            )
-        ]
-    )
-
-    out_data = out_path / cog_file.name
-    # Remove asset created by create_stac_item and add our own
-    del item.assets["asset"]
-    item.assets["mangrove"] = pystac.Asset(
-        href=str(out_data),
-        title="gmw-v3.0",
-        media_type=pystac.MediaType.COG,
-        roles=["data"],
-    )
-
-    log.info(f"Item created {item.to_dict()}")
-    log.info(f"Item validated {item.validate()}")
-
-    log.info(f"Dump the data to S3 {str(cog_file)}")
-    s3_dump(
-        data=open(str(cog_file), "rb").read(),
-        url=str(out_data),
-        ACL="bucket-owner-full-control",
-        ContentType="image/tiff",
-    )
-    log.info(f"File written to {out_data}")
-
-    log.info("Write STAC to S3")
-    s3_dump(
-        data=json.dumps(item.to_dict(), indent=2),
-        url=item.self_href,
-        ACL="bucket-owner-full-control",
-        ContentType="application/json",
-    )
-    log.info(f"STAC written to {item.self_href}")
-
-    return item
+    return gmw_africa_tiles
 
 
 def gmw_download_stac_cog(year: str, s3_dst: str, slack_url: str = None) -> None:
@@ -121,58 +111,103 @@ def gmw_download_stac_cog(year: str, s3_dst: str, slack_url: str = None) -> None
     Mangrove download, COG and STAC process
 
     """
-
-    gmw_shp = ""
-
     try:
         if year not in VALID_YEARS:
             raise ValueError(
-                f"Chosen year {year} is not valid, please choose from one of {VALID_YEARS}"
+                f"Chosen year {year} is not valid, "
+                f"please choose from one of {VALID_YEARS}"
             )
         log.info(f"Starting GMW downloader for year {year}")
+        gmw_africa_tiles = get_gmw_africa_tiles()
+        gmw_files = download_and_unzip_gmw(year=year)
+        gmw_africa_files = [
+            file
+            for file in gmw_files
+            if any(label in file for label in gmw_africa_tiles)
+        ]
 
-        log.info("download extents if needed")
-        if year == "2018":
-            gmw_shp = f"GMW_v3_{year}/00_Data/gmw_v3_{year}.shp"
-        else:
-            gmw_shp = f"gmw_v3_{year}_vec.shp"
-        local_filename = FILE_NAME.format(year=year)
-        if not os.path.exists(gmw_shp):
-            gmw_shp = download_and_unzip_gmw(local_filename=local_filename)
-        local_extracted_file_path = LOCAL_DIR / gmw_shp
+        # Copy over the tiles one by one.
+        for local_file in gmw_africa_files:
+            filename = os.path.splitext(os.path.basename(local_file))[0]
+            region_code = filename.split("_")[1]
+            out_cog = URL(s3_dst) / str(year) / region_code / f"{filename}.tif"
+            out_stac = (
+                URL(s3_dst) / str(year) / region_code / f"{filename}.stac-item.json"
+            )
 
-        output_file = LOCAL_DIR / gmw_shp.replace(".shp", ".tif")
-        log.info(f"Output TIF file is {output_file}")
-        log.info(f"Extracted SHP file is {local_extracted_file_path}")
-        log.info("Start gdal_rasterize")
-        cmd = (
-            "gdal_rasterize "
-            "-a_nodata 0 "
-            "-ot Byte "
-            "-a pxlval "
-            "-of GTiff "
-            "-tr 0.0002 0.0002 "
-            f"{local_extracted_file_path} {output_file} "
-            "-te -26.36 -47.97 64.50 38.35"
-        )
-        check_output(cmd, stderr=STDOUT, shell=True)
+            # Create and upload COG
 
-        log.info(f"File {output_file} rasterized successfully")
+            ds = rioxarray.open_rasterio(local_file).squeeze(dim="band")
+            # Subset to Africa
+            ulx, uly, lrx, lry = AFRICA_BBOX
+            # Note: lats are upside down!
+            ds = ds.sel(y=slice(uly, lry), x=slice(ulx, lrx))
+            # Add crs information
+            ds = assign_crs(ds, crs="EPSG:4326")
+            # Create an in memory COG.
+            cog_bytes = write_cog(
+                geo_im=ds, fname=":mem:", nodata=0, overview_resampling="nearest"
+            )
+            # Upload COG to s3
+            s3_dump(
+                data=cog_bytes,
+                url=str(out_cog),
+                ACL="bucket-owner-full-control",
+                ContentType="image/tiff",
+            )
+            log.info(f"COG written to {out_cog}")
 
-        # Create cloud optimised GeoTIFF
-        cloud_optimised_file = LOCAL_DIR / f"deafrica_gmw_{year}.tif"
-        cmd = f"rio cogeo create --overview-resampling nearest {output_file} {cloud_optimised_file}"
-        check_output(cmd, stderr=STDOUT, shell=True)
+            # Create and upload STAC.
 
-        log.info(f"File {cloud_optimised_file} cloud optimised successfully")
-
-        create_and_upload_stac(cog_file=cloud_optimised_file, s3_dst=s3_dst, year=year)
+            # Base item creation.
+            item = create_stac_item(
+                out_cog,
+                id=str(odc_uuid("gmw", "3.0", [out_cog.name.replace("tif", "")])),
+                with_proj=True,
+                input_datetime=datetime(int(year), 12, 31),
+                properties={
+                    "odc:product": "gmw",
+                    "odc:region_code": region_code,
+                    "start_datetime": f"{year}-01-01T00:00:00Z",
+                    "end_datetime": f"{year}-12-31T23:59:59Z",
+                },
+            )
+            # Links creation
+            item.set_self_href(str(out_stac))
+            item.add_links(
+                [
+                    pystac.Link(
+                        target=str(SOURCE_URL_PATH / FILE_NAME.format(year=year)),
+                        title="Source file",
+                        rel=pystac.RelType.DERIVED_FROM,
+                        media_type="application/zip",
+                    )
+                ]
+            )
+            # Remove asset created by create_stac_item and add our own
+            del item.assets["asset"]
+            item.assets["mangrove"] = pystac.Asset(
+                href=str(out_cog),
+                title="gmw-v3.0",
+                media_type=pystac.MediaType.COG,
+                roles=["data"],
+            )
+            log.info(f"Item created {item.to_dict()}")
+            # Not sure why this takes too long.
+            # log.info(f"Item validated {item.validate()}")
+            # Upload STAC to s3
+            s3_dump(
+                data=json.dumps(item.to_dict(), indent=2),
+                url=item.self_href,
+                ACL="bucket-owner-full-control",
+                ContentType="application/json",
+            )
+            log.info(f"STAC written to {item.self_href}")
 
         # All done!
         log.info(f"Completed work on {s3_dst}/{year}")
     except Exception as e:
-        message = f"Failed to handle GMW {gmw_shp} with error {e}"
-
+        message = f"Failed to handle GMW {FILE_NAME.format(year=year)} with error {e}"
         if slack_url is not None:
             send_slack_notification(slack_url, "GMW", message)
         log.exception(message)
