@@ -48,7 +48,7 @@ def get_common_message_attributes(stac_doc: Dict, product_name: str) -> Dict:
             "Value": product_name,
         }
     }
-    msg_attributes["status"] = {"Type": "String", "Value": "created"}
+
     date_time = stac_doc.get("properties").get("datetime")
     if date_time:
         msg_attributes["datetime"] = {
