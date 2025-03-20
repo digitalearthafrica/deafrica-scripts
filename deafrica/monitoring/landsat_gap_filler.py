@@ -10,16 +10,16 @@ from textwrap import dedent
 from typing import Optional
 
 import click
-from odc.aws.queue import publish_messages, get_queue
+from odc.aws.queue import get_queue, publish_messages
 
 from deafrica import __version__
 from deafrica.utils import (
     find_latest_report,
+    limit,
     read_report_missing_scenes,
     send_slack_notification,
     setup_logging,
     slack_url,
-    limit,
 )
 
 S3_BUCKET_PATH = "s3://deafrica-landsat/status-report/"

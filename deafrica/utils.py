@@ -14,9 +14,9 @@ from types import SimpleNamespace
 from typing import Sequence
 from urllib.parse import urlparse
 from uuid import UUID, uuid5
-import pyarrow.parquet as pq
 
 import click
+import pyarrow.parquet as pq
 import requests
 from odc.aws import s3_client, s3_fetch, s3_ls_dir
 from xarray.tutorial import file_formats

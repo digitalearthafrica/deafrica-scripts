@@ -1,8 +1,8 @@
+import os
+from datetime import datetime, timedelta
+
 import boto3
 import click as click
-from datetime import datetime
-from datetime import timedelta
-import os
 
 from deafrica.utils import setup_logging
 

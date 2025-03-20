@@ -6,16 +6,16 @@ from urlpath import URL
 
 from deafrica.monitoring import s2_gap_report
 from deafrica.monitoring.s2_gap_report import (
-    get_and_filter_cogs_keys,
     generate_buckets_diff,
+    get_and_filter_cogs_keys,
 )
 from deafrica.tests.conftest import (
     COGS_REGION,
     INVENTORY_BUCKET_NAME,
-    INVENTORY_MANIFEST_FILE,
+    INVENTORY_BUCKET_SOURCE_NAME,
     INVENTORY_DATA_FILE,
     INVENTORY_FOLDER,
-    INVENTORY_BUCKET_SOURCE_NAME,
+    INVENTORY_MANIFEST_FILE,
     REGION,
     REPORT_FOLDER,
     TEST_DATA_DIR,

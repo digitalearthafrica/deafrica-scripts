@@ -1,15 +1,14 @@
 import boto3
 import moto
 import pytest
+from botocore.exceptions import ClientError
+
 from deafrica.data.chirps import (
     DAILY_URL_TEMPLATE,
     MONTHLY_URL_TEMPLATE,
     download_and_cog_chirps,
 )
 from deafrica.tests.conftest import TEST_DATA_DIR
-
-from botocore.exceptions import ClientError
-
 
 TEST_BUCKET_NAME = "test-bucket"
 TEST_REGION = "ap-southeast-2"

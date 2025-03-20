@@ -4,16 +4,15 @@
 
 import json
 import logging
+import os
 import sys
+from datetime import date, datetime, timedelta, timezone
 from textwrap import dedent
 from typing import Optional
 
-import datacube
-from datetime import date, datetime, timedelta, timezone
-
-import click
-import os
 import boto3
+import click
+import datacube
 from botocore import UNSIGNED
 from botocore.config import Config
 
