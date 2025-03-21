@@ -10,11 +10,11 @@ import pystac
 import xarray as xr
 from datacube.utils.cog import write_cog
 from datacube.utils.geometry import assign_crs
-from deafrica.utils import AFRICA_BBOX, setup_logging
 from odc.aws import s3_dump, s3_head_object
-from deafrica.utils import odc_uuid
 from rio_stac import create_stac_item
 from urlpath import URL
+
+from deafrica.utils import AFRICA_BBOX, odc_uuid, setup_logging
 
 """
 Download ESA Climate Change Initiative 300m Landcover from

@@ -1,4 +1,4 @@
-from unittest.mock import patch, PropertyMock
+from unittest.mock import PropertyMock, patch
 
 import boto3
 from click.testing import CliRunner
@@ -6,16 +6,16 @@ from moto import mock_s3
 from urlpath import URL
 
 from deafrica.monitoring.landsat_gap_report import (
-    get_and_filter_keys_from_files,
-    get_and_filter_keys,
     cli,
+    get_and_filter_keys,
+    get_and_filter_keys_from_files,
 )
 from deafrica.tests.conftest import (
-    REGION,
     INVENTORY_BUCKET_NAME,
-    INVENTORY_MANIFEST_FILE,
     INVENTORY_DATA_FILE,
     INVENTORY_FOLDER,
+    INVENTORY_MANIFEST_FILE,
+    REGION,
     TEST_BUCKET_NAME,
     TEST_DATA_DIR,
 )

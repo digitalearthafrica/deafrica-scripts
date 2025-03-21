@@ -1,19 +1,20 @@
-import json
-from textwrap import dedent
-import requests
-import click
-from odc.aws import s3_dump, s3_client, s3_ls_dir
-import geopandas as gpd
 import datetime
-from sentinelhub import SHConfig, SentinelHubCatalog, Geometry, DataCollection
-from urlpath import URL
+import json
 import os
+from textwrap import dedent
+
+import click
+import geopandas as gpd
+import requests
+from odc.aws import s3_client, s3_dump, s3_ls_dir
+from sentinelhub import DataCollection, Geometry, SentinelHubCatalog, SHConfig
+from urlpath import URL
+
 from deafrica.utils import (
-    slack_url,
     send_slack_notification,
     setup_logging,
+    slack_url,
 )
-
 
 SH_CLIENT_ID = os.getenv("SH_CLIENT_ID", "")
 SH_CLIENT_SECRET = os.getenv("SH_CLIENT_SECRET", "")

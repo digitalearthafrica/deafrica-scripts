@@ -1,5 +1,6 @@
-from deafrica.monitoring.latency_check import latency_checker
 import pytest
+
+from deafrica.monitoring.latency_check import latency_checker
 
 
 def test_latency_checker():

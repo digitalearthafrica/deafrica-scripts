@@ -3,22 +3,22 @@ from unittest.mock import patch
 
 import boto3
 import pytest
-from moto import mock_sqs, mock_s3
+from moto import mock_s3, mock_sqs
 from odc.aws.queue import get_queue
 from urlpath import URL
 
 from deafrica.monitoring import landsat_gap_filler
 from deafrica.monitoring.landsat_gap_filler import (
     build_messages,
-    post_messages,
     fill_the_gap,
+    post_messages,
 )
 from deafrica.tests.conftest import (
-    SQS_QUEUE_NAME,
     REGION,
+    REPORT_FOLDER,
+    SQS_QUEUE_NAME,
     TEST_BUCKET_NAME,
     TEST_DATA_DIR,
-    REPORT_FOLDER,
 )
 
 DATA_FOLDER = "landsat"

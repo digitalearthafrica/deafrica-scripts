@@ -4,9 +4,12 @@ import csv
 import json
 import logging
 import math
+import os
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+from email.utils import parsedate_to_datetime
 from gzip import GzipFile
 from io import BytesIO
 from pathlib import Path
@@ -14,15 +17,23 @@ from types import SimpleNamespace
 from typing import Sequence
 from urllib.parse import urlparse
 from uuid import UUID, uuid5
-import pyarrow.parquet as pq
 
 import click
+import fsspec
+import gcsfs
+import pyarrow.parquet as pq
 import requests
-from odc.aws import s3_client, s3_fetch, s3_ls_dir
+import s3fs
+import yaml
+from fsspec.implementations.local import LocalFileSystem
+from gcsfs import GCSFileSystem
+from odc.aws import s3_client, s3_fetch, s3_ls_dir, s3_url_parse
+from s3fs.core import S3FileSystem
 from xarray.tutorial import file_formats
 
 # GDAL format: [ulx, uly, lrx, lry]
 AFRICA_BBOX = [-26.36, 38.35, 64.50, -47.97]
+AFRICA_EXTENT_URL = "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/master/africa-extent-bbox.json"
 
 
 def odc_uuid(
@@ -424,3 +435,203 @@ def list_inventory(
                     multiple_contains=multiple_contains,
                 ):
                     yield namespace
+
+
+def is_s3_path(path: str) -> bool:
+    o = urlparse(path)
+    if o.scheme in ["s3"]:
+        return True
+    else:
+        return False
+
+
+def is_gcsfs_path(path: str) -> bool:
+    o = urlparse(path)
+    if o.scheme in ["gcs", "gs"]:
+        return True
+    else:
+        return False
+
+
+def is_url(path: str) -> bool:
+    o = urlparse(path)
+    if o.scheme in ["http", "https"]:
+        return True
+    else:
+        return False
+
+
+def get_filesystem(
+    path: str,
+    anon: bool = True,
+) -> S3FileSystem | LocalFileSystem | GCSFileSystem:
+    if is_s3_path(path=path):
+        fs = s3fs.S3FileSystem(
+            anon=anon, s3_additional_kwargs={"ACL": "bucket-owner-full-control"}
+        )
+    elif is_gcsfs_path(path=path):
+        if anon:
+            fs = gcsfs.GCSFileSystem(token="anon")
+        else:
+            fs = gcsfs.GCSFileSystem()
+    else:
+        fs = fsspec.filesystem("file")
+    return fs
+
+
+def check_file_exists(path: str) -> bool:
+    fs = get_filesystem(path=path, anon=True)
+    if fs.exists(path) and fs.isfile(path):
+        return True
+    else:
+        return False
+
+
+def check_directory_exists(path: str) -> bool:
+    fs = get_filesystem(path=path, anon=True)
+    if fs.exists(path) and fs.isdir(path):
+        return True
+    else:
+        return False
+
+
+def check_file_extension(path: str, accepted_file_extensions: list[str]) -> bool:
+    _, file_extension = os.path.splitext(path)
+    if file_extension.lower() in accepted_file_extensions:
+        return True
+    else:
+        return False
+
+
+def is_geotiff(path: str) -> bool:
+    accepted_geotiff_extensions = [".tif", ".tiff", ".gtiff"]
+    return check_file_extension(
+        path=path, accepted_file_extensions=accepted_geotiff_extensions
+    )
+
+
+def find_geotiff_files(directory_path: str, file_name_pattern: str = ".*") -> list[str]:
+    file_name_pattern = re.compile(file_name_pattern)
+
+    fs = get_filesystem(path=directory_path, anon=True)
+
+    geotiff_file_paths = []
+
+    for root, dirs, files in fs.walk(directory_path):
+        for file_name in files:
+            if is_geotiff(path=file_name):
+                if re.search(file_name_pattern, file_name):
+                    geotiff_file_paths.append(os.path.join(root, file_name))
+                else:
+                    continue
+            else:
+                continue
+
+    if is_s3_path(path=directory_path):
+        geotiff_file_paths = [f"s3://{file}" for file in geotiff_file_paths]
+    elif is_gcsfs_path(path=directory_path):
+        geotiff_file_paths = [f"gs://{file}" for file in geotiff_file_paths]
+    return geotiff_file_paths
+
+
+def download_product_yaml(url: str) -> str:
+    """
+    Download a product definition file from a raw github url.
+
+    Parameters
+    ----------
+    url : str
+        URL to the product definition file
+
+    Returns
+    -------
+    str
+        Local file path of the downloaded product definition file
+
+    """
+    try:
+        # Create output directory
+        tmp_products_dir = "/tmp/products"
+        if not check_directory_exists(tmp_products_dir):
+            fs = get_filesystem(tmp_products_dir, anon=False)
+            fs.makedirs(tmp_products_dir, exist_ok=True)
+            logging.info(f"Created the directory {tmp_products_dir}")
+
+        output_path = os.path.join(tmp_products_dir, os.path.basename(url))
+
+        # Load product definition from url
+        response = requests.get(url)
+        response.raise_for_status()
+        content = yaml.safe_load(response.content.decode(response.encoding))
+
+        # Write to file.
+        yaml_string = yaml.dump(
+            content,
+            default_flow_style=False,  # Ensures block format
+            sort_keys=False,  # Keeps the original order
+            allow_unicode=True,  # Ensures special characters are correctly represented
+        )
+        # Ensure it starts with "---"
+        yaml_string = f"---\n{yaml_string}"
+
+        with open(output_path, "w") as file:
+            file.write(yaml_string)
+        logging.info(f"Product definition file written to {output_path}")
+        return Path(output_path).resolve()
+    except Exception as e:
+        logging.error(e)
+        raise e
+
+
+def s3_uri_to_public_url(s3_uri, region="af-south-1"):
+    """Convert S3 URI to a public HTTPS URL"""
+    bucket, key = s3_url_parse(s3_uri)
+    return f"https://{bucket}.s3.{region}.amazonaws.com/{key}"
+
+
+def get_last_modified(file_path: str):
+    """Returns the Last-Modified timestamp
+    of a given URL if available."""
+    if is_gcsfs_path(file_path):
+        url = file_path.replace("gs://", "https://storage.googleapis.com/")
+    elif is_s3_path(file_path):
+        url = s3_uri_to_public_url(file_path)
+    else:
+        url = file_path
+
+    assert is_url(url)
+    response = requests.head(url, allow_redirects=True)
+    last_modified = response.headers.get("Last-Modified")
+    if last_modified:
+        return parsedate_to_datetime(last_modified)
+    else:
+        return None
+
+
+def fix_assets_links(stac_file: dict) -> dict:
+    """
+    Fix assets' links to point from gsutil URI to
+    public URL
+
+    Parameters
+    ----------
+    stac_file : dict
+        Stac item from converting a dataset doc to stac using
+        `eodatasets3.stac.to_stac_item`
+
+    Returns
+    -------
+    dict
+        Updated stac_item
+    """
+    # Fix links in assets
+    assets = stac_file["assets"]
+    for measurement in assets.keys():
+        measurement_url = assets[measurement]["href"]
+        if is_gcsfs_path(measurement_url):
+            new_measurement_url = measurement_url.replace(
+                "gs://", "https://storage.googleapis.com/"
+            )
+            stac_file["assets"][measurement]["href"] = new_measurement_url
+
+    return stac_file

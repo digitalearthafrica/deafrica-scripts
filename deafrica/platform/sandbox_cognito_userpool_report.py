@@ -1,14 +1,15 @@
-import json
 import csv
-import boto3
-import click
+import json
+import os
+import subprocess
+from datetime import datetime
+from email import encoders
+from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders
-from datetime import datetime
-import subprocess
-import os
+
+import boto3
+import click
 
 AWS_REGION_COGNITO = "us-west-2"  # AWS region for Cognito User Pool
 AWS_REGION_SES = "af-south-1"  # AWS region for SES

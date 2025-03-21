@@ -10,9 +10,9 @@ from urlpath import URL
 
 from deafrica.monitoring import s2_gap_filler
 from deafrica.tests.conftest import (
+    COGS_REGION,
     REGION,
     SQS_QUEUE_NAME,
-    COGS_REGION,
     TEST_BUCKET_NAME,
     TEST_DATA_DIR,
 )

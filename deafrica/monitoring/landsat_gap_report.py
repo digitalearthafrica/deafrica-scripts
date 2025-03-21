@@ -12,27 +12,27 @@ import csv
 import gzip
 import json
 import time
-from datetime import datetime, date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from textwrap import dedent
 
 import click
+import datacube
 import pandas as pd
-from odc.aws import s3_dump, s3_client
+from odc.aws import s3_client, s3_dump
 from urlpath import URL
 
 from deafrica import __version__
 from deafrica.utils import (
-    slack_url,
-    update_stac,
+    convert_str_to_date,
+    download_file_to_tmp,
+    list_inventory,
     send_slack_notification,
     setup_logging,
-    download_file_to_tmp,
-    convert_str_to_date,
+    slack_url,
     time_process,
-    list_inventory,
+    update_stac,
 )
-import datacube
 
 SUPPORTED_SATELLITES = ("ls8_ls9", "ls7", "ls5")
 FILES = {

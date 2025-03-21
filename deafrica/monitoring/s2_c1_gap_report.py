@@ -1,22 +1,22 @@
 import json
 import re
-from datetime import datetime, date, timedelta
+from datetime import date, datetime, timedelta
 from textwrap import dedent
 
 import click
+import datacube
 import pandas as pd
-from odc.aws import s3_dump, s3_client
-from deafrica.utils import list_inventory
+from odc.aws import s3_client, s3_dump
 from urlpath import URL
-from deafrica import __version__
 
+from deafrica import __version__
 from deafrica.utils import (
-    slack_url,
-    update_stac,
+    list_inventory,
     send_slack_notification,
     setup_logging,
+    slack_url,
+    update_stac,
 )
-import datacube
 
 SENTINEL_2_C1_INVENTORY_PATH = URL(
     "s3://deafrica-sentinel-2-l2a-c1-inventory/deafrica-sentinel-2-l2a-c1/deafrica-sentinel-2-l2a-c1-inventory/"

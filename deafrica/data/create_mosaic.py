@@ -6,11 +6,12 @@ import click
 import pystac
 from datacube import Datacube
 from datacube.utils.dask import start_local_dask
-from deafrica.utils import setup_logging
 from odc.algo import save_cog
 from odc.aws import s3_client, s3_dump, s3_head_object
 from pystac.asset import Asset
 from rio_stac import create_stac_item
+
+from deafrica.utils import setup_logging
 
 
 def _save_opinionated_cog(

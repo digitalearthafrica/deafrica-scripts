@@ -5,14 +5,15 @@ import os
 import shutil
 from logging import Logger
 from pathlib import Path
-from shapely.geometry import Polygon
-from odc.aws import s3_dump, s3_head_object
-import requests
-import pystac
-from rio_stac import create_stac_item
-from deafrica.utils import odc_uuid, setup_logging
-import click
 
+import click
+import pystac
+import requests
+from odc.aws import s3_dump, s3_head_object
+from rio_stac import create_stac_item
+from shapely.geometry import Polygon
+
+from deafrica.utils import odc_uuid, setup_logging
 
 AFRICA_EXTENT = "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/master/africa-extent.json"
 

@@ -1,27 +1,27 @@
 import json
 import logging
+import ntpath
+import os
 import sys
 from textwrap import dedent
 from typing import Dict, Optional
-import rasterio
-from rasterio.session import AWSSession
-import requests
-import ntpath
-import os
 
 import click
-from odc.aws import s3_fetch, s3_client
+import rasterio
+import requests
+from odc.aws import s3_client, s3_fetch
 from odc.aws.queue import get_queue, publish_messages
+from rasterio.session import AWSSession
 from stac_sentinel import sentinel_s2_l2a
 
 from deafrica import __version__
 from deafrica.utils import (
     find_latest_report,
     read_report_missing_scenes,
-    split_list_equally,
     send_slack_notification,
     setup_logging,
     slack_url,
+    split_list_equally,
 )
 
 SOURCE_REGION = "us-west-2"
@@ -48,7 +48,7 @@ def get_common_message_attributes(stac_doc: Dict, product_name: str) -> Dict:
             "Value": product_name,
         }
     }
-    msg_attributes["status"] = {"Type": "String", "Value": "created"}
+
     date_time = stac_doc.get("properties").get("datetime")
     if date_time:
         msg_attributes["datetime"] = {
