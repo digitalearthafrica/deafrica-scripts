@@ -12,7 +12,6 @@ import requests
 from odc.aws import s3_client, s3_fetch
 from odc.aws.queue import get_queue, publish_messages
 from rasterio.session import AWSSession
-from stac_sentinel import sentinel_s2_l2a
 
 from deafrica import __version__
 from deafrica.utils import (
