@@ -1,7 +1,7 @@
+import os
 from pathlib import Path
 
 import pytest
-from urlpath import URL
 
 REGION = "af-south-1"
 TEST_BUCKET_NAME = "test-bucket"
@@ -26,24 +26,21 @@ def setup_env(monkeypatch):
 
 @pytest.fixture
 def s3_report_path():
-    return URL(f"s3://{TEST_BUCKET_NAME}") / URL(REPORT_FOLDER)
+    return os.path.join(f"s3://{TEST_BUCKET_NAME}", REPORT_FOLDER)
 
 
 @pytest.fixture
 def s3_inventory_manifest_file():
-    return (
-        URL(INVENTORY_FOLDER)
-        / URL(INVENTORY_BUCKET_NAME)
-        / "2021-09-17T00-00Z"
-        / INVENTORY_MANIFEST_FILE
+    return os.path.join(
+        INVENTORY_FOLDER,
+        INVENTORY_BUCKET_NAME,
+        "2021-09-17T00-00Z",
+        INVENTORY_MANIFEST_FILE,
     )
 
 
 @pytest.fixture
 def s3_inventory_data_file():
-    return (
-        URL(INVENTORY_FOLDER)
-        / URL(INVENTORY_BUCKET_NAME)
-        / URL("data")
-        / INVENTORY_DATA_FILE
+    return os.path.join(
+        INVENTORY_FOLDER, INVENTORY_BUCKET_NAME, "data", INVENTORY_DATA_FILE
     )

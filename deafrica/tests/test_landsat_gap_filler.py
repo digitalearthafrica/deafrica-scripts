@@ -1,11 +1,11 @@
 import json
+import os
 from unittest.mock import patch
 
 import boto3
 import pytest
 from moto import mock_s3, mock_sqs
 from odc.aws.queue import get_queue
-from urlpath import URL
 
 from deafrica.monitoring import landsat_gap_filler
 from deafrica.monitoring.landsat_gap_filler import (
@@ -21,10 +21,13 @@ from deafrica.tests.conftest import (
     TEST_DATA_DIR,
 )
 
+# from urlpath import URL
+
+
 DATA_FOLDER = "landsat"
 FAKE_LANDSAT_GAP_REPORT = "landsat_5_2021-08-16_gap_report_update.json"
 LANDSAT_GAP_REPORT = TEST_DATA_DIR / DATA_FOLDER / FAKE_LANDSAT_GAP_REPORT
-S3_LANDSAT_GAP_REPORT = URL(REPORT_FOLDER) / FAKE_LANDSAT_GAP_REPORT
+S3_LANDSAT_GAP_REPORT = os.path.join(REPORT_FOLDER, FAKE_LANDSAT_GAP_REPORT)
 
 
 def test_build_messages():
@@ -60,7 +63,7 @@ def test_post_messages():
 
 @mock_sqs
 @mock_s3
-def test_generate_buckets_diff(s3_report_path: URL):
+def test_generate_buckets_diff(s3_report_path: str):
     sqs_client = boto3.client("sqs", region_name=REGION)
     sqs_client.create_queue(QueueName=SQS_QUEUE_NAME)
 
@@ -76,11 +79,11 @@ def test_generate_buckets_diff(s3_report_path: URL):
     s3_client.upload_file(
         str(LANDSAT_GAP_REPORT),
         TEST_BUCKET_NAME,
-        str(S3_LANDSAT_GAP_REPORT),
+        S3_LANDSAT_GAP_REPORT,
     )
 
     print(list(boto3.resource("s3").Bucket(TEST_BUCKET_NAME).objects.all()))
-    with patch.object(landsat_gap_filler, "S3_BUCKET_PATH", str(s3_report_path)):
+    with patch.object(landsat_gap_filler, "S3_BUCKET_PATH", s3_report_path):
         # No differences
         fill_the_gap(landsat="landsat_5", sync_queue_name=SQS_QUEUE_NAME)
         queue = get_queue(queue_name=SQS_QUEUE_NAME)
@@ -90,7 +93,7 @@ def test_generate_buckets_diff(s3_report_path: URL):
 
 @mock_sqs
 @mock_s3
-def test_exceptions(s3_report_path: URL):
+def test_exceptions(s3_report_path: str):
     sqs_client = boto3.client("sqs", region_name=REGION)
     sqs_client.create_queue(QueueName=SQS_QUEUE_NAME)
 
@@ -106,11 +109,11 @@ def test_exceptions(s3_report_path: URL):
     s3_client.upload_file(
         str(LANDSAT_GAP_REPORT),
         TEST_BUCKET_NAME,
-        str(S3_LANDSAT_GAP_REPORT),
+        S3_LANDSAT_GAP_REPORT,
     )
 
     print(list(boto3.resource("s3").Bucket(TEST_BUCKET_NAME).objects.all()))
-    with patch.object(landsat_gap_filler, "S3_BUCKET_PATH", str(s3_report_path)):
+    with patch.object(landsat_gap_filler, "S3_BUCKET_PATH", s3_report_path):
         # String Limit
         with pytest.raises(ValueError):
             fill_the_gap(

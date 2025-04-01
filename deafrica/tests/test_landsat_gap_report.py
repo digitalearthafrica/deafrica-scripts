@@ -1,9 +1,9 @@
+import os
 from unittest.mock import PropertyMock, patch
 
 import boto3
 from click.testing import CliRunner
 from moto import mock_s3
-from urlpath import URL
 
 from deafrica.monitoring.landsat_gap_report import (
     cli,
@@ -34,8 +34,8 @@ def test_get_and_filter_keys_from_files():
 
 @mock_s3
 def test_get_and_filter_keys(
-    s3_inventory_data_file: URL,
-    s3_inventory_manifest_file: URL,
+    s3_inventory_data_file: str,
+    s3_inventory_manifest_file: str,
 ):
     s3_client = boto3.client("s3", region_name=REGION)
     s3_client.create_bucket(
@@ -49,20 +49,20 @@ def test_get_and_filter_keys(
     s3_client.upload_file(
         str(INVENTORY_MANIFEST_FILE),
         INVENTORY_BUCKET_NAME,
-        str(s3_inventory_manifest_file),
+        s3_inventory_manifest_file,
     )
 
     # Upload inventory data
     s3_client.upload_file(
         str(INVENTORY_DATA_FILE),
         INVENTORY_BUCKET_NAME,
-        str(s3_inventory_data_file),
+        s3_inventory_data_file,
     )
 
     print(list(boto3.resource("s3").Bucket("test-inventory-bucket").objects.all()))
 
-    s3_inventory_path = URL(
-        f"s3://{INVENTORY_BUCKET_NAME}/{INVENTORY_FOLDER}/{INVENTORY_BUCKET_NAME}/"
+    s3_inventory_path = os.path.join(
+        f"s3://{INVENTORY_BUCKET_NAME}", INVENTORY_FOLDER, INVENTORY_BUCKET_NAME, ""
     )
 
     with patch(
@@ -75,7 +75,7 @@ def test_get_and_filter_keys(
 
 @mock_s3
 def test_landsat_gap_report_cli(
-    s3_inventory_data_file: URL, s3_inventory_manifest_file: URL
+    s3_inventory_data_file: str, s3_inventory_manifest_file: str
 ):
     s3_client = boto3.client("s3", region_name=REGION)
     s3_client.create_bucket(
@@ -89,20 +89,20 @@ def test_landsat_gap_report_cli(
     s3_client.upload_file(
         str(INVENTORY_MANIFEST_FILE),
         INVENTORY_BUCKET_NAME,
-        str(s3_inventory_manifest_file),
+        s3_inventory_manifest_file,
     )
 
     # Upload inventory data
     s3_client.upload_file(
         str(INVENTORY_DATA_FILE),
         INVENTORY_BUCKET_NAME,
-        str(s3_inventory_data_file),
+        s3_inventory_data_file,
     )
 
     print(list(boto3.resource("s3").Bucket("test-inventory-bucket").objects.all()))
 
-    s3_inventory_path = URL(
-        f"s3://{INVENTORY_BUCKET_NAME}/{INVENTORY_FOLDER}/{INVENTORY_BUCKET_NAME}/"
+    s3_inventory_path = os.path.join(
+        f"s3://{INVENTORY_BUCKET_NAME}", INVENTORY_FOLDER, INVENTORY_BUCKET_NAME, ""
     )
 
     s3_client2 = boto3.client("s3", region_name=REGION)
