@@ -174,7 +174,7 @@ def fill_the_gap(
     type=str,
     nargs=1,
     required=True,
-    default="satellite to be compared, supported ones (landsat_8, landsat_7, landsat_5)",
+    default="satellite to be compared, supported ones (Landsat_8_Landsat_9, Landsat_7, Landsat_5)",
 )
 @click.argument(
     "sync_queue_name",
