@@ -8,23 +8,24 @@ s3://deafrica-landsat-dev/status-report/<satellite_date.csv.gz>
 
 from __future__ import annotations
 
-import csv
 import gzip
 import json
+import os
+import shutil
 import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from textwrap import dedent
 
 import click
+import dask.dataframe as dd
 import datacube
 import pandas as pd
 from odc.aws import s3_client, s3_dump
-from urlpath import URL
 
 from deafrica import __version__
 from deafrica.utils import (
-    convert_str_to_date,
+    check_file_exists,
     download_file_to_tmp,
     list_inventory,
     send_slack_notification,
@@ -41,19 +42,19 @@ FILES = {
     "ls5": "LANDSAT_TM_C2_L2.csv.gz",
 }
 
-BASE_BULK_CSV_URL = URL(
+BASE_BULK_CSV_URL = (
     "https://landsat.usgs.gov/landsat/metadata_service/bulk_metadata_files/"
 )
 
-AFRICA_GZ_PATHROWS_URL = URL(
-    "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/master/deafrica-usgs-pathrows.csv.gz"
-)
 
-LANDSAT_INVENTORY_PATH = URL(
+AFRICA_GZ_PATHROWS_URL = "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/master/deafrica-usgs-pathrows.csv.gz"
+
+
+LANDSAT_INVENTORY_PATH = (
     "s3://deafrica-landsat-inventory/deafrica-landsat/deafrica-landsat-inventory/"
 )
 
-USGS_S3_BUCKET_PATH = URL("s3://usgs-landsat")
+USGS_S3_BUCKET_PATH = "s3://usgs-landsat"
 
 
 def get_and_filter_keys_from_files(file_path: Path):
@@ -63,22 +64,6 @@ def get_and_filter_keys_from_files(file_path: Path):
     :return:
     """
 
-    def build_path(file_row):
-        # USGS changes - for _ when generates the CSV bulk file
-        identifier = file_row["Sensor Identifier"].lower().replace("_", "-")
-        year_acquired = convert_str_to_date(file_row["Date Acquired"]).year
-
-        return (
-            "collection02/level-2/standard/{identifier}/{year_acquired}/"
-            "{target_path}/{target_row}/{display_id}/".format(
-                identifier=identifier,
-                year_acquired=year_acquired,
-                target_path=file_row["WRS Path"].zfill(3),
-                target_row=file_row["WRS Row"].zfill(3),
-                display_id=file_row["Display ID"],
-            )
-        )
-
     africa_pathrows = set(
         pd.read_csv(
             AFRICA_GZ_PATHROWS_URL,
@@ -86,29 +71,67 @@ def get_and_filter_keys_from_files(file_path: Path):
         ).values.ravel()
     )
 
-    with gzip.open(file_path, "rt") as csv_file:
-        return set(
-            build_path(row)
-            for row in csv.DictReader(csv_file)
-            if (
-                # Filter to skip all LANDSAT_4
-                row.get("Satellite") is not None
-                and row["Satellite"] != "LANDSAT_4"
-                and row["Satellite"] != "4"
-                # Filter to get just day
-                and (
-                    row.get("Day/Night Indicator") is not None
-                    and row["Day/Night Indicator"].upper() == "DAY"
-                )
-                # Filter to get just from Africa
-                and (
-                    row.get("WRS Path") is not None
-                    and row.get("WRS Row") is not None
-                    and int(f"{row['WRS Path'].zfill(3)}{row['WRS Row'].zfill(3)}")
-                    in africa_pathrows
-                )
-            )
+    # Decompress the file
+    file_path = str(file_path)
+    unzipped_file = file_path.rstrip(".gz")
+    if not check_file_exists(unzipped_file):
+        with gzip.open(file_path, "rb") as f_in:
+            with open(unzipped_file, "wb") as f_out:
+                shutil.copyfileobj(f_in, f_out)
+
+    # Read the csv file with dask
+    csv_file = dd.read_csv(unzipped_file)
+
+    # Apply filtering
+
+    # Filter to skip all LANDSAT_4
+    csv_file = csv_file[~csv_file["Satellite"].isin(["LANDSAT_4", "4"])]
+
+    # Filter to get just day
+    csv_file = csv_file[
+        csv_file["Day/Night Indicator"].map_partitions(
+            lambda s: s.str.upper().isin(["DAY"])
         )
+    ]
+
+    # Filter to get rows in Africa
+    csv_file = csv_file.assign(
+        str_wrs_path=csv_file["WRS Path"].map_partitions(
+            lambda s: s.astype(str).str.zfill(3), meta=("str_wrs_path", "str")
+        ),
+        str_wrs_row=csv_file["WRS Row"].map_partitions(
+            lambda s: s.astype(str).str.zfill(3), meta=("str_wrs_row", "str")
+        ),
+    )
+    csv_file["pathrow"] = csv_file.map_partitions(
+        lambda df: (df["str_wrs_path"] + df["str_wrs_row"]).astype(int),
+        meta=("pathrow", "int64"),
+    )
+    csv_file = csv_file[csv_file["pathrow"].isin(africa_pathrows)]
+
+    # Build path
+    csv_file["identifier"] = csv_file["Sensor Identifier"].map_partitions(
+        lambda s: s.str.lower().str.replace("_", "-", regex=False),
+        meta=("identifier", "str"),
+    )
+    csv_file["year_acquired"] = dd.to_datetime(
+        csv_file["Date Acquired"], errors="coerce"
+    ).dt.year
+
+    def build_path(df):
+        return "collection02/level-2/standard/{}/{}/{}/{}/{}/".format(
+            df["identifier"],
+            df["year_acquired"],
+            df["str_wrs_path"],
+            df["str_wrs_row"],
+            df["Display ID"],
+        )
+
+    csv_file["built_path"] = csv_file.map_partitions(
+        lambda df: df.apply(build_path, axis=1), meta=("path", "str")
+    )
+
+    return set(csv_file.compute()["built_path"])
 
 
 def get_and_filter_keys(satellites: tuple[str, str]) -> set:
@@ -134,7 +157,7 @@ def get_and_filter_keys(satellites: tuple[str, str]) -> set:
         raise ValueError(f"Invalid satellites: {satellites}")
 
     list_json_keys = list_inventory(
-        manifest=str(LANDSAT_INVENTORY_PATH),
+        manifest=LANDSAT_INVENTORY_PATH,
         prefix="collection02",
         suffix="_stac.json",
         multiple_contains=sat_prefixes,
@@ -156,7 +179,7 @@ def get_odc_keys(satellites: tuple[str, str], log) -> set:
                     + "/"
                 ] = uri.indexed_time
         return all_odc_vals
-    except:
+    except Exception:
         log.info("Error while searching for datasets in odc")
         return {}
 
@@ -179,10 +202,11 @@ def generate_buckets_diff(
 
     log.info("Task started")
 
-    landsat_status_report_path = URL(f"s3://{bucket_name}/status-report/")
-    landsat_status_report_url = URL(
+    landsat_status_report_path = f"s3://{bucket_name}/status-report/"
+    landsat_status_report_url = (
         f"https://{bucket_name}.s3.af-south-1.amazonaws.com/status-report/"
     )
+
     environment = "DEV" if "dev" in bucket_name else "PDS"
 
     title = " & ".join(satellites).replace("ls", "Landsat ")
@@ -197,19 +221,18 @@ def generate_buckets_diff(
     # Create connection to the inventory S3 bucket
     log.info(f"Retrieving keys from inventory bucket {LANDSAT_INVENTORY_PATH}")
     dest_paths = get_and_filter_keys(satellites=satellites)
-
     log.info(f"INVENTORY bucket number of objects {len(dest_paths)}")
     log.info(f"INVENTORY 10 first {list(dest_paths)[0:10]}")
+
     date_string = datetime.now().strftime("%Y-%m-%d")
 
     # Download bulk file
     log.info("Download Bulk file")
-    file_path = download_file_to_tmp(url=str(BASE_BULK_CSV_URL), file_name=file_name)
+    file_path = download_file_to_tmp(url=BASE_BULK_CSV_URL, file_name=file_name)
 
     # Retrieve keys from the bulk file
     log.info("Filtering keys from bulk file")
     source_paths = get_and_filter_keys_from_files(file_path)
-
     log.info(f"BULK FILE number of objects {len(source_paths)}")
     log.info(f"BULK 10 First {list(source_paths)[0:10]}")
 
@@ -225,7 +248,7 @@ def generate_buckets_diff(
         # missing scenes = keys that are in the bulk file but missing in PDS sync bucket and/or in source bucket
         log.info("Filtering missing scenes")
         missing_scenes = [
-            str(USGS_S3_BUCKET_PATH / path)
+            os.path.join(USGS_S3_BUCKET_PATH, path)
             for path in source_paths.difference(dest_paths)
         ]
 
@@ -233,23 +256,23 @@ def generate_buckets_diff(
         # orphan scenes = keys that are in PDS sync bucket but missing in the bulk file and/or in source bucket
         log.info("Filtering orphan scenes")
         orphaned_scenes = [
-            str(URL(f"s3://{bucket_name}") / path)
+            os.path.join(f"s3://{bucket_name}", path)
             for path in dest_paths.difference(source_paths)
         ]
 
-        log.info(f"Retrieving keys from odc")
+        log.info("Retrieving keys from odc")
         all_odc_values = get_odc_keys(satellites, log)
         all_odc_keys = all_odc_values.keys()
 
         missing_odc_scenes = [
-            str(URL(f"s3://{bucket_name}") / path)
+            os.path.join(f"s3://{bucket_name}", path)
             for path in dest_paths.difference(all_odc_keys)
         ]
 
         yesterday = date.today() - timedelta(days=1)
 
         orphaned_odc_scenes = [
-            str(URL(f"s3://{bucket_name}") / path)
+            os.path.join(f"s3://{bucket_name}", path)
             for path in set(all_odc_keys).difference(dest_paths)
             if yesterday > all_odc_values[path].date()
         ]
@@ -275,14 +298,14 @@ def generate_buckets_diff(
             (
                 f"{title}_{date_string}_gap_report.json"
                 if not update_stac
-                else URL(f"{date_string}_gap_report_update.json")
+                else f"{date_string}_gap_report_update.json"
             )
             .replace(" ", "_")
             .replace("_&", "")
         )
 
         log.info(
-            f"Report file will be saved in {landsat_status_report_path / output_filename}"
+            f"Report file will be saved in {os.path.join(landsat_status_report_path , output_filename)}"
         )
         missing_orphan_scenes_json = json.dumps(
             {
@@ -295,13 +318,13 @@ def generate_buckets_diff(
 
         s3_dump(
             data=missing_orphan_scenes_json,
-            url=str(landsat_status_report_path / output_filename),
+            url=os.path.join(landsat_status_report_path, output_filename),
             s3=landsat_s3,
             ContentType="application/json",
         )
 
     report_output = (
-        str(landsat_status_report_url / output_filename)
+        os.path.join(landsat_status_report_url, output_filename)
         if len(missing_scenes) > 0
         or len(orphaned_scenes) > 0
         or len(missing_odc_scenes) > 0
