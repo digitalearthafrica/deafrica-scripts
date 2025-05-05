@@ -257,8 +257,8 @@ def send_messages(
 
 def index_missing_odc_scenes(
     idx: int,
+    product_name: str,
     max_workers: int = 1,
-    product_name: str = "s2_l2a_c1",
     limit: int = None,
     slack_url: str = None,
 ) -> None:
@@ -348,7 +348,7 @@ def index_missing_odc_scenes(
     error_flag = ":red_circle:" if len(failed) > 0 else ""
 
     message = dedent(
-        f"{error_flag}*Sentinel 2 GAP Filler (worker {idx}) - {environment}*\n"
+        f"{error_flag}*Sentinel 2 Collection 1 GAP Filler (worker {idx}) - {environment}*\n"
         f"Total missing ODC scenes: {len(files)}\n"
         f"Attempted missing ODC scenes to index: {len(scene_paths)}\n"
         f"Failed missing ODC scenes to index: {len(split_list_scenes[idx]) - len(indexed)}\n"
@@ -357,7 +357,7 @@ def index_missing_odc_scenes(
     )
 
     if slack_url is not None:
-        send_slack_notification(slack_url, "S2 Gap Filler", message)
+        send_slack_notification(slack_url, "S2 Collection 1 Gap Filler", message)
 
     log.info(message)
 

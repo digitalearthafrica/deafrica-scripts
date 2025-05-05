@@ -149,6 +149,29 @@ def read_report_missing_scenes(report_path: str, limit=None):
     return missing_scene_paths
 
 
+def read_report_missing_odc_scenes(report_path: str, limit=None):
+    """
+    read the gap report
+    """
+
+    s3 = s3_client(region_name="af-south-1")
+    report_json = s3_fetch(url=report_path, s3=s3)
+    report_dict = json.loads(report_json)
+
+    key = "missing_odc"
+    if report_dict.get(key, None) is None:
+        raise Exception("Missing scenes not found")
+
+    missing_odc_scene_paths = [
+        scene_path.strip() for scene_path in report_dict[key] if scene_path
+    ]
+
+    if limit:
+        missing_odc_scene_paths = missing_odc_scene_paths[: int(limit)]
+
+    return missing_odc_scene_paths
+
+
 def split_list_equally(list_to_split: list, num_inter_lists: int):
     """
     Split list_to_split in equally balanced lists among num_inter_lists
