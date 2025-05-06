@@ -127,7 +127,7 @@ def index_missing_odc_scenes(
 
     log.info(message)
 
-    if failed > 0:
+    if len(failed) > 0:
         sys.exit(1)
 
 
