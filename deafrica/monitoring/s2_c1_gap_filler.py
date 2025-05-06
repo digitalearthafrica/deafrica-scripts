@@ -2,13 +2,14 @@ import json
 import logging
 import ntpath
 import os
+import subprocess
 import sys
+import warnings
 from textwrap import dedent
 from typing import Dict, Optional
 
 import click
 import rasterio
-import requests
 from odc.aws import s3_client, s3_fetch
 from odc.aws.queue import get_queue, publish_messages
 from rasterio.session import AWSSession
@@ -16,6 +17,7 @@ from rasterio.session import AWSSession
 from deafrica import __version__
 from deafrica.utils import (
     find_latest_report,
+    limit,
     read_report_missing_scenes,
     send_slack_notification,
     setup_logging,
@@ -26,7 +28,6 @@ from deafrica.utils import (
 SOURCE_REGION = "us-west-2"
 S3_BUCKET_PATH = "s3://deafrica-sentinel-2-l2a-c1/status-report/"
 
-import warnings
 
 # supress a FutureWarning from pyproj
 warnings.simplefilter(action="ignore", category=FutureWarning)
@@ -261,12 +262,7 @@ def send_messages(
     default="deafrica-pds-sentinel-2-l2a-c1-sync-scene",
 )
 @click.argument("product_name", type=str, nargs=1, default="s2_l2a_c1")
-@click.option(
-    "--limit",
-    "-l",
-    help="Limit the number of messages to transfer.",
-    default=None,
-)
+@limit
 @slack_url
 @click.option("--version", is_flag=True, default=False)
 @click.option("--dryrun", is_flag=True, default=False)

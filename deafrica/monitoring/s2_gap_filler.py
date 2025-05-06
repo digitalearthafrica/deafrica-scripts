@@ -3,6 +3,7 @@ import logging
 import ntpath
 import os
 import sys
+import warnings
 from textwrap import dedent
 from typing import Dict, Optional
 
@@ -30,7 +31,6 @@ from deafrica.utils import (
 SOURCE_REGION = "us-west-2"
 S3_BUCKET_PATH = "s3://deafrica-sentinel-2/status-report/"
 STAC_VERSION = "1.0.0-beta.2"
-import warnings
 
 # supress a FutureWarning from pyproj
 warnings.simplefilter(action="ignore", category=FutureWarning)
@@ -584,7 +584,7 @@ def cli(
     if version:
         click.echo(__version__)
 
-    valid_product_name = ["s2_l2a", "s2_l2a_c1"]
+    valid_product_name = ["s2_l2a"]
     if product_name not in valid_product_name:
         raise ValueError(f"Product name must be on of {valid_product_name}")
 
