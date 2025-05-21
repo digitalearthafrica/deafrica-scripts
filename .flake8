@@ -1,7 +1,0 @@
-[flake8]
-extend-ignore = 
-    # Minimally compatible config
-    # with black
-    E203,E701,
-    # Comments
-    E266
