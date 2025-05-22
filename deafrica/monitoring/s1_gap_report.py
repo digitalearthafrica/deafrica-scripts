@@ -10,9 +10,9 @@ from odc.aws import s3_client, s3_dump, s3_ls_dir
 from sentinelhub import DataCollection, Geometry, SentinelHubCatalog, SHConfig
 from urlpath import URL
 
+from deafrica.logs import setup_logging
 from deafrica.utils import (
     send_slack_notification,
-    setup_logging,
     slack_url,
 )
 

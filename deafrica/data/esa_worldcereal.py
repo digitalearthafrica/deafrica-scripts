@@ -27,6 +27,7 @@ from eodatasets3.stac import to_stac_item
 from odc.aws import s3_dump
 
 from deafrica.easi_assemble import EasiPrepare
+from deafrica.logs import setup_logging
 from deafrica.utils import (
     AFRICA_EXTENT_URL,
     check_directory_exists,
@@ -38,7 +39,6 @@ from deafrica.utils import (
     is_s3_path,
     is_url,
     odc_uuid,
-    setup_logging,
 )
 
 WORLDCEREAL_AEZ_URL = "https://zenodo.org/records/7875105/files/WorldCereal_AEZ.geojson"

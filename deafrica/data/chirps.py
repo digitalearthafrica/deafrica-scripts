@@ -14,7 +14,8 @@ from rio_cogeo import cog_translate
 from rio_cogeo.profiles import cog_profiles
 from rio_stac import create_stac_item
 
-from deafrica.utils import odc_uuid, send_slack_notification, setup_logging, slack_url
+from deafrica.logs import setup_logging
+from deafrica.utils import odc_uuid, send_slack_notification, slack_url
 
 MONTHLY_URL_TEMPLATE = (
     "https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_monthly/tifs/{in_file}"

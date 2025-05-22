@@ -13,7 +13,8 @@ from odc.aws import s3_dump, s3_head_object
 from rio_stac import create_stac_item
 from shapely.geometry import Polygon
 
-from deafrica.utils import odc_uuid, setup_logging
+from deafrica.logs import setup_logging
+from deafrica.utils import odc_uuid
 
 AFRICA_EXTENT = "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/master/africa-extent.json"
 

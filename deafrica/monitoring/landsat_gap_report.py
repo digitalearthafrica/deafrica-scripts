@@ -23,12 +23,12 @@ from odc.aws import s3_client, s3_dump
 from urlpath import URL
 
 from deafrica import __version__
+from deafrica.logs import setup_logging
 from deafrica.utils import (
     convert_str_to_date,
     download_file_to_tmp,
     list_inventory,
     send_slack_notification,
-    setup_logging,
     slack_url,
     time_process,
     update_stac,

@@ -25,11 +25,11 @@ from pystac import Item
 from rio_stac import create_stac_item
 from urlpath import URL
 
+from deafrica.logs import setup_logging
 from deafrica.utils import (
     AFRICA_BBOX,
     odc_uuid,
     send_slack_notification,
-    setup_logging,
     slack_url,
 )
 

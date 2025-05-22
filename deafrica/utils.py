@@ -65,15 +65,6 @@ def odc_uuid(
     return uuid5(UUID("6f34c6f4-13d6-43c0-8e4e-42b6c13203af"), srcs_hashes)
 
 
-def setup_logging(level: int = logging.INFO) -> logging.Logger:
-    """Set up a simple logger"""
-    log = logging.getLogger(__name__)
-    console = logging.StreamHandler()
-    log.addHandler(console)
-    log.setLevel(level)
-    return log
-
-
 def send_slack_notification(url: str, title: str, message: str):
     """
     Sends a slack notification.

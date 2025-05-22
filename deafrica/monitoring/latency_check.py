@@ -17,9 +17,9 @@ from botocore import UNSIGNED
 from botocore.config import Config
 
 from deafrica import __version__
+from deafrica.logs import setup_logging
 from deafrica.utils import (
     send_slack_notification,
-    setup_logging,
     slack_url,
 )
 

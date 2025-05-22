@@ -13,12 +13,12 @@ import click
 from odc.aws.queue import get_queue, publish_messages
 
 from deafrica import __version__
+from deafrica.logs import setup_logging
 from deafrica.utils import (
     find_latest_report,
     limit,
     read_report_missing_scenes,
     send_slack_notification,
-    setup_logging,
     slack_url,
 )
 

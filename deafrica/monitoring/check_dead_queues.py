@@ -7,7 +7,8 @@ import click as click
 from odc.aws.queue import get_queues
 
 from deafrica import __version__
-from deafrica.utils import send_slack_notification, setup_logging
+from deafrica.logs import setup_logging
+from deafrica.utils import send_slack_notification
 
 
 def check_deadletter_queues(

@@ -17,7 +17,8 @@ from rio_cogeo.cogeo import cog_translate
 from rio_cogeo.profiles import cog_profiles
 from rio_stac import create_stac_item
 
-from deafrica.utils import odc_uuid, setup_logging
+from deafrica.logs import setup_logging
+from deafrica.utils import odc_uuid
 
 NS = [
     "N40",
