@@ -15,9 +15,11 @@ from odc.aws.queue import get_queue, publish_messages
 from deafrica import __version__
 from deafrica.click_options import limit, slack_url
 from deafrica.logs import setup_logging
-from deafrica.utils import (
+from deafrica.monitoring.gap_report import (
     find_latest_report,
     read_report_missing_scenes,
+)
+from deafrica.utils import (
     send_slack_notification,
 )
 

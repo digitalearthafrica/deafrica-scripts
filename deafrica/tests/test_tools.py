@@ -5,10 +5,12 @@ from odc.aws.queue import publish_message
 from urlpath import URL
 
 from deafrica.monitoring.check_dead_queues import check_deadletter_queues
-from deafrica.tests.conftest import REGION, TEST_BUCKET_NAME, TEST_DATA_DIR
-from deafrica.utils import (
+from deafrica.monitoring.gap_report import (
     find_latest_report,
     read_report_missing_scenes,
+)
+from deafrica.tests.conftest import REGION, TEST_BUCKET_NAME, TEST_DATA_DIR
+from deafrica.utils import (
     split_list_equally,
 )
 
