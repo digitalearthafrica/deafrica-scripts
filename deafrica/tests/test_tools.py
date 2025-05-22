@@ -2,7 +2,7 @@ import boto3
 import pytest
 from moto import mock_s3, mock_sqs
 from odc.aws.queue import publish_message
-from urlpath import URL
+from yarl import URL
 
 from deafrica.monitoring.check_dead_queues import check_deadletter_queues
 from deafrica.monitoring.gap_report import (

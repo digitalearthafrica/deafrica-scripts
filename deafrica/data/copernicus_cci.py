@@ -13,7 +13,7 @@ from datacube.utils.geometry import assign_crs
 from odc.apps.dc_tools._docs import odc_uuid
 from odc.aws import s3_dump, s3_head_object
 from rio_stac import create_stac_item
-from urlpath import URL
+from yarl import URL
 
 from deafrica.logs import setup_logging
 from deafrica.utils import AFRICA_BBOX

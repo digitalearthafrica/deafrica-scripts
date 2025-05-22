@@ -12,7 +12,7 @@ from osgeo import gdal
 from rasterio import MemoryFile
 from rio_cogeo import cog_profiles, cog_translate
 from rio_stac import create_stac_item
-from urlpath import URL
+from yarl import URL
 
 from deafrica.logs import setup_logging
 from deafrica.utils import AFRICA_BBOX

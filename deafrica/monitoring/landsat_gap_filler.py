@@ -172,10 +172,12 @@ def fill_the_gap(
 
 @click.argument(
     "satellite",
-    type=str,
+    type=click.Choice(
+        ["Landsat_8_Landsat_9", "Landsat_7", "Landsat_5"], case_sensitive=True
+    ),
     nargs=1,
     required=True,
-    default="satellite to be compared, supported ones (landsat_8, landsat_7, landsat_5)",
+    default="satellite to be compared",
 )
 @click.argument(
     "sync_queue_name",

@@ -3,7 +3,7 @@ from unittest.mock import PropertyMock, patch
 import boto3
 from click.testing import CliRunner
 from moto import mock_s3
-from urlpath import URL
+from yarl import URL
 
 from deafrica.monitoring.landsat_gap_report import (
     cli,

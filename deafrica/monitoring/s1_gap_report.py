@@ -8,7 +8,7 @@ import geopandas as gpd
 import requests
 from odc.aws import s3_client, s3_dump, s3_ls_dir
 from sentinelhub import DataCollection, Geometry, SentinelHubCatalog, SHConfig
-from urlpath import URL
+from yarl import URL
 
 from deafrica.click_options import slack_url
 from deafrica.logs import setup_logging

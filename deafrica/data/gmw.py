@@ -24,7 +24,7 @@ from odc.aws import s3_dump
 from odc.geo.xr import assign_crs, write_cog
 from pystac import Item
 from rio_stac import create_stac_item
-from urlpath import URL
+from yarl import URL
 
 from deafrica.click_options import slack_url
 from deafrica.logs import setup_logging

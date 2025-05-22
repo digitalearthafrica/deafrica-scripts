@@ -5,7 +5,7 @@ import boto3
 import pytest
 from moto import mock_s3, mock_sqs
 from odc.aws.queue import get_queue
-from urlpath import URL
+from yarl import URL
 
 from deafrica.monitoring import landsat_gap_filler
 from deafrica.monitoring.landsat_gap_filler import (
