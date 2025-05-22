@@ -24,8 +24,7 @@ from odc.apps.dc_tools._docs import odc_uuid
 from odc.aws import s3_dump
 
 from deafrica.easi_assemble import EasiPrepare
-from deafrica.logs import setup_logging
-from deafrica.utils import (
+from deafrica.io import (
     check_directory_exists,
     check_file_exists,
     download_product_yaml,
@@ -37,6 +36,7 @@ from deafrica.utils import (
     is_s3_path,
     is_url,
 )
+from deafrica.logs import setup_logging
 
 # Set log level to info
 log = setup_logging()
