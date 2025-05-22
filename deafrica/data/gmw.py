@@ -22,16 +22,12 @@ import rioxarray
 from odc.apps.dc_tools._docs import odc_uuid
 from odc.aws import s3_dump
 from odc.geo.xr import assign_crs, write_cog
-from pystac import Item
 from rio_stac import create_stac_item
 from yarl import URL
 
 from deafrica.click_options import slack_url
 from deafrica.logs import setup_logging
-from deafrica.utils import (
-    AFRICA_BBOX,
-    send_slack_notification,
-)
+from deafrica.utils import AFRICA_BBOX, AFRICA_EXTENT_BBOX_URL, send_slack_notification
 
 VALID_YEARS = [
     "1996",
@@ -49,7 +45,6 @@ VALID_YEARS = [
 SOURCE_URL_PATH = URL("https://zenodo.org/records/6894273/files/")
 FILE_NAME = "gmw_v3_{year}_gtiff.zip"
 LOCAL_DIR = Path(os.getcwd())
-AFRICA_EXTENT_URL = "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/master/africa-extent-bbox.json"  # noqa E501
 
 # Set log level to info
 log = setup_logging()
@@ -95,7 +90,7 @@ def get_gmw_africa_tiles() -> Set[str]:
     set[str]
         Labels for Global Mangrove Watch tiles over Africa.
     """
-    africa_extent = gpd.read_file(AFRICA_EXTENT_URL).to_crs("EPSG:4326")
+    africa_extent = gpd.read_file(AFRICA_EXTENT_BBOX_URL).to_crs("EPSG:4326")
     gmw_tiles_url = SOURCE_URL_PATH / "gmw_v3_tiles.geojson"
     gmw_tiles = gpd.read_file(str(gmw_tiles_url)).to_crs("EPSG:4326")
     gmw_africa_tiles = set(
