@@ -2,10 +2,6 @@
 # Send slack notification when latency check detects higher than specified latency on Landsat 8/9 and Sentinel 1/2 scenes
 """
 
-import json
-import logging
-import os
-import sys
 from datetime import date, datetime, timedelta, timezone
 from textwrap import dedent
 from typing import Optional
