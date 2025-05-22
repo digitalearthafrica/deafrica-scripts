@@ -1,0 +1,241 @@
+#!/usr/bin/env python3
+"""Build S3 iterators using odc-tools
+and index datasets found into RDS
+
+# Adapted from https://github.com/opendatacube/odc-tools/blob/develop/apps/dc_tools/odc/apps/dc_tools/s3_to_dc.py
+"""
+
+import logging
+import sys
+from typing import Tuple
+
+import click
+from datacube import Datacube
+from datacube.index.hl import Doc2Dataset
+from odc.aio import S3Fetcher, s3_find_glob
+from odc.apps.dc_tools._docs import parse_doc_stream
+from odc.apps.dc_tools.utils import (
+    IndexingException,
+    SkippedException,
+    allow_unsafe,
+    archive_less_mature,
+    fail_on_missing_lineage,
+    index_update_dataset,
+    no_sign_request,
+    publish_action,
+    request_payer,
+    skip_check,
+    skip_lineage,
+    statsd_gauge_reporting,
+    statsd_setting,
+    transform_stac,
+    update_flag,
+    update_if_exists_flag,
+    verify_lineage,
+)
+
+from deafrica.data.indexing_tools.stac_to_eo3 import stac_transform
+
+
+def doc_error(uri, doc):
+    """Log the internal errors parsing docs"""
+    logging.exception("Failed to parse doc at %s", uri)
+
+
+def dump_to_odc(
+    document_stream,
+    dc: Datacube,
+    products: list,
+    transform=None,
+    update=False,
+    update_if_exists=False,
+    allow_unsafe=False,
+    archive_less_mature=None,
+    publish_action=None,
+    **kwargs,
+) -> Tuple[int, int, int]:
+    doc2ds = Doc2Dataset(dc.index, products=products, **kwargs)
+
+    ds_added = 0
+    ds_failed = 0
+    ds_skipped = 0
+    uris_docs = parse_doc_stream(
+        ((doc.url, doc.data) for doc in document_stream),
+        on_error=doc_error,
+    )
+
+    found_docs = False
+    for uri, metadata in uris_docs:
+        found_docs = True
+        stac_doc = None
+        if transform:
+            stac_doc = metadata
+            metadata = stac_transform(metadata)
+        try:
+            index_update_dataset(
+                metadata,
+                uri,
+                dc,
+                doc2ds,
+                update=update,
+                update_if_exists=update_if_exists,
+                allow_unsafe=allow_unsafe,
+                archive_less_mature=archive_less_mature,
+                publish_action=publish_action,
+                stac_doc=stac_doc,
+            )
+            ds_added += 1
+        except IndexingException:
+            logging.exception("Failed to index dataset %s", uri)
+            ds_failed += 1
+        except SkippedException:
+            ds_skipped += 1
+    if not found_docs:
+        raise click.ClickException("Doc stream was empty")
+
+    return ds_added, ds_failed, ds_skipped
+
+
+@click.command("s3-to-dc-v2")
+@click.option(
+    "--log",
+    type=click.Choice(
+        ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False
+    ),
+    default="WARNING",
+    show_default=True,
+    help="control the log level, e.g., --log=error",
+)
+@skip_lineage
+@fail_on_missing_lineage
+@verify_lineage
+@transform_stac
+@update_flag
+@update_if_exists_flag
+@allow_unsafe
+@skip_check
+@no_sign_request
+@statsd_setting
+@request_payer
+@archive_less_mature
+@publish_action
+@click.argument("uris", nargs=-1)
+@click.argument("product", type=str, nargs=1, required=False)
+def cli(
+    log,
+    skip_lineage,
+    fail_on_missing_lineage,
+    verify_lineage,
+    stac,
+    update,
+    update_if_exists,
+    allow_unsafe,
+    skip_check,
+    no_sign_request,
+    statsd_setting,
+    request_payer,
+    archive_less_mature,
+    publish_action,
+    uris,
+    product,
+):
+    """
+    Iterate through files in an S3 bucket and add them to datacube.
+
+    File uris can be provided as a glob, or as a list of absolute URLs.
+    If more than one uri is given, all will be treated as absolute URLs.
+
+    Product is optional; if one is provided, it must match all datasets.
+    Can provide a single product name or a space separated list of multiple products
+    (formatted as a single string).
+    """
+    log_level = getattr(logging, log.upper())
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s: %(levelname)s: %(message)s",
+        datefmt="%m/%d/%Y %I:%M:%S",
+    )
+
+    opts = {}
+    if request_payer:
+        opts["RequestPayer"] = "requester"
+
+    dc = Datacube()
+
+    # if it's a uri, a product wasn't provided, and 'product' is actually another uri
+    if product.startswith("s3://"):
+        candidate_products = []
+        uris += (product,)
+    else:
+        # Check datacube connection and products
+        candidate_products = product.split()
+        odc_products = dc.list_products().name.values
+
+        odc_products = set(odc_products)
+        if not set(candidate_products).issubset(odc_products):
+            missing_products = list(set(candidate_products) - odc_products)
+            print(
+                f"Error: Requested Product/s {', '.join(missing_products)} "
+                f"{'is' if len(missing_products) == 1 else 'are'} "
+                "not present in the ODC Database",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+    is_glob = True
+    # we assume the uri to be an absolute URL if it contains no wildcards
+    # or if there are multiple uri values provided
+    if (len(uris) > 1) or ("*" not in uris[0]):
+        is_glob = False
+        for url in uris:
+            if "*" in url:
+                logging.warning(
+                    "A list of uris is assumed to include only absolute URLs. "
+                    "Any wildcard characters will be escaped."
+                )
+
+    # Get a generator from supplied S3 Uri for candidate documents
+    fetcher = S3Fetcher(aws_unsigned=no_sign_request)
+    # Grab the URL from the resulting S3 item
+    if is_glob:
+        document_stream = (
+            url.url
+            for url in s3_find_glob(uris[0], skip_check=skip_check, s3=fetcher, **opts)
+        )
+    else:
+        # if working with absolute URLs, no need for all the globbing logic
+        document_stream = uris
+
+    added, failed, skipped = dump_to_odc(
+        fetcher(document_stream),
+        dc,
+        candidate_products,
+        skip_lineage=skip_lineage,
+        fail_on_missing_lineage=fail_on_missing_lineage,
+        verify_lineage=verify_lineage,
+        transform=stac,
+        update=update,
+        update_if_exists=update_if_exists,
+        allow_unsafe=allow_unsafe,
+        archive_less_mature=archive_less_mature,
+        publish_action=publish_action,
+    )
+
+    print(
+        f"Added {added} datasets, skipped {skipped} datasets and failed {failed} datasets."
+    )
+    if statsd_setting:
+        statsd_gauge_reporting(added, ["app:s3_to_dc", "action:added"], statsd_setting)
+        statsd_gauge_reporting(
+            skipped, ["app:s3_to_dc", "action:skipped"], statsd_setting
+        )
+        statsd_gauge_reporting(
+            failed, ["app:s3_to_dc", "action:failed"], statsd_setting
+        )
+
+    if failed > 0:
+        sys.exit(failed)
+
+
+if __name__ == "__main__":
+    cli()
