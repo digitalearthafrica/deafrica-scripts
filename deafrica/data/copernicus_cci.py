@@ -28,7 +28,7 @@ Datasource: https://cds.climate.copernicus.eu/cdsapp#!/dataset/satellite-land-co
 
 PRODUCT_NAME = "cci_landcover"
 
-# CDSAPI_URL = "https://cds.climate.copernicus.eu/api/v2"
+# CDSAPI_URL = "https://cds.climate.copernicus.eu/api"
 # CDSAPI_KEY = "user-or-organisation-key"
 
 # values may be set in ~/.cdsapirc
@@ -66,6 +66,8 @@ def download_cci_lc(year: str, s3_dst: str, workdir: str, overwrite: bool = Fals
     log = setup_logging()
     assets = {}
 
+    ulx, uly, lrx, lry = AFRICA_BBOX
+
     cci_lc_version = get_version_from_year(year)
     name = f"{PRODUCT_NAME}_{year}_{cci_lc_version}"
 
@@ -99,8 +101,9 @@ def download_cci_lc(year: str, s3_dst: str, workdir: str, overwrite: bool = Fals
                     {
                         "format": "zip",
                         "variable": "all",
-                        "version": cci_lc_version,
-                        "year": str(year),
+                        "version": [cci_lc_version.replace(".", "_")],
+                        "year": [str(year)],
+                        "area": [uly, ulx, lry, lrx],
                     },
                     local_file,
                 )
@@ -119,7 +122,6 @@ def download_cci_lc(year: str, s3_dst: str, workdir: str, overwrite: bool = Fals
             # Process data
             ds = xr.open_dataset(unzipped)
             # Subset to Africa
-            ulx, uly, lrx, lry = AFRICA_BBOX
             # Note: lats are upside down!
             ds_small = ds.sel(lat=slice(uly, lry), lon=slice(ulx, lrx))
             ds_small = assign_crs(ds_small, crs="epsg:4326")
