@@ -24,6 +24,7 @@ from eodatasets3.images import ValidDataMethod
 from eodatasets3.model import DatasetDoc
 from eodatasets3.serialise import to_path  # noqa F401
 from eodatasets3.stac import to_stac_item
+from odc.apps.dc_tools._docs import odc_uuid
 from odc.aws import s3_dump
 
 from deafrica.easi_assemble import EasiPrepare
@@ -38,7 +39,6 @@ from deafrica.utils import (
     is_gcsfs_path,
     is_s3_path,
     is_url,
-    odc_uuid,
 )
 
 WORLDCEREAL_AEZ_URL = "https://zenodo.org/records/7875105/files/WorldCereal_AEZ.geojson"
