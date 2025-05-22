@@ -1,17 +1,13 @@
 import json
 import logging
-import ntpath
-import os
 import sys
+import warnings
 from textwrap import dedent
 from typing import Dict, Optional
 
 import click
-import rasterio
-import requests
 from odc.aws import s3_client, s3_fetch
 from odc.aws.queue import get_queue, publish_messages
-from rasterio.session import AWSSession
 
 from deafrica import __version__
 from deafrica.click_options import limit, slack_url
@@ -28,7 +24,6 @@ from deafrica.utils import (
 SOURCE_REGION = "us-west-2"
 S3_BUCKET_PATH = "s3://deafrica-sentinel-2-l2a-c1/status-report/"
 
-import warnings
 
 # supress a FutureWarning from pyproj
 warnings.simplefilter(action="ignore", category=FutureWarning)
