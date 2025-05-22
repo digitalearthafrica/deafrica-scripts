@@ -27,7 +27,7 @@ from eodatasets3.stac import to_stac_item
 from odc.apps.dc_tools._docs import odc_uuid
 from odc.aws import s3_dump
 
-from deafrica.easi_assemble import EasiPrepare
+from deafrica.data.easi_assemble import EasiPrepare
 from deafrica.io import (
     check_directory_exists,
     check_file_exists,
