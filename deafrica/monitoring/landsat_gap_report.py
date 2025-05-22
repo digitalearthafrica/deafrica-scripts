@@ -23,15 +23,14 @@ from odc.aws import s3_client, s3_dump
 from urlpath import URL
 
 from deafrica import __version__
+from deafrica.click_options import slack_url, update_stac
 from deafrica.logs import setup_logging
 from deafrica.utils import (
     convert_str_to_date,
     download_file_to_tmp,
     list_inventory,
     send_slack_notification,
-    slack_url,
     time_process,
-    update_stac,
 )
 
 SUPPORTED_SATELLITES = ("ls8_ls9", "ls7", "ls5")

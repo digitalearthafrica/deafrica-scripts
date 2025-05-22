@@ -16,7 +16,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import urlparse
 
-import click
 import fsspec
 import gcsfs
 import pyarrow.parquet as pq
@@ -219,27 +218,6 @@ def test_http_return(returned):
             f"-status_code: {status_code} \n"
             f"-reason: {reason} \n"
         )
-
-
-# A whole bunch of generic Click options
-slack_url = click.option(
-    "--slack_url",
-    help="Slack url to use to send a notification",
-    default=None,
-)
-
-update_stac = click.option(
-    "--update_stac",
-    is_flag=True,
-    default=False,
-    help="Will fill a special report within all scenes from the source",
-)
-limit = click.option(
-    "--limit",
-    "-l",
-    help="Limit the number of messages to transfer.",
-    default=None,
-)
 
 
 def find_latest_manifest(prefix, s3, **kw) -> str:

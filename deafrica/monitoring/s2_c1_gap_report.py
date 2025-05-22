@@ -10,12 +10,11 @@ from odc.aws import s3_client, s3_dump
 from urlpath import URL
 
 from deafrica import __version__
+from deafrica.click_options import slack_url, update_stac
 from deafrica.logs import setup_logging
 from deafrica.utils import (
     list_inventory,
     send_slack_notification,
-    slack_url,
-    update_stac,
 )
 
 SENTINEL_2_C1_INVENTORY_PATH = URL(

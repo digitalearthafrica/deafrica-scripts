@@ -14,12 +14,12 @@ from odc.aws.queue import get_queue, publish_messages
 from rasterio.session import AWSSession
 
 from deafrica import __version__
+from deafrica.click_options import limit, slack_url
 from deafrica.logs import setup_logging
 from deafrica.utils import (
     find_latest_report,
     read_report_missing_scenes,
     send_slack_notification,
-    slack_url,
     split_list_equally,
 )
 
@@ -261,12 +261,7 @@ def send_messages(
     default="deafrica-pds-sentinel-2-l2a-c1-sync-scene",
 )
 @click.argument("product_name", type=str, nargs=1, default="s2_l2a_c1")
-@click.option(
-    "--limit",
-    "-l",
-    help="Limit the number of messages to transfer.",
-    default=None,
-)
+@limit
 @slack_url
 @click.option("--version", is_flag=True, default=False)
 @click.option("--dryrun", is_flag=True, default=False)
