@@ -252,7 +252,7 @@ def create_stac_files(
         except Exception as error:
             log.exception(error)
             log.error(
-                f"Failed to generate metedata file for the dataset {dataset_path}"
+                f"Failed to generate metadata file for the dataset {dataset_path}"
             )
             failed_tasks.append(
                 f"Failed to generate metedata file for the dataset {dataset_path}"
