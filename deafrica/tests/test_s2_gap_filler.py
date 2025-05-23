@@ -6,7 +6,7 @@ import boto3
 from click.testing import CliRunner
 from moto import mock_s3, mock_sqs
 from odc.aws.queue import get_queue
-from urlpath import URL
+from yarl import URL
 
 from deafrica.monitoring import s2_gap_filler
 from deafrica.tests.conftest import (

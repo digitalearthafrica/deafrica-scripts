@@ -5,7 +5,7 @@ import boto3
 import click as click
 from kubernetes import client, config
 
-from deafrica.utils import setup_logging
+from deafrica.logs import setup_logging
 
 log = setup_logging()
 

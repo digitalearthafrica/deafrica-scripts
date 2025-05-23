@@ -2,10 +2,6 @@
 # Send slack notification when latency check detects higher than specified latency on Landsat 8/9 and Sentinel 1/2 scenes
 """
 
-import json
-import logging
-import os
-import sys
 from datetime import date, datetime, timedelta, timezone
 from textwrap import dedent
 from typing import Optional
@@ -17,10 +13,10 @@ from botocore import UNSIGNED
 from botocore.config import Config
 
 from deafrica import __version__
+from deafrica.click_options import slack_url
+from deafrica.logs import setup_logging
 from deafrica.utils import (
     send_slack_notification,
-    setup_logging,
-    slack_url,
 )
 
 

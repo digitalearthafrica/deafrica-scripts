@@ -13,13 +13,14 @@ import click
 from odc.aws.queue import get_queue, publish_messages
 
 from deafrica import __version__
-from deafrica.utils import (
+from deafrica.click_options import limit, slack_url
+from deafrica.logs import setup_logging
+from deafrica.monitoring.gap_report import (
     find_latest_report,
-    limit,
     read_report_missing_scenes,
+)
+from deafrica.utils import (
     send_slack_notification,
-    setup_logging,
-    slack_url,
 )
 
 S3_BUCKET_PATH = "s3://deafrica-landsat/status-report/"
@@ -171,10 +172,12 @@ def fill_the_gap(
 
 @click.argument(
     "satellite",
-    type=str,
+    type=click.Choice(
+        ["Landsat_8_Landsat_9", "Landsat_7", "Landsat_5"], case_sensitive=True
+    ),
     nargs=1,
     required=True,
-    default="satellite to be compared, supported ones (landsat_8, landsat_7, landsat_5)",
+    default="satellite to be compared",
 )
 @click.argument(
     "sync_queue_name",

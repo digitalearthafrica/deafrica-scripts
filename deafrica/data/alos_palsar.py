@@ -11,13 +11,14 @@ from typing import Tuple
 
 import click
 import pystac
+from odc.apps.dc_tools._docs import odc_uuid
 from odc.aws import s3_dump, s3_head_object
 from osgeo import gdal
 from rio_cogeo.cogeo import cog_translate
 from rio_cogeo.profiles import cog_profiles
 from rio_stac import create_stac_item
 
-from deafrica.utils import odc_uuid, setup_logging
+from deafrica.logs import setup_logging
 
 NS = [
     "N40",

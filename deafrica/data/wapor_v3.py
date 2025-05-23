@@ -20,10 +20,11 @@ from eodatasets3.images import ValidDataMethod
 from eodatasets3.model import DatasetDoc
 from eodatasets3.serialise import to_path  # noqa F401
 from eodatasets3.stac import to_stac_item
+from odc.apps.dc_tools._docs import odc_uuid
 from odc.aws import s3_dump
 
-from deafrica.easi_assemble import EasiPrepare
-from deafrica.utils import (
+from deafrica.data.easi_assemble import EasiPrepare
+from deafrica.io import (
     check_directory_exists,
     check_file_exists,
     download_product_yaml,
@@ -34,9 +35,8 @@ from deafrica.utils import (
     is_gcsfs_path,
     is_s3_path,
     is_url,
-    odc_uuid,
-    setup_logging,
 )
+from deafrica.logs import setup_logging
 
 # Set log level to info
 log = setup_logging()

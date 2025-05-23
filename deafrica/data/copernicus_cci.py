@@ -10,11 +10,13 @@ import pystac
 import xarray as xr
 from datacube.utils.cog import write_cog
 from datacube.utils.geometry import assign_crs
+from odc.apps.dc_tools._docs import odc_uuid
 from odc.aws import s3_dump, s3_head_object
 from rio_stac import create_stac_item
-from urlpath import URL
+from yarl import URL
 
-from deafrica.utils import AFRICA_BBOX, odc_uuid, setup_logging
+from deafrica.logs import setup_logging
+from deafrica.utils import AFRICA_BBOX
 
 """
 Download ESA Climate Change Initiative 300m Landcover from
@@ -26,7 +28,7 @@ Datasource: https://cds.climate.copernicus.eu/cdsapp#!/dataset/satellite-land-co
 
 PRODUCT_NAME = "cci_landcover"
 
-# CDSAPI_URL = "https://cds.climate.copernicus.eu/api/v2"
+# CDSAPI_URL = "https://cds.climate.copernicus.eu/api"
 # CDSAPI_KEY = "user-or-organisation-key"
 
 # values may be set in ~/.cdsapirc
@@ -64,6 +66,8 @@ def download_cci_lc(year: str, s3_dst: str, workdir: str, overwrite: bool = Fals
     log = setup_logging()
     assets = {}
 
+    ulx, uly, lrx, lry = AFRICA_BBOX
+
     cci_lc_version = get_version_from_year(year)
     name = f"{PRODUCT_NAME}_{year}_{cci_lc_version}"
 
@@ -97,8 +101,9 @@ def download_cci_lc(year: str, s3_dst: str, workdir: str, overwrite: bool = Fals
                     {
                         "format": "zip",
                         "variable": "all",
-                        "version": cci_lc_version,
-                        "year": str(year),
+                        "version": [cci_lc_version.replace(".", "_")],
+                        "year": [str(year)],
+                        "area": [uly, ulx, lry, lrx],
                     },
                     local_file,
                 )
@@ -117,7 +122,6 @@ def download_cci_lc(year: str, s3_dst: str, workdir: str, overwrite: bool = Fals
             # Process data
             ds = xr.open_dataset(unzipped)
             # Subset to Africa
-            ulx, uly, lrx, lry = AFRICA_BBOX
             # Note: lats are upside down!
             ds_small = ds.sel(lat=slice(uly, lry), lon=slice(ulx, lrx))
             ds_small = assign_crs(ds_small, crs="epsg:4326")

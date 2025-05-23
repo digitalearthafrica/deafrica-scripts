@@ -8,13 +8,18 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import boto3
+import numpy
 import rasterio
 import yaml
+from botocore import UNSIGNED
+from botocore.client import Config
 from eodatasets3 import serialise
 from eodatasets3.images import GridSpec, MeasurementBundler
 from eodatasets3.model import AccessoryDoc, DatasetDoc, ProductDoc
 from eodatasets3.properties import Eo3Interface
 from eodatasets3.validate import Level, ValidationExpectations, validate_dataset
+
+from deafrica.io import get_filesystem, get_gdal_vsi_prefix
 
 # Uncomment and add logging if and where needed
 # import logging
@@ -22,7 +27,7 @@ from eodatasets3.validate import Level, ValidationExpectations, validate_dataset
 # logger = get_logger('EasiPrepare', level=logging.DEBUG)
 
 # Adapted from
-# https://github.com/opendatacube/tutorial-odc-product/blob/master/tasks/eo3assemble/easi_assemble.py
+# https://github.com/opendatacube/tutorial-odc-product/blob/master/tasks/eo3assemble/easi_assemble.py: EasiPrepare()
 
 OUTPUT_NAME = "odc-metadata.yaml"
 
@@ -31,8 +36,8 @@ class EasiPrepare(Eo3Interface):
     def __init__(
         self,
         dataset_path: str,
-        product_yaml: Path,
-        output_path: str = None,
+        product_yaml: str | Path,
+        output_path: str | Path = None,
     ) -> None:
         """
         Prepare eo3 metadata for a dataset.
@@ -43,7 +48,7 @@ class EasiPrepare(Eo3Interface):
             Files should be readable by GDAL to allow generation of the grid specifications.
 
         :param product_yaml:
-            Path to the corresponding product YAML. The product name is used and the
+            File system Path  or URL to the corresponding product YAML. The product name is used and the
             measurements must correspond to file(s).
 
         :param output_path:
@@ -60,8 +65,8 @@ class EasiPrepare(Eo3Interface):
 
         # Handle inputs
         self._set_dataset_path(dataset_path)
-        self._set_output_path(output_path)
-        self._product_yaml = Path(product_yaml)
+        self._set_output_path(str(output_path))
+        self._product_yaml = str(product_yaml)
 
         # Defaults
         self._dataset = (
@@ -99,7 +104,8 @@ class EasiPrepare(Eo3Interface):
         Parse some_path for validity and type, and resolve to its absolute path.
         Test if its a URI
         - If '','file': Resolve path
-        - If s3: Get bucket, key
+        - If s3 or gs: Get bucket, key
+        - Ih https(s) url: Get path
         """
         scheme, new_path, bucket, key = (None, None, None, None)
         if some_path is not None:
@@ -116,7 +122,9 @@ class EasiPrepare(Eo3Interface):
                 bucket = loc.hostname
                 key = re.sub("^[/]", "", loc.path)
             elif loc.scheme in ("http", "https"):
-                raise RuntimeError('Location type "http/s" is not implemented yet')
+                scheme = loc.scheme
+                new_path = some_path
+                # raise RuntimeError('Location type "http/s" is not implemented yet')
         return (scheme, new_path, bucket, key)
 
     def _set_dataset_path(self, dataset_path):
@@ -151,7 +159,7 @@ class EasiPrepare(Eo3Interface):
                     meta = self._dataset_path / OUTPUT_NAME
                 else:
                     meta = self._dataset_path.parent / OUTPUT_NAME
-        if self._dataset_scheme in ("s3", "gs", "gcs"):
+        if self._dataset_scheme in ("s3", "gs", "gcs", "http", "https"):
             if output_path:
                 # Make sure its local
                 # If a directory then + OUTPUT_NAME
@@ -233,7 +241,8 @@ class EasiPrepare(Eo3Interface):
         """
         Return the product name from the product yaml
         """
-        with self._product_yaml.open() as f:
+        fs = get_filesystem(self._product_yaml)
+        with fs.open(self._product_yaml) as f:
             y = yaml.load(f, Loader=yaml.FullLoader)
             return y["name"]
 
@@ -242,7 +251,8 @@ class EasiPrepare(Eo3Interface):
         Return list of (measurement, alias, ..) tuples
         """
         measurements = []  # list of tuples (measurement name, alias, ...)
-        with self._product_yaml.open() as f:
+        fs = get_filesystem(self._product_yaml)
+        with fs.open(self._product_yaml) as f:
             y = yaml.load(f, Loader=yaml.FullLoader)
             for m in y["measurements"]:
                 t = [m["name"]]
@@ -331,11 +341,12 @@ class EasiPrepare(Eo3Interface):
 
         # S3; obtain a list of object keys for the dataset
         if self._dataset_scheme == "s3":
-            client = boto3.client("s3")
+            # client = boto3.client("s3")
+            client = boto3.client("s3", config=Config(signature_version=UNSIGNED))
             response = client.list_objects_v2(
                 Bucket=self._dataset_bucket,
                 Prefix=self._dataset_key,
-                RequestPayer="requester",  # Make a parameter if/when required
+                # RequestPayer="requester",  # Make a parameter if/when required
             )
             # print(f'Debug: {response}')
             if response["KeyCount"] > 0:
@@ -359,12 +370,13 @@ class EasiPrepare(Eo3Interface):
     def note_measurement(
         self,
         measurement_name: str,
-        file_path: Path,
+        file_path: Path | str,
+        layer: str | None = None,
         expand_valid_data: bool = True,
         relative_to_metadata: bool = True,
-        grid=None,
-        array=None,
-        nodata=None,
+        grid: GridSpec | None = None,
+        array: numpy.ndarray | None = None,
+        nodata: float | int | None = None,
     ):
         """
         Reference a measurement from its existing file path.
@@ -374,6 +386,8 @@ class EasiPrepare(Eo3Interface):
             Measurement name corresponding to a product measurement
         :param file_path:
             Path to data file for this measurement
+        :param layer:
+            Layer name in data file for this measurement
         :param expand_valid_data:
             Calculate the union of valid data polygons across all measurements
         :param relative_to_metadata:
@@ -394,21 +408,37 @@ class EasiPrepare(Eo3Interface):
         if self.geometry:
             expand_valid_data = False
 
-        if not grid:
-            with rasterio.open(file_path) as ds:
-                # TODO: fix for multi-band files
-                if ds.count != 1:
-                    raise NotImplementedError(
-                        "TODO: Only single-band files currently supported"
-                    )
-                grid = GridSpec.from_rio(ds)
-                if not array:
-                    array = ds.read(1)
-                if not nodata:
-                    nodata = ds.nodata
+        src = rasterio.open(file_path)
+        count = src.count
+        driver = src.driver
+        # Multi-band file
+        if count != 1:
+            src.close()
+            if driver.lower() == "netcdf":
+                with rasterio.open(
+                    f"netcdf:{get_gdal_vsi_prefix(file_path)}:{layer}"
+                ) as ds:
+                    if not grid:
+                        grid = GridSpec.from_rio(ds)
+                    if not nodata:
+                        nodata = ds.nodata
+                    if expand_valid_data:
+                        if not array:
+                            array = ds.read(1)
 
-        # This could be a layer name in a multi-band file; need to test it
-        layer = None
+            else:
+                raise NotImplementedError(
+                    "TODO: Only multi-band netcdf files currently supported"
+                )
+        else:
+            if not grid:
+                grid = GridSpec.from_rio(src)
+            if not nodata:
+                nodata = src.nodata
+            if expand_valid_data:
+                if not array:
+                    array = src.read(1)
+            src.close()
 
         self._measurements.record_image(
             measurement_name,  # str

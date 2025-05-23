@@ -3,6 +3,7 @@ import logging
 import ntpath
 import os
 import sys
+import warnings
 from textwrap import dedent
 from typing import Dict, Optional
 
@@ -17,20 +18,20 @@ from rasterio.session import AWSSession
 from shapely import geometry
 
 from deafrica import __version__
-from deafrica.utils import (
+from deafrica.click_options import limit, slack_url
+from deafrica.logs import setup_logging
+from deafrica.monitoring.gap_report import (
     find_latest_report,
-    limit,
     read_report_missing_scenes,
+)
+from deafrica.utils import (
     send_slack_notification,
-    setup_logging,
-    slack_url,
     split_list_equally,
 )
 
 SOURCE_REGION = "us-west-2"
 S3_BUCKET_PATH = "s3://deafrica-sentinel-2/status-report/"
 STAC_VERSION = "1.0.0-beta.2"
-import warnings
 
 # supress a FutureWarning from pyproj
 warnings.simplefilter(action="ignore", category=FutureWarning)

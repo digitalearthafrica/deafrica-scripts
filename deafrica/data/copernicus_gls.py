@@ -6,14 +6,16 @@ from tempfile import TemporaryDirectory
 import click
 import pystac
 import requests
+from odc.apps.dc_tools._docs import odc_uuid
 from odc.aws import s3_dump, s3_head_object
 from osgeo import gdal
 from rasterio import MemoryFile
 from rio_cogeo import cog_profiles, cog_translate
 from rio_stac import create_stac_item
-from urlpath import URL
+from yarl import URL
 
-from deafrica.utils import AFRICA_BBOX, odc_uuid, setup_logging
+from deafrica.logs import setup_logging
+from deafrica.utils import AFRICA_BBOX
 
 # 2015
 # https://zenodo.org/record/3939038/files/PROBAV_LC100_global_v3.0.1_2015-base_Bare-CoverFraction-layer_EPSG-4326.tif
