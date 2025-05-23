@@ -1,4 +1,5 @@
-FROM ghcr.io/osgeo/gdal:ubuntu-small-3.8.5 AS base
+# gdal:ubuntu-small no longer comes with netcdf support compiled into gdal
+FROM ghcr.io/osgeo/gdal:ubuntu-full-3.11.0 AS base
 
 ENV CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt\
     DEBIAN_FRONTEND=noninteractive \
@@ -53,16 +54,17 @@ RUN python3 -m venv $VIRTUAL_ENV
 
 COPY requirements.txt /tmp/
 RUN python -m pip install --upgrade pip pip-tools \
-     && python -m pip install --no-cache-dir -r /tmp/requirements.txt \
+    && python -m pip install --no-cache-dir -r /tmp/requirements.txt \
         --no-binary rasterio \
         --no-binary shapely \
-        --no-binary fiona
+        --no-binary fiona    
 
 RUN mkdir -p /code
 WORKDIR /code
 COPY . /code/
 
-RUN pip install /code
+RUN pip install /code \
+    && pip cache purge
 
 CMD ["python", "--version"]
 
