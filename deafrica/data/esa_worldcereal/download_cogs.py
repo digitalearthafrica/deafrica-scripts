@@ -80,7 +80,7 @@ def download_and_unzip_data(zip_url: str):
     local_zip_path = os.path.join(LOCAL_DOWNLOAD_DIR, zip_filename)
 
     if check_file_exists(local_zip_path):
-        log.info(f"{local_zip_path} already exists! Skippping download ...")
+        log.info(f"{local_zip_path} already exists! Skipping download ...")
     else:
         log.info(f"Downloading {zip_url} to {local_zip_path} ...")
         local_zip_path = download_file_from_url(
