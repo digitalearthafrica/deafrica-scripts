@@ -4,7 +4,6 @@ Create per dataset metadata (stac files) for the ESA WorldCereal 10 m
 """
 
 import json
-import logging
 import os
 import posixpath
 import sys
@@ -152,9 +151,7 @@ def create_stac_files(
         {AEZ_id}_{season}_{product}_{startdate}_{enddate}_{classification|confidence}.tif
     """
     # Setup logging level
-    setup_logging()
-
-    log = logging.getLogger(__name__)
+    log = setup_logging()
 
     # Find all the geotiffs
     # Files have the structure
