@@ -107,6 +107,8 @@ cffi==1.17.1
     #   cryptography
     #   pygit2
     #   pynacl
+cftime==1.6.4.post1
+    # via deafrica (setup.py)
 charset-normalizer==3.4.2
     # via requests
 circuitbreaker==2.1.3
@@ -341,6 +343,7 @@ numpy==2.2.6
     # via
     #   antimeridian
     #   bokeh
+    #   cftime
     #   contourpy
     #   dask
     #   dask-image
