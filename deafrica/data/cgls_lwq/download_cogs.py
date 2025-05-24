@@ -4,7 +4,6 @@ crop and convert to Cloud Optimized Geotiffs, and push to an S3 bucket.
 """
 
 import json
-import logging
 import os
 import posixpath
 import sys
@@ -188,8 +187,7 @@ def download_cogs(
     url_filter: str,
 ):
     # Setup logging level
-    setup_logging()
-    log = logging.getLogger(__name__)
+    log = setup_logging()
 
     if product_name not in MANIFEST_FILE_URLS.keys():
         raise NotImplementedError(

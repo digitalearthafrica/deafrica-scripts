@@ -4,7 +4,6 @@ Lake Water Quality datasets.
 """
 
 import json
-import logging
 import os
 import posixpath
 import sys
@@ -172,8 +171,7 @@ def create_stac_files(
     write_eo3: bool,
 ):
     # Setup logging level
-    setup_logging()
-    log = logging.getLogger(__name__)
+    log = setup_logging()
 
     # Find all the geotiffs
     # Files have the structure

@@ -5,7 +5,6 @@ convert to Cloud Optimized Geotiff, and push to an S3 bucket.
 Datasource: https://zenodo.org/records/7875105
 """
 
-import logging
 import os
 import posixpath
 from subprocess import STDOUT, check_output
@@ -35,8 +34,7 @@ from deafrica.io import (
 from deafrica.logs import setup_logging
 from deafrica.utils import AFRICA_EXTENT_URL
 
-setup_logging()
-log = logging.getLogger(__name__)
+log = setup_logging()
 
 
 def get_africa_aez_ids():
