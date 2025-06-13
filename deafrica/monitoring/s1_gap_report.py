@@ -4,9 +4,11 @@ import os
 from textwrap import dedent
 
 import click
+import datacube
 import geopandas as gpd
 import requests
 from odc.aws import s3_client, s3_dump, s3_ls_dir
+from odc.aws.inventory import list_inventory
 from sentinelhub import DataCollection, Geometry, SentinelHubCatalog, SHConfig
 from yarl import URL
 
@@ -24,11 +26,14 @@ REGION_NAME = "af-south-1"
 AFRICA_EXTENT = "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/master/africa-extent.json"
 TILING_GRID = "https://s3.eu-central-1.amazonaws.com/sh-batch-grids/tiling-grid-3.zip"
 PERIOD = 7
+SENTINEL_1_INVENTORY_PATH = "s3://deafrica-sentinel-1-inventory/deafrica-sentinel-1/deafrica-sentinel-1-inventory/"
 
 missing_datasets = []
 missing_datatakes = []
 incomplete_datatakes = []
 missing_files = []
+missing_odc_scenes = []
+orphaned_odc_scenes = []
 
 
 def get_origin_data(
@@ -166,23 +171,42 @@ def sendNotification(slack_url, report_http_link):
         f"Missing Files: {len(missing_files)}\n"
         f"Incomplete Datatakes: {len(incomplete_datatakes)}\n"
         f"Missing Datatakes: {len(missing_datatakes)}\n"
+        f"Missing ODC Scenes: {len(missing_odc_scenes)}\n"
+        f"Orphan ODC Scenes: {len(orphaned_odc_scenes)}\n"
         f"Report: {report_http_link}\n"
     )
     send_slack_notification(slack_url, "S1 Gap Report", message)
 
 
+def get_odc_keys(log) -> set:
+    try:
+        dc = datacube.Datacube()
+        all_odc_vals = {}
+
+        for val in dc.index.datasets.search_returning(
+            ["uri", "indexed_time"], product="s1_rtc"
+        ):
+            all_odc_vals[val.uri.replace("s3://deafrica-sentinel-1/", "")] = (
+                val.indexed_time
+            )
+        return all_odc_vals
+    except Exception:
+        log.info("Error while searching for datasets in odc")
+        return {}
+
+
 def find_missing_s1_data(bucket_name: str, slack_url: str):
     log = setup_logging()
     log.info("Task started ")
+    today = datetime.datetime.today()
     s1_status_report_path = URL(f"s3://{bucket_name}/status-report/")
-
     try:
         africa_extent_json = requests.get(AFRICA_EXTENT).json()
         africa_grid = get_africa_grid(africa_extent_json)
 
         target_datatakes = []
         for i in range(0, PERIOD):
-            date = datetime.datetime.today() - datetime.timedelta(days=PERIOD - i + 1)
+            date = today - datetime.timedelta(days=PERIOD - i + 1)
             date_str = date.strftime("%Y-%m-%d")
             log.info("Checking S1 data for date: " + date_str)
 
@@ -203,34 +227,61 @@ def find_missing_s1_data(bucket_name: str, slack_url: str):
                     datatake not in missing_datatakes
                 ):
                     missing_datatakes.append(datatake)
-        if missing_datasets or missing_files:
-            output_filename = (
-                f"{datetime.datetime.today().strftime('%Y-%m-%d')}_gap_report.json"
-            )
-            log.info(f"File will be saved in {s1_status_report_path}{output_filename}")
 
-            missing_json = json.dumps(
-                {
-                    "missing_datasets": list(missing_datasets),
-                    "missing_files": list(missing_files),
-                    "incomplete_datatakes": list(incomplete_datatakes),
-                    "missing_datatakes": list(missing_datatakes),
-                }
+        # Keys that in the destination bucket but are not indexed
+        # on ODC.
+        client = s3_client(region_name=REGION_NAME)
+        destination_keys = set(
+            ns.Key
+            for ns in list_inventory(
+                manifest=SENTINEL_1_INVENTORY_PATH,
+                prefix="s1_rtc",
+                contains="metadata.json",
+                n_threads=200,
             )
+        )
+        all_odc_values = get_odc_keys(log)
+        indexed_keys = all_odc_values.keys()
+        missing_odc_scenes = set(
+            key for key in destination_keys if key not in indexed_keys
+        )
 
-            client = s3_client(region_name=REGION_NAME)
-            s3_dump(
-                data=missing_json,
-                url=str(URL(s1_status_report_path) / output_filename),
-                s3=client,
-                ContentType="application/json",
-            )
+        # Keys that are indexed on ODC but do not exist in the
+        # destination bucket
+        yesterday = (today - datetime.timedelta(days=1)).date()
+        orphaned_odc_scenes = set(
+            key
+            for key in indexed_keys
+            if (key not in destination_keys and yesterday > all_odc_values[key].date())
+        )
 
-            if slack_url:
-                report_http_link = f"https://{bucket_name}.s3.af-south-1.amazonaws.com/status-report/{output_filename}"
-                sendNotification(slack_url, report_http_link)
+        # Write report
+        output_filename = f"{today.strftime('%Y-%m-%d')}_gap_report.json"
+        log.info(f"File will be saved in {s1_status_report_path}{output_filename}")
+
+        missing_json = json.dumps(
+            {
+                "missing_datasets": list(missing_datasets),
+                "missing_files": list(missing_files),
+                "incomplete_datatakes": list(incomplete_datatakes),
+                "missing_datatakes": list(missing_datatakes),
+                "missing_odc": list(missing_odc_scenes),
+                "orphan_odc": list(orphaned_odc_scenes),
+            }
+        )
+
+        s3_dump(
+            data=missing_json,
+            url=str(URL(s1_status_report_path) / output_filename),
+            s3=client,
+            ContentType="application/json",
+        )
+
+        if slack_url:
+            report_http_link = f"https://{bucket_name}.s3.af-south-1.amazonaws.com/status-report/{output_filename}"
+            sendNotification(slack_url, report_http_link)
     except Exception as exc:
-        log.error(exc)
+        log.exception(exc)
 
 
 @click.argument(
