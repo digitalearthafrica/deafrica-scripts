@@ -136,10 +136,12 @@ def is_json(path: str) -> bool:
     )
 
 
-def find_json_files(directory_path: str, file_name_pattern: str = ".*") -> list[str]:
+def find_json_files(
+    directory_path: str, file_name_pattern: str = ".*", anon: bool = True
+) -> list[str]:
     file_name_pattern = re.compile(file_name_pattern)
 
-    fs = get_filesystem(path=directory_path, anon=True)
+    fs = get_filesystem(path=directory_path, anon=anon)
 
     json_file_paths = []
 
