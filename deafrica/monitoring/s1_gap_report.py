@@ -1,46 +1,50 @@
 import datetime
 import json
+import logging
 import os
 from textwrap import dedent
 
 import click
 import datacube
 import geopandas as gpd
+import pandas as pd
 import requests
+from geojson import FeatureCollection
 from odc.aws import s3_client, s3_dump, s3_ls_dir
 from odc.aws.inventory import list_inventory
 from sentinelhub import DataCollection, Geometry, SentinelHubCatalog, SHConfig
 from yarl import URL
 
 from deafrica.click_options import slack_url
+from deafrica.io import find_json_files
 from deafrica.logs import setup_logging
-from deafrica.utils import (
-    send_slack_notification,
-)
+from deafrica.utils import AFRICA_EXTENT_URL, send_slack_notification
 
 SH_CLIENT_ID = os.getenv("SH_CLIENT_ID", "")
 SH_CLIENT_SECRET = os.getenv("SH_CLIENT_SECRET", "")
 
-BUCKET = "s3://deafrica-sentinel-1/"
-REGION_NAME = "af-south-1"
-AFRICA_EXTENT = "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/master/africa-extent.json"
 TILING_GRID = "https://s3.eu-central-1.amazonaws.com/sh-batch-grids/tiling-grid-3.zip"
-PERIOD = 7
-SENTINEL_1_INVENTORY_PATH = "s3://deafrica-sentinel-1-inventory/deafrica-sentinel-1/deafrica-sentinel-1-inventory/"
+
+S1_BUCKET = "s3://deafrica-sentinel-1/"
+S1_STAGING_BUCKET = "s3://deafrica-sentinel-1-staging-frankfurt/"
+S1_INVENTORY_PATH = "s3://deafrica-sentinel-1-inventory/deafrica-sentinel-1/deafrica-sentinel-1-inventory/"
+BASE_FOLDER_NAME = "s1_rtc"
+REGION_NAME = "af-south-1"
+
+log = logging.getLogger(__name__)
 
 missing_datasets = []
 missing_datatakes = []
 incomplete_datatakes = []
 missing_files = []
-missing_odc_scenes = []
-orphaned_odc_scenes = []
 
 
 def get_origin_data(
     grided_africa: gpd.GeoDataFrame,
-    africa_geometry,
-    date: str,
-):
+    africa_geometry: Geometry,
+    start_date: str,
+    end_date: str,
+) -> list[str]:
     config = SHConfig()
     config.sh_client_id = SH_CLIENT_ID
     config.sh_client_secret = SH_CLIENT_SECRET
@@ -51,7 +55,7 @@ def get_origin_data(
         catalog.search(
             DataCollection.SENTINEL1_IW,
             geometry=africa_geometry,
-            time=date,
+            time=(start_date, end_date),
             fields={
                 "include": ["id", "properties.datetime", "geometry"],
                 "exclude": [],
@@ -71,7 +75,7 @@ def get_origin_data(
     return create_dataset_names(grided_results)
 
 
-def get_africa_grid(africa_extent_json):
+def get_africa_grid(africa_extent_json: FeatureCollection) -> gpd.GeoDataFrame:
     grid = gpd.read_file(TILING_GRID)
     africa_extent_frame = gpd.GeoDataFrame.from_features(
         africa_extent_json["features"], crs="EPSG:4326"
@@ -107,7 +111,7 @@ def check_target_data(origin_datasets, target_datatakes):
     client = s3_client(region_name=REGION_NAME)
     target_files = []
     for dataset in origin_datasets:
-        results = list(s3_ls_dir(uri=BUCKET + dataset, s3=client))
+        results = list(s3_ls_dir(uri=S1_BUCKET + dataset, s3=client))
         if results:
             target_files.append(results)
             check_if_all_files_in_target_folder(results, dataset)
@@ -115,11 +119,11 @@ def check_target_data(origin_datasets, target_datatakes):
             if datatake not in target_datatakes:
                 target_datatakes.append(datatake)
         else:
-            missing_datasets.append(BUCKET + dataset)
+            missing_datasets.append(S1_BUCKET + dataset)
     return target_files
 
 
-def load_json_from_geometry(data):
+def load_geometry_from_json(data: FeatureCollection) -> Geometry:
     for f in data["features"]:
         return Geometry.from_geojson(f["geometry"])
 
@@ -146,7 +150,7 @@ def check_if_all_files_in_target_folder(name_list, name: str):
 def create_path_from_file(path: str):
     splited = path.split("/")
     name = (
-        BUCKET
+        S1_BUCKET
         + path
         + "/"
         + splited[0]
@@ -164,7 +168,172 @@ def create_path_from_file(path: str):
     return name
 
 
-def sendNotification(slack_url, report_http_link):
+def get_s1_date_ranges() -> list[tuple[str]]:
+    start_date_str = "2018-01-01"
+    end_date_str = datetime.datetime.today().strftime("%Y-%m-%d")
+
+    start_date = pd.to_datetime(start_date_str)
+    end_date = pd.to_datetime(end_date_str)
+
+    # Generate the first day of each month between the two dates
+    month_starts = pd.date_range(start=start_date, end=end_date, freq="MS")
+
+    # Create date ranges: (start, end) for each month
+    date_ranges = []
+    for i in range(len(month_starts)):
+        start = month_starts[i]
+        if i + 1 < len(month_starts):
+            end = month_starts[i + 1] - pd.Timedelta(days=1)
+        else:
+            end = end_date
+        date_ranges.append((start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")))
+
+    return date_ranges
+
+
+def find_missing_s1_data_from_sentinelhub() -> tuple[list, list, list, list]:
+    africa_extent_json = requests.get(AFRICA_EXTENT_URL).json()
+    africa_geometry = load_geometry_from_json(africa_extent_json)
+    africa_grid = get_africa_grid(africa_extent_json)
+
+    date_ranges = get_s1_date_ranges()
+
+    target_datatakes = []
+    for month_range in date_ranges:
+        start_date = month_range[0]
+        end_date = month_range[-1]
+        month_str = datetime.datetime.strptime(start_date, "%Y-%m-%d").strftime("%B %Y")
+        log.info(f"Checking S1 data for the month {month_str}")
+
+        origin_data = get_origin_data(
+            africa_grid, africa_geometry, start_date, end_date
+        )
+        log.info(f"Sentinel-Hub results: {len(origin_data)}")
+
+        target_data = check_target_data(origin_data, target_datatakes)
+        log.info(f"DEAfrica results: {len(target_data)}")
+    if missing_datasets:
+        for dataset in missing_datasets:
+            datatake = dataset[-6:]
+            if (datatake in target_datatakes) & (datatake not in incomplete_datatakes):
+                incomplete_datatakes.append(datatake)
+            elif (datatake not in target_datatakes) & (
+                datatake not in missing_datatakes
+            ):
+                missing_datatakes.append(datatake)
+    return missing_datasets, missing_files, incomplete_datatakes, missing_datatakes
+
+
+def get_odc_keys() -> dict[str, str]:
+    try:
+        dc = datacube.Datacube()
+        all_odc_vals = {}
+        for val in dc.index.datasets.search_returning(
+            ["uri", "indexed_time"], product=BASE_FOLDER_NAME
+        ):
+            all_odc_vals[val.uri.replace(S1_BUCKET, "")] = val.indexed_time
+        return all_odc_vals
+    except Exception:
+        log.info("Error while searching for datasets in odc")
+        return {}
+
+
+def get_missing_and_orphan_odc_scenes() -> tuple[set[str], set[str]]:
+    log.info(f"Finding datasets in pds bucket {S1_BUCKET} but not indexed in ODC ...")
+    today = datetime.datetime.today()
+    # Keys that in the destination bucket but are not indexed
+    # on ODC.
+    destination_keys = set(
+        ns.Key
+        for ns in list_inventory(
+            manifest=S1_INVENTORY_PATH,
+            prefix=BASE_FOLDER_NAME,
+            contains="metadata.json",
+            n_threads=200,
+        )
+    )
+    all_odc_values = get_odc_keys()
+    indexed_keys = all_odc_values.keys()
+    missing_odc_scenes = set(key for key in destination_keys if key not in indexed_keys)
+
+    # Keys that are indexed on ODC but do not exist in the
+    # destination bucket
+    yesterday = (today - datetime.timedelta(days=1)).date()
+    orphaned_odc_scenes = set(
+        key
+        for key in indexed_keys
+        if (key not in destination_keys and yesterday > all_odc_values[key].date())
+    )
+    log.info("Done")
+    return missing_odc_scenes, orphaned_odc_scenes
+
+
+def get_staging_bucket_diff():
+    log.info(
+        f"Finding datasets in staging bucket {S1_STAGING_BUCKET} but not in pds bucket {S1_BUCKET} ..."
+    )
+    source_keys = find_json_files(
+        directory_path=S1_STAGING_BUCKET,
+        file_name_pattern=r".*metadata\.json$",
+        anon=False,
+    )
+    source_keys = [i.replace(S1_STAGING_BUCKET, "") for i in source_keys]
+
+    destination_keys = set(
+        ns.Key
+        for ns in list_inventory(
+            manifest=S1_INVENTORY_PATH,
+            prefix=BASE_FOLDER_NAME,
+            contains="metadata.json",
+            n_threads=200,
+        )
+    )
+    missing_staged_scenes = set(
+        key for key in source_keys if key not in destination_keys
+    )
+    log.info("Done")
+    return missing_staged_scenes
+
+
+def write_gap_report(
+    bucket_name: str,
+    slack_url: str,
+    missing_datasets: list[str],
+    missing_files: list[str],
+    incomplete_datatakes: list[str],
+    missing_datatakes: list[str],
+    missing_odc_scenes: set[str],
+    orphaned_odc_scenes: set[str],
+    missing_staged_scenes: set[str],
+):
+    log.info("Writing gap report ...")
+    today = datetime.datetime.today()
+    s1_status_report_path = URL(f"s3://{bucket_name}/status-report/")
+    output_filename = f"{today.strftime('%Y-%m-%d')}_gap_report.json"
+    log.info(f"File will be saved in {s1_status_report_path}{output_filename}")
+
+    missing_json = json.dumps(
+        {
+            "missing_datasets": list(missing_datasets),
+            "missing_files": list(missing_files),
+            "incomplete_datatakes": list(incomplete_datatakes),
+            "missing_datatakes": list(missing_datatakes),
+            "missing_odc": list(missing_odc_scenes),
+            "orphan_odc": list(orphaned_odc_scenes),
+            "missing_staged_scenes": list(missing_staged_scenes),
+        }
+    )
+
+    client = s3_client(region_name=REGION_NAME)
+    s3_dump(
+        data=missing_json,
+        url=str(s1_status_report_path / output_filename),
+        s3=client,
+        ContentType="application/json",
+    )
+    log.info(f"Gap report written to {s1_status_report_path}{output_filename}")
+
+    report_http_link = f"https://{bucket_name}.s3.af-south-1.amazonaws.com/status-report/{output_filename}"
     message = dedent(
         f"*SENTINEL 1 GAP REPORT - PDS*\n"
         f"Missing Datasets: {len(missing_datasets)}\n"
@@ -173,113 +342,37 @@ def sendNotification(slack_url, report_http_link):
         f"Missing Datatakes: {len(missing_datatakes)}\n"
         f"Missing ODC Scenes: {len(missing_odc_scenes)}\n"
         f"Orphan ODC Scenes: {len(orphaned_odc_scenes)}\n"
+        f"Missing Staged Scenes: {len(missing_staged_scenes)}\n"
         f"Report: {report_http_link}\n"
     )
-    send_slack_notification(slack_url, "S1 Gap Report", message)
-
-
-def get_odc_keys(log) -> set:
-    try:
-        dc = datacube.Datacube()
-        all_odc_vals = {}
-
-        for val in dc.index.datasets.search_returning(
-            ["uri", "indexed_time"], product="s1_rtc"
-        ):
-            all_odc_vals[val.uri.replace("s3://deafrica-sentinel-1/", "")] = (
-                val.indexed_time
-            )
-        return all_odc_vals
-    except Exception:
-        log.info("Error while searching for datasets in odc")
-        return {}
+    if slack_url:
+        send_slack_notification(slack_url, "S1 Gap Report", message)
+        log.info("Slack notification sent")
+    else:
+        log.info(message)
 
 
 def find_missing_s1_data(bucket_name: str, slack_url: str):
     log = setup_logging()
     log.info("Task started ")
-    today = datetime.datetime.today()
-    s1_status_report_path = URL(f"s3://{bucket_name}/status-report/")
     try:
-        africa_extent_json = requests.get(AFRICA_EXTENT).json()
-        africa_grid = get_africa_grid(africa_extent_json)
-
-        target_datatakes = []
-        for i in range(0, PERIOD):
-            date = today - datetime.timedelta(days=PERIOD - i + 1)
-            date_str = date.strftime("%Y-%m-%d")
-            log.info("Checking S1 data for date: " + date_str)
-
-            africa_geometry = load_json_from_geometry(africa_extent_json)
-            origin_data = get_origin_data(africa_grid, africa_geometry, date_str)
-            log.info("Sentinel-Hub results: " + str(len(origin_data)))
-
-            target_data = check_target_data(origin_data, target_datatakes)
-            log.info("DEAfrica results: " + str(len(target_data)))
-        if missing_datasets:
-            for dataset in missing_datasets:
-                datatake = dataset[-6:]
-                if (datatake in target_datatakes) & (
-                    datatake not in incomplete_datatakes
-                ):
-                    incomplete_datatakes.append(datatake)
-                elif (datatake not in target_datatakes) & (
-                    datatake not in missing_datatakes
-                ):
-                    missing_datatakes.append(datatake)
-
-        # Keys that in the destination bucket but are not indexed
-        # on ODC.
-        client = s3_client(region_name=REGION_NAME)
-        destination_keys = set(
-            ns.Key
-            for ns in list_inventory(
-                manifest=SENTINEL_1_INVENTORY_PATH,
-                prefix="s1_rtc",
-                contains="metadata.json",
-                n_threads=200,
-            )
+        missing_datasets, missing_files, incomplete_datatakes, missing_datatakes = (
+            find_missing_s1_data_from_sentinelhub()
         )
-        all_odc_values = get_odc_keys(log)
-        indexed_keys = all_odc_values.keys()
-        missing_odc_scenes = set(
-            key for key in destination_keys if key not in indexed_keys
+        missing_odc_scenes, orphaned_odc_scenes = get_missing_and_orphan_odc_scenes()
+
+        missing_staged_scenes = get_staging_bucket_diff()
+        write_gap_report(
+            bucket_name,
+            slack_url,
+            missing_datasets,
+            missing_files,
+            incomplete_datatakes,
+            missing_datatakes,
+            missing_odc_scenes,
+            orphaned_odc_scenes,
+            missing_staged_scenes,
         )
-
-        # Keys that are indexed on ODC but do not exist in the
-        # destination bucket
-        yesterday = (today - datetime.timedelta(days=1)).date()
-        orphaned_odc_scenes = set(
-            key
-            for key in indexed_keys
-            if (key not in destination_keys and yesterday > all_odc_values[key].date())
-        )
-
-        # Write report
-        output_filename = f"{today.strftime('%Y-%m-%d')}_gap_report.json"
-        log.info(f"File will be saved in {s1_status_report_path}{output_filename}")
-
-        missing_json = json.dumps(
-            {
-                "missing_datasets": list(missing_datasets),
-                "missing_files": list(missing_files),
-                "incomplete_datatakes": list(incomplete_datatakes),
-                "missing_datatakes": list(missing_datatakes),
-                "missing_odc": list(missing_odc_scenes),
-                "orphan_odc": list(orphaned_odc_scenes),
-            }
-        )
-
-        s3_dump(
-            data=missing_json,
-            url=str(URL(s1_status_report_path) / output_filename),
-            s3=client,
-            ContentType="application/json",
-        )
-
-        if slack_url:
-            report_http_link = f"https://{bucket_name}.s3.af-south-1.amazonaws.com/status-report/{output_filename}"
-            sendNotification(slack_url, report_http_link)
     except Exception as exc:
         log.exception(exc)
 
