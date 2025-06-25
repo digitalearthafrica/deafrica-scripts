@@ -149,7 +149,7 @@ def cli(
     version: bool = False,
 ):
     """
-    Index missing ODC missing scenes.
+    Index missing ODC scenes.
 
     params:
         idx: (int) sequential index which will be used to define the range of scenes that the POD will work with
