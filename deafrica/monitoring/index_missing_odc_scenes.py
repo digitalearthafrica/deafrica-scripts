@@ -46,7 +46,7 @@ def index_missing_odc_scenes(
     dc = Datacube()
 
     if product_name not in dc.list_products()["name"].to_list():
-        assert NotImplementedError(f"product {product_name} not available in datacube")
+        raise NotImplementedError(f"product {product_name} not available in datacube")
 
     latest_report = find_latest_report(
         report_folder_path=s3_report_folder_path,
