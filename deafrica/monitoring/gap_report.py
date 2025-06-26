@@ -38,11 +38,34 @@ def read_report_missing_scenes(report_path: str, limit=None):
     report_json = s3_fetch(url=report_path, s3=s3)
     report_dict = json.loads(report_json)
 
-    if report_dict.get("missing", None) is None:
+    key = "missing"
+    if report_dict.get(key, None) is None:
         raise Exception("Missing scenes not found")
 
     missing_scene_paths = [
-        scene_path.strip() for scene_path in report_dict["missing"] if scene_path
+        scene_path.strip() for scene_path in report_dict[key] if scene_path
+    ]
+
+    if limit:
+        missing_scene_paths = missing_scene_paths[: int(limit)]
+
+    return missing_scene_paths
+
+
+def read_report_missing_odc_scenes(report_path: str, limit=None):
+    """
+    read the gap report
+    """
+    s3 = s3_client(region_name="af-south-1")
+    report_json = s3_fetch(url=report_path, s3=s3)
+    report_dict = json.loads(report_json)
+
+    key = "missing_odc"
+    if report_dict.get(key, None) is None:
+        raise Exception("Missing ODC scenes not found")
+
+    missing_scene_paths = [
+        scene_path.strip() for scene_path in report_dict[key] if scene_path
     ]
 
     if limit:
