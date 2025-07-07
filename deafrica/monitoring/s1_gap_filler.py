@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 @click.command("s1-gap-filler", no_args_is_help=True)
 @click.argument("worker-idx", type=int, nargs=1, required=True)
 @click.argument("max-workers", type=int, nargs=1, required=True)
-@click.argument("sns-topic-arn", type=int, nargs=1, required=True)
+@click.argument("sns-topic-arn", type=str, nargs=1, required=True)
 @limit
 @slack_url
 @click.option("--version", is_flag=True, default=False)
