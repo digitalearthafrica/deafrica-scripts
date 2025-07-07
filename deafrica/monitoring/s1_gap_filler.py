@@ -45,6 +45,7 @@ def cli(
 
     if version:
         click.echo(__version__)
+        sys.exit(0)
 
     if limit is not None:
         try:
