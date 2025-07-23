@@ -233,9 +233,9 @@ def get_odc_keys() -> dict[str, str]:
         ):
             all_odc_vals[val.uri.replace(S1_BUCKET, "")] = val.indexed_time
         return all_odc_vals
-    except Exception:
-        log.info("Error while searching for datasets in odc")
-        return {}
+    except Exception as e:
+        log.error(f"Error while searching for datasets in odc: {e}")
+        raise
 
 
 def get_missing_and_orphan_odc_scenes() -> tuple[set[str], set[str]]:
