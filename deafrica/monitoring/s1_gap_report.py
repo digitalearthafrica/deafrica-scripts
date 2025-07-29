@@ -295,84 +295,84 @@ def get_staging_bucket_diff():
     return missing_staged_scenes
 
 
-def write_gap_report(
-    bucket_name: str,
-    slack_url: str,
-    missing_datasets: list[str],
-    missing_files: list[str],
-    incomplete_datatakes: list[str],
-    missing_datatakes: list[str],
-    missing_odc_scenes: set[str],
-    orphaned_odc_scenes: set[str],
-    missing_staged_scenes: set[str],
+def find_missing_s1_data(
+    bucket_name: str, slack_url: str, skip_sentinelhub_check: bool
 ):
-    log.info("Writing gap report ...")
-    today = datetime.datetime.today()
-    s1_status_report_path = URL(f"s3://{bucket_name}/status-report/")
-    output_filename = f"{today.strftime('%Y-%m-%d')}_gap_report.json"
-    log.info(f"File will be saved in {s1_status_report_path}{output_filename}")
-
-    missing_json = json.dumps(
-        {
-            "missing_datasets": list(missing_datasets),
-            "missing_files": list(missing_files),
-            "incomplete_datatakes": list(incomplete_datatakes),
-            "missing_datatakes": list(missing_datatakes),
-            "missing_odc": list(missing_odc_scenes),
-            "orphan_odc": list(orphaned_odc_scenes),
-            "missing_staged_scenes": list(missing_staged_scenes),
-        }
-    )
-
-    client = s3_client(region_name=REGION_NAME)
-    s3_dump(
-        data=missing_json,
-        url=str(s1_status_report_path / output_filename),
-        s3=client,
-        ContentType="application/json",
-    )
-    log.info(f"Gap report written to {s1_status_report_path}{output_filename}")
-
-    report_http_link = f"https://{bucket_name}.s3.af-south-1.amazonaws.com/status-report/{output_filename}"
-    message = dedent(
-        f"*SENTINEL 1 GAP REPORT - PDS*\n"
-        f"Missing Datasets: {len(missing_datasets)}\n"
-        f"Missing Files: {len(missing_files)}\n"
-        f"Incomplete Datatakes: {len(incomplete_datatakes)}\n"
-        f"Missing Datatakes: {len(missing_datatakes)}\n"
-        f"Missing ODC Scenes: {len(missing_odc_scenes)}\n"
-        f"Orphan ODC Scenes: {len(orphaned_odc_scenes)}\n"
-        f"Missing Staged Scenes: {len(missing_staged_scenes)}\n"
-        f"Report: {report_http_link}\n"
-    )
-    if slack_url:
-        send_slack_notification(slack_url, "S1 Gap Report", message)
-        log.info("Slack notification sent")
-    else:
-        log.info(message)
-
-
-def find_missing_s1_data(bucket_name: str, slack_url: str):
     log = setup_logging()
     log.info("Task started ")
     try:
-        missing_datasets, missing_files, incomplete_datatakes, missing_datatakes = (
-            find_missing_s1_data_from_sentinelhub()
-        )
         missing_odc_scenes, orphaned_odc_scenes = get_missing_and_orphan_odc_scenes()
-
         missing_staged_scenes = get_staging_bucket_diff()
-        write_gap_report(
-            bucket_name,
-            slack_url,
-            missing_datasets,
-            missing_files,
-            incomplete_datatakes,
-            missing_datatakes,
-            missing_odc_scenes,
-            orphaned_odc_scenes,
-            missing_staged_scenes,
+
+        if skip_sentinelhub_check is False:
+            missing_datasets, missing_files, incomplete_datatakes, missing_datatakes = (
+                find_missing_s1_data_from_sentinelhub()
+            )
+
+        log.info("Writing gap report ...")
+        today = datetime.datetime.today()
+        s1_status_report_path = URL(f"s3://{bucket_name}/status-report/")
+        output_filename = f"{today.strftime('%Y-%m-%d')}_gap_report.json"
+        log.info(f"File will be saved in {s1_status_report_path}{output_filename}")
+
+        if skip_sentinelhub_check is False:
+            gap_report_json = json.dumps(
+                {
+                    "missing_datasets": list(missing_datasets),
+                    "missing_files": list(missing_files),
+                    "incomplete_datatakes": list(incomplete_datatakes),
+                    "missing_datatakes": list(missing_datatakes),
+                    "missing_odc": list(missing_odc_scenes),
+                    "orphan_odc": list(orphaned_odc_scenes),
+                    "missing_staged_scenes": list(missing_staged_scenes),
+                }
+            )
+        else:
+            gap_report_json = json.dumps(
+                {
+                    "missing_odc": list(missing_odc_scenes),
+                    "orphan_odc": list(orphaned_odc_scenes),
+                    "missing_staged_scenes": list(missing_staged_scenes),
+                }
+            )
+
+        client = s3_client(region_name=REGION_NAME)
+        s3_dump(
+            data=gap_report_json,
+            url=str(s1_status_report_path / output_filename),
+            s3=client,
+            ContentType="application/json",
         )
+        log.info(f"Gap report written to {s1_status_report_path}{output_filename}")
+
+        report_http_link = f"https://{bucket_name}.s3.af-south-1.amazonaws.com/status-report/{output_filename}"
+
+        if skip_sentinelhub_check is False:
+            slack_message = dedent(
+                f"*SENTINEL 1 GAP REPORT - PDS*\n"
+                f"Missing Datasets: {len(missing_datasets)}\n"
+                f"Missing Files: {len(missing_files)}\n"
+                f"Incomplete Datatakes: {len(incomplete_datatakes)}\n"
+                f"Missing Datatakes: {len(missing_datatakes)}\n"
+                f"Missing ODC Scenes: {len(missing_odc_scenes)}\n"
+                f"Orphan ODC Scenes: {len(orphaned_odc_scenes)}\n"
+                f"Missing Staged Scenes: {len(missing_staged_scenes)}\n"
+                f"Report: {report_http_link}\n"
+            )
+        else:
+            slack_message = dedent(
+                f"*SENTINEL 1 GAP REPORT - PDS*\n"
+                f"Missing ODC Scenes: {len(missing_odc_scenes)}\n"
+                f"Orphan ODC Scenes: {len(orphaned_odc_scenes)}\n"
+                f"Missing Staged Scenes: {len(missing_staged_scenes)}\n"
+                f"Report: {report_http_link}\n"
+            )
+
+        if slack_url:
+            send_slack_notification(slack_url, "S1 Gap Report", slack_message)
+            log.info("Slack notification sent")
+        else:
+            log.info(slack_message)
     except Exception as exc:
         log.exception(exc)
 
@@ -384,10 +384,12 @@ def find_missing_s1_data(bucket_name: str, slack_url: str):
     required=True,
     default="Bucket where the gap report will be stored",
 )
+@click.option("--skip-sentinelhub-check", is_flag=True, default=False)
 @slack_url
 @click.command("s1-gap-report")
 def cli(
     bucket_name: str,
+    skip_sentinelhub_check: bool,
     slack_url: str = None,
 ):
     """
@@ -397,4 +399,5 @@ def cli(
     find_missing_s1_data(
         bucket_name=bucket_name,
         slack_url=slack_url,
+        skip_sentinelhub_check=skip_sentinelhub_check,
     )
