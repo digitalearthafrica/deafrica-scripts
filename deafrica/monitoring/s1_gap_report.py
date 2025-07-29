@@ -384,7 +384,15 @@ def find_missing_s1_data(
     required=True,
     default="Bucket where the gap report will be stored",
 )
-@click.option("--skip-sentinelhub-check", is_flag=True, default=False)
+@click.option(
+    "--skip-sentinelhub-check",
+    is_flag=True,
+    default=False,
+    help="If True, skip checking for missing datasets, missing files, "
+    "incomplete and missing datatakes from SentinelHub. Gap report only returns "
+    "missing ODC scenes, orphaned ODC scenes and scenes in the staging bucket "
+    "but not in the specified bucket.",
+)
 @slack_url
 @click.command("s1-gap-report")
 def cli(
@@ -393,7 +401,7 @@ def cli(
     slack_url: str = None,
 ):
     """
-    Publish missing datasets
+    Sentinel-1 gap report for s1_rtc scenes in the bucket BUCKET_NAME.
     """
 
     find_missing_s1_data(
