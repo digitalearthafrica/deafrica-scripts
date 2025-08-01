@@ -16,7 +16,6 @@ from sentinelhub import DataCollection, Geometry, SentinelHubCatalog, SHConfig
 from yarl import URL
 
 from deafrica.click_options import slack_url
-from deafrica.io import find_json_files
 from deafrica.logs import setup_logging
 from deafrica.utils import AFRICA_EXTENT_URL, send_slack_notification
 
@@ -268,33 +267,6 @@ def get_missing_and_orphan_odc_scenes() -> tuple[set[str], set[str]]:
     return missing_odc_scenes, orphaned_odc_scenes
 
 
-def get_staging_bucket_diff():
-    log.info(
-        f"Finding datasets in staging bucket {S1_STAGING_BUCKET} but not in pds bucket {S1_BUCKET} ..."
-    )
-    source_keys = find_json_files(
-        directory_path=S1_STAGING_BUCKET,
-        file_name_pattern=r".*metadata\.json$",
-        anon=False,
-    )
-    source_keys = [i.replace(S1_STAGING_BUCKET, "") for i in source_keys]
-
-    destination_keys = set(
-        ns.Key
-        for ns in list_inventory(
-            manifest=S1_INVENTORY_PATH,
-            prefix=BASE_FOLDER_NAME,
-            contains="metadata.json",
-            n_threads=200,
-        )
-    )
-    missing_staged_scenes = set(
-        key for key in source_keys if key not in destination_keys
-    )
-    log.info("Done")
-    return missing_staged_scenes
-
-
 def find_missing_s1_data(
     bucket_name: str, slack_url: str, skip_sentinelhub_check: bool
 ):
@@ -302,7 +274,6 @@ def find_missing_s1_data(
     log.info("Task started ")
     try:
         missing_odc_scenes, orphaned_odc_scenes = get_missing_and_orphan_odc_scenes()
-        missing_staged_scenes = get_staging_bucket_diff()
 
         if skip_sentinelhub_check is False:
             missing_datasets, missing_files, incomplete_datatakes, missing_datatakes = (
@@ -324,7 +295,6 @@ def find_missing_s1_data(
                     "missing_datatakes": list(missing_datatakes),
                     "missing_odc": list(missing_odc_scenes),
                     "orphan_odc": list(orphaned_odc_scenes),
-                    "missing_staged_scenes": list(missing_staged_scenes),
                 }
             )
         else:
@@ -332,7 +302,6 @@ def find_missing_s1_data(
                 {
                     "missing_odc": list(missing_odc_scenes),
                     "orphan_odc": list(orphaned_odc_scenes),
-                    "missing_staged_scenes": list(missing_staged_scenes),
                 }
             )
 
@@ -356,7 +325,6 @@ def find_missing_s1_data(
                 f"Missing Datatakes: {len(missing_datatakes)}\n"
                 f"Missing ODC Scenes: {len(missing_odc_scenes)}\n"
                 f"Orphan ODC Scenes: {len(orphaned_odc_scenes)}\n"
-                f"Missing Staged Scenes: {len(missing_staged_scenes)}\n"
                 f"Report: {report_http_link}\n"
             )
         else:
@@ -364,7 +332,6 @@ def find_missing_s1_data(
                 f"*SENTINEL 1 GAP REPORT - PDS*\n"
                 f"Missing ODC Scenes: {len(missing_odc_scenes)}\n"
                 f"Orphan ODC Scenes: {len(orphaned_odc_scenes)}\n"
-                f"Missing Staged Scenes: {len(missing_staged_scenes)}\n"
                 f"Report: {report_http_link}\n"
             )
 
@@ -389,9 +356,8 @@ def find_missing_s1_data(
     is_flag=True,
     default=False,
     help="If True, skip checking for missing datasets, missing files, "
-    "incomplete and missing datatakes from SentinelHub. Gap report only returns "
-    "missing ODC scenes, orphaned ODC scenes and scenes in the staging bucket "
-    "but not in the specified bucket.",
+    "incomplete and missing datatakes from SentinelHub. "
+    "Gap report only returns missing ODC scenes and orphaned ODC scenes.",
 )
 @slack_url
 @click.command("s1-gap-report")
