@@ -51,12 +51,16 @@ def get_version_from_year(year: str) -> str:
     """
     try:
         year_num = int(year)
-        # Only allow from 1992 to 2020, inclusive
-        if year_num not in range(1992, 2021):
+
+        start_available_year = 1992  # First year with available Datasets
+        v1_available_year = 2015  # Last Year for version 1 of the API
+        current_available_year = 2022  # Beginning Year for version 2 of the API
+
+        if year_num not in range(start_available_year, current_available_year + 1):
             raise ValueError("Supplied date is outside of available range")
-        if 1992 <= year_num <= 2015:
-            return "v2.0.7cds"
-        if 2016 <= year_num <= 2020:
+        if start_available_year <= year_num <= v1_available_year:
+            return "v2_0.7cds"
+        if v1_available_year + 1 <= year_num <= current_available_year:
             return "v2.1.1"
     except ValueError as e:
         raise e
@@ -69,6 +73,7 @@ def download_cci_lc(year: str, s3_dst: str, workdir: str, overwrite: bool = Fals
     ulx, uly, lrx, lry = AFRICA_BBOX
 
     cci_lc_version = get_version_from_year(year)
+    print("CCI Version -> ", cci_lc_version)
     name = f"{PRODUCT_NAME}_{year}_{cci_lc_version}"
 
     out_cog = URL(s3_dst) / year / f"{name}.tif"
