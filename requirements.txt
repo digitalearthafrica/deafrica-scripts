@@ -337,6 +337,8 @@ mypy-extensions==1.1.0
     # via typing-inspect
 narwhals==2.0.1
     # via bokeh
+netCDF4==1.7.2
+    # netCDF4
 networkx==3.5
     # via scikit-image
 numexpr==2.11.0
