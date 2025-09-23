@@ -11,13 +11,12 @@ from email.mime.text import MIMEText
 import boto3
 import click
 
-AWS_REGION_COGNITO = "us-west-2"  # AWS region for Cognito User Pool
+AWS_REGION_COGNITO = "af-south-1"  # AWS region for Cognito User Pool
 AWS_REGION_SES = "af-south-1"  # AWS region for SES
-USER_POOL_ID = "us-west-2_v9nJrst3o"  # User pool ID from environment
+USER_POOL_ID = "af-south-1_4DJTD5vRo"  # User pool ID from environment
 
 # Email Configuration
 SENDER_EMAIL = "info@digitalearthafrica.org"  # SES-verified sender email
-RECEIVER_EMAIL = "kenneth.mubea@digitalearthafrica.org"
 
 # Get the current date in YYYY-MM-DD format
 current_date = datetime.now().strftime("%Y-%m-%d")
@@ -134,11 +133,11 @@ def convert_json_to_csv(json_filename, csv_filename):
             )
 
 
-def send_email_with_attachment(csv_filename):
+def send_email_with_attachment(recipient_email, csv_filename):
     # Prepare email message
     msg = MIMEMultipart()
     msg["From"] = SENDER_EMAIL
-    msg["To"] = RECEIVER_EMAIL
+    msg["To"] = recipient_email
     msg["Subject"] = "Cognito Users Report"
 
     # Attach the body of the email
@@ -157,7 +156,7 @@ def send_email_with_attachment(csv_filename):
     try:
         response = ses_client.send_raw_email(
             Source=SENDER_EMAIL,
-            Destinations=[RECEIVER_EMAIL],
+            Destinations=[recipient_email],
             RawMessage={"Data": msg.as_string()},
         )
         print("Email sent successfully!")
@@ -165,7 +164,7 @@ def send_email_with_attachment(csv_filename):
         print(f"Error sending email via SES: {e}")
 
 
-def main():
+def main(email_address):
     # Fetch users from AWS Cognito and save to Users.json
     fetch_users_from_aws()
 
@@ -178,12 +177,17 @@ def main():
 
     # Send the CSV as an email attachment
     print(f"Sending email with attached CSV report...")
-    send_email_with_attachment(csv_filename)
+    send_email_with_attachment(email_address, csv_filename)
 
 
 @click.command("sandbox-users-report")
-def cli():
-    main()
+@click.option(
+    "--email",
+    help="Recipient's Email Address",
+    required=True
+)
+def cli(email):
+    main(email)
 
 
 if __name__ == "__main__":
