@@ -181,11 +181,7 @@ def main(email_address):
 
 
 @click.command("sandbox-users-report")
-@click.option(
-    "--email",
-    help="Recipient's Email Address",
-    required=True
-)
+@click.option("--email", help="Recipient's Email Address", required=True)
 def cli(email):
     main(email)
 
