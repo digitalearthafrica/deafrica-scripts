@@ -59,34 +59,52 @@ def convert_json_to_csv(json_filename, csv_filename):
     # Flatten the JSON into a DataFrame
     records = []
 
-    for user in data['Users']:
+    for user in data["Users"]:
         base = {
-            'Username': user['Username'],
-            'UserCreateDate': user['UserCreateDate'],
-            'UserLastModifiedDate': user['UserLastModifiedDate'],
-            'Enabled': user['Enabled'],
-            'UserStatus': user['UserStatus'],
+            "Username": user["Username"],
+            "UserCreateDate": user["UserCreateDate"],
+            "UserLastModifiedDate": user["UserLastModifiedDate"],
+            "Enabled": user["Enabled"],
+            "UserStatus": user["UserStatus"],
         }
-        
+
         # Flatten Attributes
-        for attr in user['Attributes']:
-            base[attr['Name']] = attr['Value']
-        
+        for attr in user["Attributes"]:
+            base[attr["Name"]] = attr["Value"]
+
         records.append(base)
 
     # Convert to DataFrame
     df = pd.DataFrame(records)
-    df.sort_values(by='UserCreateDate', ascending=True, inplace=True)
+    df.sort_values(by="UserCreateDate", ascending=True, inplace=True)
     # Rearrange Columns
-    df = df[["Username", "email", "phone_number", "given_name",
-            "family_name", "custom:organisation", "gender",
-            "custom:age_category", "custom:organisation_type",
-            "custom:thematic_interest", "custom:country",
-            "custom:timeframe", "custom:source_of_referral",
-            "email_verified", "phone_number_verified", "UserStatus",
-            "Enabled", "UserCreateDate", "UserLastModifiedDate", "custom:last_login"]]
+    df = df[
+        [
+            "Username",
+            "email",
+            "phone_number",
+            "given_name",
+            "family_name",
+            "custom:organisation",
+            "gender",
+            "custom:age_category",
+            "custom:organisation_type",
+            "custom:thematic_interest",
+            "custom:country",
+            "custom:timeframe",
+            "custom:source_of_referral",
+            "email_verified",
+            "phone_number_verified",
+            "UserStatus",
+            "Enabled",
+            "UserCreateDate",
+            "UserLastModifiedDate",
+            "custom:last_login",
+        ]
+    ]
     df.to_excel(csv_filename, index=False)
-    
+
+
 def send_email_with_attachment(recipient_email, csv_filename):
     # Prepare email message
     msg = MIMEMultipart()
@@ -135,11 +153,7 @@ def main(email_address):
 
 
 @click.command("sandbox-users-report")
-@click.option(
-    "--email",
-    help="Recipient's Email Address",
-    required=True
-)
+@click.option("--email", help="Recipient's Email Address", required=True)
 def cli(email):
     main(email)
 
