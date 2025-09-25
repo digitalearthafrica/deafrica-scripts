@@ -2,6 +2,7 @@ import csv
 import json
 import os
 import subprocess
+import pandas as pd
 from datetime import datetime
 from email import encoders
 from email.mime.base import MIMEBase
@@ -55,84 +56,37 @@ def convert_json_to_csv(json_filename, csv_filename):
     with open(json_filename) as json_file:
         data = json.load(json_file)
 
-    # Open a CSV file for writing
-    with open(csv_filename, mode="w", newline="") as csv_file:
-        writer = csv.writer(csv_file)
-        writer.writerow(
-            [
-                "Name",
-                "Email",
-                "Email Verified",
-                "Phone Number Verified",
-                "MFA Enabled",
-                "Username",
-                "User Status",
-                "Enabled",
-                "User Create Date",
-                "User Last Modified Date",
-            ]
-        )  # Add more headers as needed
+    # Flatten the JSON into a DataFrame
+    records = []
 
-        # Write the user data to the CSV
-        for user in data["Users"]:
-            username = user["Username"]
-            name = next(
-                (
-                    attr["Value"]
-                    for attr in user["Attributes"]
-                    if attr["Name"] == "name"
-                ),
-                None,
-            )
-            email = next(
-                (
-                    attr["Value"]
-                    for attr in user["Attributes"]
-                    if attr["Name"] == "email"
-                ),
-                None,
-            )
-            email_verified = next(
-                (
-                    attr["Value"]
-                    for attr in user["Attributes"]
-                    if attr["Name"] == "email_verified"
-                ),
-                "FALSE",
-            )
-            phone_number_verified = next(
-                (
-                    attr["Value"]
-                    for attr in user["Attributes"]
-                    if attr["Name"] == "phone_number_verified"
-                ),
-                "FALSE",
-            )
-            mfa_enabled = "FALSE"
+    for user in data['Users']:
+        base = {
+            'Username': user['Username'],
+            'UserCreateDate': user['UserCreateDate'],
+            'UserLastModifiedDate': user['UserLastModifiedDate'],
+            'Enabled': user['Enabled'],
+            'UserStatus': user['UserStatus'],
+        }
+        
+        # Flatten Attributes
+        for attr in user['Attributes']:
+            base[attr['Name']] = attr['Value']
+        
+        records.append(base)
 
-            # Extract additional fields
-            user_status = user["UserStatus"]
-            enabled = user["Enabled"]
-            user_create_date = user["UserCreateDate"]
-            user_last_modified_date = user["UserLastModifiedDate"]
-
-            # Write the row to the CSV
-            writer.writerow(
-                [
-                    name,
-                    email,
-                    email_verified,
-                    phone_number_verified,
-                    mfa_enabled,
-                    username,
-                    user_status,
-                    enabled,
-                    user_create_date,
-                    user_last_modified_date,
-                ]
-            )
-
-
+    # Convert to DataFrame
+    df = pd.DataFrame(records)
+    df.sort_values(by='UserCreateDate', ascending=True, inplace=True)
+    # Rearrange Columns
+    df = df[["Username", "email", "phone_number", "given_name",
+            "family_name", "custom:organisation", "gender",
+            "custom:age_category", "custom:organisation_type",
+            "custom:thematic_interest", "custom:country",
+            "custom:timeframe", "custom:source_of_referral",
+            "email_verified", "phone_number_verified", "UserStatus",
+            "Enabled", "UserCreateDate", "UserLastModifiedDate", "custom:last_login"]]
+    df.to_excel(csv_filename, index=False)
+    
 def send_email_with_attachment(recipient_email, csv_filename):
     # Prepare email message
     msg = MIMEMultipart()
@@ -170,7 +124,7 @@ def main(email_address):
 
     # Convert the fetched JSON to CSV
     json_filename = "Users.json"
-    csv_filename = f"Users_{current_date}.csv"
+    csv_filename = f"Users_{current_date}.xlsx"
 
     print(f"Converting JSON to CSV file: {csv_filename}...")
     convert_json_to_csv(json_filename, csv_filename)
@@ -181,7 +135,11 @@ def main(email_address):
 
 
 @click.command("sandbox-users-report")
-@click.option("--email", help="Recipient's Email Address", required=True)
+@click.option(
+    "--email",
+    help="Recipient's Email Address",
+    required=True
+)
 def cli(email):
     main(email)
 
