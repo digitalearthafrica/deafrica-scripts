@@ -64,7 +64,7 @@ azure-identity==1.25.0
     # via adlfs
 azure-storage-blob==12.26.0
     # via adlfs
-bcrypt==4.3.0
+bcrypt==5.0.0
     # via paramiko
 beautifulsoup4==4.13.5
     # via pydap
@@ -132,7 +132,7 @@ circuitbreaker==2.1.3
     # via oci
 ciso8601==2.3.3
     # via eodatasets3
-click==8.2.1
+click==8.3.0
     # via
     #   click-plugins
     #   cligj
@@ -178,7 +178,7 @@ cryptography==44.0.3
     #   smbprotocol
 cycler==0.12.1
     # via matplotlib
-dask[array,complete,dataframe,diagnostics,distributed]==2025.9.0
+dask[array,complete,dataframe,diagnostics,distributed]==2025.9.1
     # via
     #   dask-image
     #   datacube
@@ -205,7 +205,7 @@ defusedxml==0.7.1
     # via eodatasets3
 deprecat==2.1.3
     # via datacube
-distributed==2025.9.0
+distributed==2025.9.1
     # via
     #   dask
     #   datacube
@@ -227,11 +227,13 @@ eodatasets3==1.9.3
     # via
     #   deafrica (setup.cfg)
     #   odc-apps-dc-tools
+et-xmlfile==2.0.0
+    # via openpyxl
 fiona==1.10.1
     # via eodatasets3
-flox==0.10.6
+flox==0.10.7
     # via xarray
-fonttools==4.59.2
+fonttools==4.60.0
     # via matplotlib
 frozenlist==1.7.0
     # via
@@ -276,7 +278,7 @@ google-auth-oauthlib==1.2.2
     # via gcsfs
 google-cloud-core==2.4.3
     # via google-cloud-storage
-google-cloud-storage==3.3.1
+google-cloud-storage==3.4.0
     # via gcsfs
 google-crc32c==1.7.1
     # via
@@ -328,7 +330,7 @@ kiwisolver==1.4.9
     # via matplotlib
 kubernetes==33.1.0
     # via deafrica (setup.cfg)
-lark==1.2.2
+lark==1.3.0
     # via datacube
 lazy-loader==0.4
     # via scikit-image
@@ -336,13 +338,13 @@ libarchive-c==5.3
     # via fsspec
 linkify-it-py==2.0.3
     # via panel
-llvmlite==0.44.0
+llvmlite==0.45.0
     # via numba
 locket==1.0.0
     # via
     #   distributed
     #   partd
-lxml==6.0.1
+lxml==6.0.2
     # via pydap
 lz4==4.4.4
     # via dask
@@ -372,7 +374,7 @@ mdurl==0.1.2
     # via markdown-it-py
 morecantile==6.2.0
     # via rio-cogeo
-msal==1.33.0
+msal==1.34.0
     # via
     #   azure-datalake-store
     #   azure-identity
@@ -390,7 +392,7 @@ multiurl==0.3.7
     # via ecmwf-datastores-client
 mypy-extensions==1.1.0
     # via typing-inspect
-narwhals==2.4.0
+narwhals==2.5.0
     # via bokeh
 nc-time-axis==1.4.1
     # via xarray
@@ -398,16 +400,16 @@ netcdf4==1.7.2
     # via xarray
 networkx==3.5
     # via scikit-image
-numba==0.61.2
+numba==0.62.0
     # via
     #   numbagg
     #   sparse
     #   xarray
-numbagg==0.9.2
+numbagg==0.9.3
     # via xarray
-numcodecs[crc32c]==0.16.2
+numcodecs[crc32c]==0.16.3
     # via zarr
-numexpr==2.12.1
+numexpr==2.13.0
     # via odc-algo
 numpy==2.2.6
     # via
@@ -460,7 +462,7 @@ oauthlib==3.3.1
     #   kubernetes
     #   requests-oauthlib
     #   sentinelhub
-oci==2.160.0
+oci==2.160.2
     # via ocifs
 ocifs==1.3.2
     # via fsspec
@@ -490,6 +492,8 @@ odc-stac==0.4.0
     # via
     #   datacube
     #   deafrica (setup.cfg)
+openpyxl==3.1.5
+    # via deafrica (setup.cfg)
 opt-einsum==3.4.0
     # via xarray
 packaging==25.0
@@ -528,7 +532,7 @@ pandas==2.3.2
     #   panel
     #   seaborn
     #   xarray
-panel==1.8.0
+panel==1.8.1
     # via fsspec
 param==2.2.1
     # via
@@ -567,7 +571,7 @@ protobuf==6.32.1
     #   google-api-core
     #   googleapis-common-protos
     #   proto-plus
-psutil==7.0.0
+psutil==7.1.0
     # via distributed
 psycopg2==2.9.10
     # via deafrica (setup.cfg)
@@ -584,13 +588,13 @@ pyasn1-modules==0.4.2
     # via google-auth
 pycparser==2.23
     # via cffi
-pydantic==2.11.7
+pydantic==2.11.9
     # via
     #   morecantile
     #   rio-cogeo
 pydantic-core==2.33.2
     # via pydantic
-pydap==3.5.6
+pydap==3.5.7
     # via xarray
 pygit2==1.18.2
     # via fsspec
@@ -604,7 +608,7 @@ pyogrio==0.11.1
     # via geopandas
 pyopenssl==24.3.0
     # via oci
-pyparsing==3.2.3
+pyparsing==3.2.5
     # via
     #   matplotlib
     #   rasterio
@@ -622,7 +626,7 @@ pyshp==2.3.1
     # via cartopy
 pyspnego==0.12.0
     # via smbprotocol
-pystac[validation]==1.14.0
+pystac[validation]==1.14.1
     # via
     #   deafrica (setup.cfg)
     #   eodatasets3
@@ -652,7 +656,7 @@ pytz==2025.2
     #   pandas
 pyviz-comms==3.0.6
     # via panel
-pyyaml==6.0.2
+pyyaml==6.0.3
     # via
     #   bokeh
     #   dask
@@ -712,7 +716,7 @@ requests-oauthlib==2.0.0
     #   sentinelhub
 rio-cogeo==5.4.2
     # via deafrica (setup.cfg)
-rio-stac==0.11.2
+rio-stac==0.12.0
     # via
     #   deafrica (setup.cfg)
     #   odc-apps-dc-tools
@@ -731,7 +735,7 @@ ruamel-yaml==0.18.15
     #   datacube
     #   deafrica (setup.cfg)
     #   eodatasets3
-ruamel-yaml-clib==0.2.12
+ruamel-yaml-clib==0.2.14
     # via ruamel-yaml
 s3fs==2025.9.0
     # via fsspec
@@ -749,11 +753,11 @@ scipy==1.16.2
     #   xarray
 seaborn==0.13.2
     # via xarray
-sentinelhub==3.11.1
+sentinelhub==3.11.2
     # via deafrica (setup.cfg)
 setuptools-scm==9.2.0
     # via deafrica (setup.cfg)
-shapely==2.1.1
+shapely==2.1.2
     # via
     #   antimeridian
     #   cartopy
@@ -790,7 +794,7 @@ structlog==25.4.0
     # via eodatasets3
 tblib==3.1.0
     # via distributed
-tifffile==2025.9.9
+tifffile==2025.9.20
     # via
     #   dask-image
     #   pims
@@ -886,11 +890,10 @@ yarl==1.20.1
     # via
     #   aiohttp
     #   deafrica (setup.cfg)
-zarr==3.1.2
+zarr==3.1.3
     # via xarray
 zict==3.0.0
     # via distributed
 
 # The following packages are considered to be unsafe in a requirements file:
 # setuptools
-
