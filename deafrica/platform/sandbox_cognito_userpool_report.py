@@ -12,9 +12,19 @@ from email.mime.text import MIMEText
 import boto3
 import click
 
-AWS_REGION_COGNITO = "af-south-1"  # AWS region for Cognito User Pool
-AWS_REGION_SES = "af-south-1"  # AWS region for SES
-USER_POOL_ID = "af-south-1_4DJTD5vRo"  # User pool ID from environment
+# Read AWS region and User Pool ID from environment variables
+AWS_REGION_COGNITO = os.getenv("aws_region_cognito")
+AWS_REGION_SES = os.getenv("aws_region_ses")
+USER_POOL_ID = os.getenv("user_pool_id")
+# Check that all required variables are set
+if not AWS_REGION_COGNITO:
+    raise ValueError("AWS_REGION_COGNITO is not set in the environment variables")
+
+if not AWS_REGION_SES:
+    raise ValueError("AWS_REGION_SES is not set in the environment variables")
+
+if not USER_POOL_ID:
+    raise ValueError("USER_POOL_ID is not set in the environment variables")
 
 # Email Configuration
 SENDER_EMAIL = "info@digitalearthafrica.org"  # SES-verified sender email
@@ -59,52 +69,34 @@ def convert_json_to_csv(json_filename, csv_filename):
     # Flatten the JSON into a DataFrame
     records = []
 
-    for user in data["Users"]:
+    for user in data['Users']:
         base = {
-            "Username": user["Username"],
-            "UserCreateDate": user["UserCreateDate"],
-            "UserLastModifiedDate": user["UserLastModifiedDate"],
-            "Enabled": user["Enabled"],
-            "UserStatus": user["UserStatus"],
+            'Username': user['Username'],
+            'UserCreateDate': user['UserCreateDate'],
+            'UserLastModifiedDate': user['UserLastModifiedDate'],
+            'Enabled': user['Enabled'],
+            'UserStatus': user['UserStatus'],
         }
-
+        
         # Flatten Attributes
-        for attr in user["Attributes"]:
-            base[attr["Name"]] = attr["Value"]
-
+        for attr in user['Attributes']:
+            base[attr['Name']] = attr['Value']
+        
         records.append(base)
 
     # Convert to DataFrame
     df = pd.DataFrame(records)
-    df.sort_values(by="UserCreateDate", ascending=True, inplace=True)
+    df.sort_values(by='UserCreateDate', ascending=True, inplace=True)
     # Rearrange Columns
-    df = df[
-        [
-            "Username",
-            "email",
-            "phone_number",
-            "given_name",
-            "family_name",
-            "custom:organisation",
-            "gender",
-            "custom:age_category",
-            "custom:organisation_type",
-            "custom:thematic_interest",
-            "custom:country",
-            "custom:timeframe",
-            "custom:source_of_referral",
-            "email_verified",
-            "phone_number_verified",
-            "UserStatus",
-            "Enabled",
-            "UserCreateDate",
-            "UserLastModifiedDate",
-            "custom:last_login",
-        ]
-    ]
+    df = df[["Username", "email", "phone_number", "given_name",
+            "family_name", "custom:organisation", "gender",
+            "custom:age_category", "custom:organisation_type",
+            "custom:thematic_interest", "custom:country",
+            "custom:timeframe", "custom:source_of_referral",
+            "email_verified", "phone_number_verified", "UserStatus",
+            "Enabled", "UserCreateDate", "UserLastModifiedDate", "custom:last_login"]]
     df.to_excel(csv_filename, index=False)
-
-
+    
 def send_email_with_attachment(recipient_email, csv_filename):
     # Prepare email message
     msg = MIMEMultipart()
@@ -153,7 +145,11 @@ def main(email_address):
 
 
 @click.command("sandbox-users-report")
-@click.option("--email", help="Recipient's Email Address", required=True)
+@click.option(
+    "--email",
+    help="Recipient's Email Address",
+    required=True
+)
 def cli(email):
     main(email)
 
