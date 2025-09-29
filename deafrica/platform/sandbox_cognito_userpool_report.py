@@ -18,13 +18,13 @@ AWS_REGION_SES = os.getenv("aws_region_ses")
 USER_POOL_ID = os.getenv("user_pool_id")
 # Check that all required variables are set
 if not AWS_REGION_COGNITO:
-    raise ValueError("AWS_REGION_COGNITO is not set in the environment variables")
+    raise ValueError("aws_region_cognito is not set in the environment variables")
 
 if not AWS_REGION_SES:
-    raise ValueError("AWS_REGION_SES is not set in the environment variables")
+    raise ValueError("aws_region_ses is not set in the environment variables")
 
 if not USER_POOL_ID:
-    raise ValueError("USER_POOL_ID is not set in the environment variables")
+    raise ValueError("user_pool_id is not set in the environment variables")
 
 # Email Configuration
 SENDER_EMAIL = "info@digitalearthafrica.org"  # SES-verified sender email
@@ -96,41 +96,61 @@ def convert_json_to_csv(json_filename, csv_filename):
             "email_verified", "phone_number_verified", "UserStatus",
             "Enabled", "UserCreateDate", "UserLastModifiedDate", "custom:last_login"]]
 
-    # Export only user ids
-    with open('user_ids.csv', 'w', newline='') as f:
-        writer = csv.writer(f)
-        for item in df['Username']:
-            writer.writerow([item])
+    # # Export only user ids
+    # with open('user_ids.csv', 'w', newline='') as f:
+    #     writer = csv.writer(f)
+    #     for item in df['Username']:
+    #         writer.writerow([item])
 
     # Export whole user attributes
     df.to_excel(csv_filename, index=False)
 
-def extract_user_groups():
-    # Fetch Cognito user groups
-    print('Fetching User Groups')
+
+def user_groups(csv_filename):
+    # Extract user groups
+    print("Extracting User groups")
     aws_user_groups = [
         "aws",
         "cognito-idp",
-        "admin-list-groups-for-user",
+        "list-groups",
         "--user-pool-id",
         USER_POOL_ID,
         "--region",
         AWS_REGION_COGNITO,
         "--query",
-        "Groups[].GroupName",
-        "--username",
-        "611ce288-f081-70ef-bfe7-1e3289619eeb"        
+        "Groups[*].GroupName",
     ]
 
-    result_user_groups = subprocess.run(aws_user_groups, capture_output=True, text=True)
+    result_user_command = subprocess.run(aws_user_groups, capture_output=True, text=True)
+    result_user_groups = json.loads(result_user_command.stdout)
 
-    if result_user_groups.returncode != 0:
-        print(f"Error fetching user groups: {result_user_groups.stderr}")
-        exit(1)
+    # Extract users in each group
+    user_groups_dict = {}
+    for i, j  in enumerate (result_user_groups):
+        print(f"Extracting Users for {j}")
+        aws_group_users = [
+            "aws",
+            "cognito-idp",
+            "list-users-in-group",
+            "--user-pool-id",
+            USER_POOL_ID,
+            "--region",
+            AWS_REGION_COGNITO,
+            "--query",
+            "Users[*].Username",
+            "--group-name",
+            j
+        ]
 
-    # Write the result to a JSON file
-    with open("Users_Groups.json", "w") as json_file:
-        json_file.write(result_user_groups.stdout)
+        result_group_users_command = subprocess.run(aws_group_users, capture_output=True, text=True)
+        result_group_users = json.loads(result_group_users_command.stdout)
+        result_group_users_name = [j] * len(result_group_users)
+        df_group = dict(zip(result_group_users, result_group_users_name))
+        df_group = pd.DataFrame(list(df_group.items()), columns=['user_id', j])
+        df_in = pd.read_excel(csv_filename)
+        result = pd.merge(df_in, df_group, left_on='Username', right_on='user_id', how='left')
+        result = result.drop(columns = ['user_id'])
+        result.to_excel(csv_filename, index=False)
 
 
 def send_email_with_attachment(recipient_email, csv_filename):
@@ -168,15 +188,17 @@ def main(email_address):
     # Fetch users from AWS Cognito and save to Users.json
     fetch_users_from_aws()
     
-    # Fetch user groups from AWS Cognito
-    extract_user_groups()
-
     # Convert the fetched JSON to Excel file
     json_filename = "Users.json"
     csv_filename = f"Users_{current_date}.xlsx"
-
+    
     print(f"Converting JSON to CSV file: {csv_filename}...")
     convert_json_to_csv(json_filename, csv_filename)
+
+    # Fetch user groups from AWS Cognito
+    # extract_user_groups()
+    user_groups(csv_filename)
+
 
     # Send the CSV as an email attachment
     print(f"Sending email with attached CSV report...")
