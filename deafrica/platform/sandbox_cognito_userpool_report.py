@@ -69,50 +69,68 @@ def convert_json_to_csv(json_filename, csv_filename):
     # Flatten the JSON into a DataFrame
     records = []
 
-    for user in data["Users"]:
+    for user in data['Users']:
         base = {
-            "Username": user["Username"],
-            "UserCreateDate": user["UserCreateDate"],
-            "UserLastModifiedDate": user["UserLastModifiedDate"],
-            "Enabled": user["Enabled"],
-            "UserStatus": user["UserStatus"],
+            'Username': user['Username'],
+            'UserCreateDate': user['UserCreateDate'],
+            'UserLastModifiedDate': user['UserLastModifiedDate'],
+            'Enabled': user['Enabled'],
+            'UserStatus': user['UserStatus'],
         }
-
+        
         # Flatten Attributes
-        for attr in user["Attributes"]:
-            base[attr["Name"]] = attr["Value"]
-
+        for attr in user['Attributes']:
+            base[attr['Name']] = attr['Value']
+        
         records.append(base)
 
     # Convert to DataFrame
     df = pd.DataFrame(records)
-    df.sort_values(by="UserCreateDate", ascending=True, inplace=True)
+    df.sort_values(by='UserCreateDate', ascending=True, inplace=True)
     # Rearrange Columns
-    df = df[
-        [
-            "Username",
-            "email",
-            "phone_number",
-            "given_name",
-            "family_name",
-            "custom:organisation",
-            "gender",
-            "custom:age_category",
-            "custom:organisation_type",
-            "custom:thematic_interest",
-            "custom:country",
-            "custom:timeframe",
-            "custom:source_of_referral",
-            "email_verified",
-            "phone_number_verified",
-            "UserStatus",
-            "Enabled",
-            "UserCreateDate",
-            "UserLastModifiedDate",
-            "custom:last_login",
-        ]
-    ]
+    df = df[["Username", "email", "phone_number", "given_name",
+            "family_name", "custom:organisation", "gender",
+            "custom:age_category", "custom:organisation_type",
+            "custom:thematic_interest", "custom:country",
+            "custom:timeframe", "custom:source_of_referral",
+            "email_verified", "phone_number_verified", "UserStatus",
+            "Enabled", "UserCreateDate", "UserLastModifiedDate", "custom:last_login"]]
+
+    # Export only user ids
+    with open('user_ids.csv', 'w', newline='') as f:
+        writer = csv.writer(f)
+        for item in df['Username']:
+            writer.writerow([item])
+
+    # Export whole user attributes
     df.to_excel(csv_filename, index=False)
+
+def extract_user_groups():
+    # Fetch Cognito user groups
+    print('Fetching User Groups')
+    aws_user_groups = [
+        "aws",
+        "cognito-idp",
+        "admin-list-groups-for-user",
+        "--user-pool-id",
+        USER_POOL_ID,
+        "--region",
+        AWS_REGION_COGNITO,
+        "--query",
+        "Groups[].GroupName",
+        "--username",
+        "611ce288-f081-70ef-bfe7-1e3289619eeb"        
+    ]
+
+    result_user_groups = subprocess.run(aws_user_groups, capture_output=True, text=True)
+
+    if result_user_groups.returncode != 0:
+        print(f"Error fetching user groups: {result_user_groups.stderr}")
+        exit(1)
+
+    # Write the result to a JSON file
+    with open("Users_Groups.json", "w") as json_file:
+        json_file.write(result_user_groups.stdout)
 
 
 def send_email_with_attachment(recipient_email, csv_filename):
@@ -149,8 +167,11 @@ def send_email_with_attachment(recipient_email, csv_filename):
 def main(email_address):
     # Fetch users from AWS Cognito and save to Users.json
     fetch_users_from_aws()
+    
+    # Fetch user groups from AWS Cognito
+    extract_user_groups()
 
-    # Convert the fetched JSON to CSV
+    # Convert the fetched JSON to Excel file
     json_filename = "Users.json"
     csv_filename = f"Users_{current_date}.xlsx"
 
@@ -163,7 +184,11 @@ def main(email_address):
 
 
 @click.command("sandbox-users-report")
-@click.option("--email", help="Recipient's Email Address", required=True)
+@click.option(
+    "--email",
+    help="Recipient's Email Address",
+    required=True
+)
 def cli(email):
     main(email)
 
