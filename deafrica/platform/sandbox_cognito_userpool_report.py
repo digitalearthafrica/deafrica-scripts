@@ -113,12 +113,6 @@ def convert_json_to_csv(json_filename, csv_filename):
         ]
     ]
 
-    # # Export only user ids
-    # with open('user_ids.csv', 'w', newline='') as f:
-    #     writer = csv.writer(f)
-    #     for item in df['Username']:
-    #         writer.writerow([item])
-
     # Export whole user attributes
     df.to_excel(csv_filename, index=False)
 
