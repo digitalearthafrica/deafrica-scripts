@@ -2,6 +2,7 @@ import csv
 import json
 import os
 import subprocess
+import pandas as pd
 from datetime import datetime
 from email import encoders
 from email.mime.base import MIMEBase
@@ -11,13 +12,22 @@ from email.mime.text import MIMEText
 import boto3
 import click
 
-AWS_REGION_COGNITO = "us-west-2"  # AWS region for Cognito User Pool
-AWS_REGION_SES = "af-south-1"  # AWS region for SES
-USER_POOL_ID = "us-west-2_v9nJrst3o"  # User pool ID from environment
+# Read AWS region and User Pool ID from environment variables
+AWS_REGION_COGNITO = os.getenv("aws_region_cognito")
+AWS_REGION_SES = os.getenv("aws_region_ses")
+USER_POOL_ID = os.getenv("user_pool_id")
+# Check that all required variables are set
+if not AWS_REGION_COGNITO:
+    raise ValueError("aws_region_cognito is not set in the environment variables")
+
+if not AWS_REGION_SES:
+    raise ValueError("aws_region_ses is not set in the environment variables")
+
+if not USER_POOL_ID:
+    raise ValueError("user_pool_id is not set in the environment variables")
 
 # Email Configuration
 SENDER_EMAIL = "info@digitalearthafrica.org"  # SES-verified sender email
-RECEIVER_EMAIL = "kenneth.mubea@digitalearthafrica.org"
 
 # Get the current date in YYYY-MM-DD format
 current_date = datetime.now().strftime("%Y-%m-%d")
@@ -56,89 +66,115 @@ def convert_json_to_csv(json_filename, csv_filename):
     with open(json_filename) as json_file:
         data = json.load(json_file)
 
-    # Open a CSV file for writing
-    with open(csv_filename, mode="w", newline="") as csv_file:
-        writer = csv.writer(csv_file)
-        writer.writerow(
-            [
-                "Name",
-                "Email",
-                "Email Verified",
-                "Phone Number Verified",
-                "MFA Enabled",
-                "Username",
-                "User Status",
-                "Enabled",
-                "User Create Date",
-                "User Last Modified Date",
-            ]
-        )  # Add more headers as needed
+    # Flatten the JSON into a DataFrame
+    records = []
 
-        # Write the user data to the CSV
-        for user in data["Users"]:
-            username = user["Username"]
-            name = next(
-                (
-                    attr["Value"]
-                    for attr in user["Attributes"]
-                    if attr["Name"] == "name"
-                ),
-                None,
-            )
-            email = next(
-                (
-                    attr["Value"]
-                    for attr in user["Attributes"]
-                    if attr["Name"] == "email"
-                ),
-                None,
-            )
-            email_verified = next(
-                (
-                    attr["Value"]
-                    for attr in user["Attributes"]
-                    if attr["Name"] == "email_verified"
-                ),
-                "FALSE",
-            )
-            phone_number_verified = next(
-                (
-                    attr["Value"]
-                    for attr in user["Attributes"]
-                    if attr["Name"] == "phone_number_verified"
-                ),
-                "FALSE",
-            )
-            mfa_enabled = "FALSE"
+    for user in data["Users"]:
+        base = {
+            "Username": user["Username"],
+            "UserCreateDate": user["UserCreateDate"],
+            "UserLastModifiedDate": user["UserLastModifiedDate"],
+            "Enabled": user["Enabled"],
+            "UserStatus": user["UserStatus"],
+        }
 
-            # Extract additional fields
-            user_status = user["UserStatus"]
-            enabled = user["Enabled"]
-            user_create_date = user["UserCreateDate"]
-            user_last_modified_date = user["UserLastModifiedDate"]
+        # Flatten Attributes
+        for attr in user["Attributes"]:
+            base[attr["Name"]] = attr["Value"]
 
-            # Write the row to the CSV
-            writer.writerow(
-                [
-                    name,
-                    email,
-                    email_verified,
-                    phone_number_verified,
-                    mfa_enabled,
-                    username,
-                    user_status,
-                    enabled,
-                    user_create_date,
-                    user_last_modified_date,
-                ]
-            )
+        records.append(base)
+
+    # Convert to DataFrame
+    df = pd.DataFrame(records)
+    df.sort_values(by="UserCreateDate", ascending=True, inplace=True)
+    # Rearrange Columns
+    df = df[
+        [
+            "Username",
+            "email",
+            "phone_number",
+            "given_name",
+            "family_name",
+            "custom:organisation",
+            "gender",
+            "custom:age_category",
+            "custom:organisation_type",
+            "custom:thematic_interest",
+            "custom:country",
+            "custom:timeframe",
+            "custom:source_of_referral",
+            "email_verified",
+            "phone_number_verified",
+            "UserStatus",
+            "Enabled",
+            "UserCreateDate",
+            "UserLastModifiedDate",
+            "custom:last_login",
+        ]
+    ]
+
+    # Export whole user attributes
+    df.to_excel(csv_filename, index=False)
 
 
-def send_email_with_attachment(csv_filename):
+def user_groups(csv_filename):
+    # Extract user groups
+    print("Extracting User groups")
+    aws_user_groups = [
+        "aws",
+        "cognito-idp",
+        "list-groups",
+        "--user-pool-id",
+        USER_POOL_ID,
+        "--region",
+        AWS_REGION_COGNITO,
+        "--query",
+        "Groups[*].GroupName",
+    ]
+
+    result_user_command = subprocess.run(
+        aws_user_groups, capture_output=True, text=True
+    )
+    result_user_groups = json.loads(result_user_command.stdout)
+
+    # Extract users in each group
+    user_groups_dict = {}
+    for i, j in enumerate(result_user_groups):
+        print(f"Extracting Users for {j}")
+        aws_group_users = [
+            "aws",
+            "cognito-idp",
+            "list-users-in-group",
+            "--user-pool-id",
+            USER_POOL_ID,
+            "--region",
+            AWS_REGION_COGNITO,
+            "--query",
+            "Users[*].Username",
+            "--group-name",
+            j,
+        ]
+
+        result_group_users_command = subprocess.run(
+            aws_group_users, capture_output=True, text=True
+        )
+        result_group_users = json.loads(result_group_users_command.stdout)
+        result_group_users_name = [j] * len(result_group_users)
+        df_group = dict(zip(result_group_users, result_group_users_name))
+        df_group = pd.DataFrame(list(df_group.items()), columns=["user_id", j])
+        df_in = pd.read_excel(csv_filename)
+        result = pd.merge(
+            df_in, df_group, left_on="Username", right_on="user_id", how="left"
+        )
+        result = result.drop(columns=["user_id"])
+        result.to_excel(csv_filename, index=False)
+
+
+def send_email_with_attachment(recipient_email, csv_filename):
     # Prepare email message
     msg = MIMEMultipart()
     msg["From"] = SENDER_EMAIL
-    msg["To"] = RECEIVER_EMAIL
+    msg["To"] = recipient_email
     msg["Subject"] = "Cognito Users Report"
 
     # Attach the body of the email
@@ -157,7 +193,7 @@ def send_email_with_attachment(csv_filename):
     try:
         response = ses_client.send_raw_email(
             Source=SENDER_EMAIL,
-            Destinations=[RECEIVER_EMAIL],
+            Destinations=[recipient_email],
             RawMessage={"Data": msg.as_string()},
         )
         print("Email sent successfully!")
@@ -165,25 +201,30 @@ def send_email_with_attachment(csv_filename):
         print(f"Error sending email via SES: {e}")
 
 
-def main():
+def main(email_address):
     # Fetch users from AWS Cognito and save to Users.json
     fetch_users_from_aws()
 
-    # Convert the fetched JSON to CSV
+    # Convert the fetched JSON to Excel file
     json_filename = "Users.json"
-    csv_filename = f"Users_{current_date}.csv"
+    csv_filename = f"Users_{current_date}.xlsx"
 
     print(f"Converting JSON to CSV file: {csv_filename}...")
     convert_json_to_csv(json_filename, csv_filename)
 
+    # Fetch user groups from AWS Cognito
+    # extract_user_groups()
+    user_groups(csv_filename)
+
     # Send the CSV as an email attachment
     print(f"Sending email with attached CSV report...")
-    send_email_with_attachment(csv_filename)
+    send_email_with_attachment(email_address, csv_filename)
 
 
 @click.command("sandbox-users-report")
-def cli():
-    main()
+@click.option("--email", help="Recipient's Email Address", required=True)
+def cli(email):
+    main(email)
 
 
 if __name__ == "__main__":
