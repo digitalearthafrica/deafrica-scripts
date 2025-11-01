@@ -135,9 +135,7 @@ def check_directory_exists(path: str) -> bool:
         return False
 
 
-def check_file_extension(
-    path: str, accepted_file_extensions: list[str]
-) -> bool:
+def check_file_extension(path: str, accepted_file_extensions: list[str]) -> bool:
     """Check if the file extension for a given path is among the list
     of allowed file extensions"""
     _, file_extension = os.path.splitext(path)
@@ -195,9 +193,7 @@ def find_files_by_extension(
     return matched_files
 
 
-def find_geotiff_files(
-    directory_path: str, file_name_pattern: str = ".*"
-) -> list[str]:
+def find_geotiff_files(directory_path: str, file_name_pattern: str = ".*") -> list[str]:
     """
     Recursively find geotiff files matching an optional filename pattern.
     """
@@ -210,9 +206,7 @@ def find_geotiff_files(
     return geotiff_file_paths
 
 
-def find_json_files(
-    directory_path: str, file_name_pattern: str = ".*"
-) -> list[str]:
+def find_json_files(directory_path: str, file_name_pattern: str = ".*") -> list[str]:
     """
     Recursively find json files matching an optional filename pattern.
     """
@@ -225,9 +219,7 @@ def find_json_files(
     return json_file_paths
 
 
-def find_csv_files(
-    directory_path: str, file_name_pattern: str = ".*"
-) -> list[str]:
+def find_csv_files(directory_path: str, file_name_pattern: str = ".*") -> list[str]:
     """
     Recursively find csv files matching an optional filename pattern.
     """
