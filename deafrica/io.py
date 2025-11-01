@@ -9,6 +9,7 @@ import re
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from urllib.parse import urlparse
+from yarl import URL
 
 import fsspec
 import requests
@@ -24,26 +25,41 @@ log = logging.getLogger(__name__)
 
 
 def is_s3_path(path: str) -> bool:
+    """
+    Checks if a given path is an s3 URI.
+    """
     fs, _ = fsspec.core.url_to_fs(path)
     return isinstance(fs, S3FileSystem)
 
 
 def is_gcsfs_path(path: str) -> bool:
+    """
+    Checks if a given path is a gsutil URI.
+    """
     fs, _ = fsspec.core.url_to_fs(path)
     return isinstance(fs, GCSFileSystem)
 
 
 def is_http_url(path: str) -> bool:
+    """
+    Checks if a given path is a http(s) URL.
+    """
     fs, _ = fsspec.core.url_to_fs(path)
     return isinstance(fs, HTTPFileSystem)
 
 
 def is_local_path(path: str) -> bool:
+    """
+    Checks if a given path is a local storage path.
+    """
     fs, _ = fsspec.core.url_to_fs(path)
     return isinstance(fs, LocalFileSystem)
 
 
 def join_url(base, *paths) -> str:
+    """
+    Join two or more pathname components, inserting '/' as needed.
+    """
     if is_local_path(base):
         return os.path.join(base, *paths)
     else:
@@ -51,10 +67,33 @@ def join_url(base, *paths) -> str:
         return posixpath.join(base, *paths)
 
 
+def get_basename(path: str):
+    """
+    Returns the final component of a pathname
+    """
+    if is_local_path(path):
+        return os.path.basename(path)
+    else:
+        return posixpath.basename(path)
+
+
+def get_parent_dir(path: str):
+    """
+    Returns the logical parent of the path.
+    """
+    if is_local_path(path):
+        return str(Path(path).resolve().parent)
+    else:
+        return str(URL(path).parent)
+
+
 def get_filesystem(
     path: str,
     anon: bool = True,
 ) -> S3FileSystem | LocalFileSystem | GCSFileSystem:
+    """
+    Instantiate a file-system based on the input path type.
+    """
     if is_s3_path(path=path):
         fs = S3FileSystem(
             anon=anon,
@@ -75,6 +114,9 @@ def get_filesystem(
 
 
 def check_file_exists(path: str) -> bool:
+    """
+    Checks if a given path exists and is a file.
+    """
     fs = get_filesystem(path=path, anon=True)
     if fs.exists(path) and fs.isfile(path):
         return True
@@ -83,6 +125,9 @@ def check_file_exists(path: str) -> bool:
 
 
 def check_directory_exists(path: str) -> bool:
+    """
+    Checks if a given path exists and is a directory.
+    """
     fs = get_filesystem(path=path, anon=True)
     if fs.exists(path) and fs.isdir(path):
         return True
@@ -90,7 +135,11 @@ def check_directory_exists(path: str) -> bool:
         return False
 
 
-def check_file_extension(path: str, accepted_file_extensions: list[str]) -> bool:
+def check_file_extension(
+    path: str, accepted_file_extensions: list[str]
+) -> bool:
+    """Check if the file extension for a given path is among the list
+    of allowed file extensions"""
     _, file_extension = os.path.splitext(path)
     if file_extension.lower() in accepted_file_extensions:
         return True
@@ -98,68 +147,97 @@ def check_file_extension(path: str, accepted_file_extensions: list[str]) -> bool
         return False
 
 
-def is_geotiff(path: str) -> bool:
-    accepted_geotiff_extensions = [".tif", ".tiff", ".gtiff"]
-    return check_file_extension(
-        path=path, accepted_file_extensions=accepted_geotiff_extensions
-    )
+def find_files_by_extension(
+    directory_path: str,
+    accepted_file_extensions: list[str],
+    file_name_pattern: str = ".*",
+) -> list[str]:
+    """
+    Recursively find files matching extensions and optional filename pattern.
 
+    Parameters
+    ----------
+    directory_path : str
+         Path to search (local, S3, or GCS).
+    accepted_file_extensions : list[str]
+        List of extensions to include (e.g., ['.tif', '.csv']).
+    file_name_pattern : str, optional
+        Regex pattern to filter file names (default: match all).
 
-def find_geotiff_files(directory_path: str, file_name_pattern: str = ".*") -> list[str]:
+    Returns
+    -------
+    list[str]
+        List of matching file paths.
+    """
     file_name_pattern = re.compile(file_name_pattern)
 
     fs = get_filesystem(path=directory_path, anon=True)
 
-    geotiff_file_paths = []
+    matched_files = []
 
     for root, dirs, files in fs.walk(directory_path):
         for file_name in files:
-            if is_geotiff(path=file_name):
+            if check_file_extension(
+                path=file_name,
+                accepted_file_extensions=accepted_file_extensions,
+            ):
                 if re.search(file_name_pattern, file_name):
-                    geotiff_file_paths.append(os.path.join(root, file_name))
+                    matched_files.append(os.path.join(root, file_name))
                 else:
                     continue
             else:
                 continue
 
     if is_s3_path(path=directory_path):
-        geotiff_file_paths = [f"s3://{file}" for file in geotiff_file_paths]
+        matched_files = [f"s3://{file}" for file in matched_files]
     elif is_gcsfs_path(path=directory_path):
-        geotiff_file_paths = [f"gs://{file}" for file in geotiff_file_paths]
+        matched_files = [f"gs://{file}" for file in matched_files]
+    return matched_files
+
+
+def find_geotiff_files(
+    directory_path: str, file_name_pattern: str = ".*"
+) -> list[str]:
+    """
+    Recursively find geotiff files matching an optional filename pattern.
+    """
+    geotiff_file_extensions = [".tif", ".tiff", ".gtiff"]
+    geotiff_file_paths = find_files_by_extension(
+        directory_path=directory_path,
+        accepted_file_extensions=geotiff_file_extensions,
+        file_name_pattern=file_name_pattern,
+    )
     return geotiff_file_paths
 
 
-def is_json(path: str) -> bool:
-    accepted_json_extensions = [".json"]
-    return check_file_extension(
-        path=path, accepted_file_extensions=accepted_json_extensions
-    )
-
-
 def find_json_files(
-    directory_path: str, file_name_pattern: str = ".*", anon: bool = True
+    directory_path: str, file_name_pattern: str = ".*"
 ) -> list[str]:
-    file_name_pattern = re.compile(file_name_pattern)
-
-    fs = get_filesystem(path=directory_path, anon=anon)
-
-    json_file_paths = []
-
-    for root, dirs, files in fs.walk(directory_path):
-        for file_name in files:
-            if is_json(path=file_name):
-                if re.search(file_name_pattern, file_name):
-                    json_file_paths.append(os.path.join(root, file_name))
-                else:
-                    continue
-            else:
-                continue
-
-    if is_s3_path(path=directory_path):
-        json_file_paths = [f"s3://{file}" for file in json_file_paths]
-    elif is_gcsfs_path(path=directory_path):
-        json_file_paths = [f"gs://{file}" for file in json_file_paths]
+    """
+    Recursively find json files matching an optional filename pattern.
+    """
+    json_file_extensions = [".json"]
+    json_file_paths = find_files_by_extension(
+        directory_path=directory_path,
+        accepted_file_extensions=json_file_extensions,
+        file_name_pattern=file_name_pattern,
+    )
     return json_file_paths
+
+
+def find_csv_files(
+    directory_path: str, file_name_pattern: str = ".*"
+) -> list[str]:
+    """
+    Recursively find csv files matching an optional filename pattern.
+    """
+    csv_file_extensions = [".csv"]
+    csv_file_paths = find_files_by_extension(
+        directory_path=directory_path,
+        accepted_file_extensions=csv_file_extensions,
+        file_name_pattern=file_name_pattern,
+    )
+    return csv_file_paths
 
 
 def download_file_from_url(url: str, output_file_path: str, chunks: int = 100) -> str:

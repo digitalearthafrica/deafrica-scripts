@@ -6,3 +6,4 @@ deafrica/_version.py
 dask-worker-space
 reports
 build
+notebooks/**
