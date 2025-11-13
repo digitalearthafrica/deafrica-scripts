@@ -3,47 +3,61 @@ Prepare eo3 metadata for a Copernicus Global Land Service -
 Lake Water Quality dataset.
 """
 
+import logging
 import warnings
 from datetime import datetime
 
 import rioxarray
 from eodatasets3.images import ValidDataMethod
-from eodatasets3.model import DatasetDoc
 from odc.apps.dc_tools._docs import odc_uuid
 
-from deafrica.data.cgls_lwq.geotiff import parse_dataset_tile_id
+from deafrica.data.cgls_lwq.filename_parser import (
+    get_dataset_id,
+    get_stac_url,
+    parse_cog_url,
+)
 from deafrica.data.easi_assemble import EasiPrepare
+
+log = logging.getLogger(__name__)
 
 
 def get_common_attrs(geotiff_url: str) -> dict:
     common_attrs = rioxarray.open_rasterio(geotiff_url).attrs
+
+    # Attributes from the file name of the measurement GeoTIFF file
+    region_code = parse_cog_url(geotiff_url)[-3]
+    common_attrs.update(
+        dict(
+            region_code=region_code,
+        )
+    )
+
     return common_attrs
 
 
 def prepare_dataset(
-    tile_id: str,
     dataset_path: str,
     product_yaml: str,
-    output_path: str,
-) -> DatasetDoc:
-    """Prepare an eo3 metadata file for a data product.
+) -> str:
+    """Prepares a STAC dataset metadata file for a data product.
 
     Parameters
     ----------
-    tile_id : str
-        Unique tile ID for a single dataset to prepare.
     dataset_path : str
-        Directory of the datasets
+        Directory of the dataset. The dataset path is the directory
+        where all measurements and associated metadata for
+        a dataset are stored.
     product_yaml : str
         Path to the product definition yaml file.
-    output_path : str
-        Path to write the output eo3 metadata file.
 
     Returns
     -------
-    DatasetDoc
-        eo3 metadata document
+    str
+        Path to odc dataset STAC file
     """
+    dataset_id = get_dataset_id(dataset_path)
+    output_path = get_stac_url(dataset_path)
+
     ## Initialise and validate inputs
     # Creates variables (see EasiPrepare for others):
     # - p.dataset_path
@@ -56,8 +70,8 @@ def prepare_dataset(
     extension = "tif"
 
     # Find measurement paths
-    tile_id_regex = rf"{tile_id}_(.*?)\.{extension}$"
-    measurement_map = p.map_measurements_to_paths(tile_id_regex)
+    dataset_id_regex = rf"{dataset_id}_(.*?)\.{extension}$"
+    measurement_map = p.map_measurements_to_paths(dataset_id_regex)
 
     # Get attrs from one of the measurement files
     common_attrs = get_common_attrs(list(measurement_map.values())[0])
@@ -65,7 +79,7 @@ def prepare_dataset(
     ## IDs and Labels
     # The version of the source dataset
     p.dataset_version = f"v{common_attrs['product_version']}"
-    p.dataset_id = odc_uuid(p.product_name, p.dataset_version, [tile_id])
+    p.dataset_id = odc_uuid(p.product_name, p.dataset_version, [dataset_id])
     # product_name is added by EasiPrepare().init()
     p.product_uri = f"https://explorer.digitalearth.africa/product/{p.product_name}"
 
@@ -113,8 +127,7 @@ def prepare_dataset(
     ## Scene metrics, as available
 
     # The "region" of acquisition, if applicable
-    _, _, _, _, _, _, tile_index_str = parse_dataset_tile_id(tile_id)
-    p.region_code = tile_index_str
+    p.region_code = common_attrs["region_code"]
 
     ## Ignore warnings, OPTIONAL
     # Ignore unknown property warnings (generated in eodatasets3.properties.Eo3Dict().normalise_and_set())
@@ -146,4 +159,15 @@ def prepare_dataset(
             expand_valid_data=True,
             relative_to_metadata=False,
         )
-    return p.to_dataset_doc(validate_correctness=True, sort_measurements=True)
+    ## Complete validate and return
+    # validation is against the eo3 specification and your product/dataset definitions
+    try:
+        dataset_uuid, output_path = p.write_stac(
+            validate_correctness=True, sort_measurements=True
+        )
+    except Exception as error:
+        raise error
+
+    log.info(f"Wrote dataset {dataset_uuid} to {output_path}")
+
+    return output_path

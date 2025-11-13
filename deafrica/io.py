@@ -9,7 +9,6 @@ import re
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from urllib.parse import urlparse
-from yarl import URL
 
 import fsspec
 import requests
@@ -20,6 +19,7 @@ from gcsfs import GCSFileSystem
 from odc.aws import s3_url_parse
 from s3fs.core import S3FileSystem
 from tqdm import tqdm
+from yarl import URL
 
 log = logging.getLogger(__name__)
 
