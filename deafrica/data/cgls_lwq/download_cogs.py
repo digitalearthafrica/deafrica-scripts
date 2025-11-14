@@ -7,7 +7,6 @@ import json
 import os
 import sys
 import warnings
-from urllib.error import HTTPError
 
 import click
 import pandas as pd
@@ -108,17 +107,15 @@ def download_cogs(
         raise NotImplementedError(error)
 
     # Read COG urls available for the product
-    manifest_file_url = COG_MANIFEST_FILE_URLS[product_name]
-
-    # If the manifest file containing COGS does not exist, switch to using netcdf files.
     try:
-        manifest_file = pd.read_csv(manifest_file_url, sep=";")
-    except HTTPError:
+        manifest_file_url = COG_MANIFEST_FILE_URLS[product_name]
+    except KeyError:
         log.warning(
             f"COG manifest file not found for product {product_name}, switching to netcdf manifest file."
         )
         manifest_file_url = NETCDF_MANIFEST_FILE_URLS[product_name]
-        manifest_file = pd.read_csv(manifest_file_url, sep=";")
+
+    manifest_file = pd.read_csv(manifest_file_url, sep=";")
 
     all_dataset_urls = manifest_file["s3_path"].to_list()
     log.info(f"Found {len(all_dataset_urls)} datasets in the manifest file")
