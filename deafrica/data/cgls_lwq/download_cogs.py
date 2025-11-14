@@ -255,7 +255,7 @@ def download_cogs(
         if "_nc" in get_basename(dataset_url):
             netcdf_url = [f"s3://{i}" for i in s3_fs.ls(dataset_url)][0]
 
-            log.info("Loading netcdf file ...")
+            log.info("Loading netcdf file (wait time 8-10 minutes)...")
             # Open the file handle from s3fs
             # This could take about 8min-10min
             with s3_fs.open(netcdf_url, "rb") as f:
