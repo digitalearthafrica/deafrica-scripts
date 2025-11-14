@@ -49,8 +49,8 @@ RUN ./aws/install
 
 # Set up the python virtual environment
 ENV VIRTUAL_ENV="/opt/venv"
-ENV PATH="${VIRTUAL_ENV}/bin:${PATH}" \
-    PROJ_DATA="${VIRTUAL_ENV}/share/proj"
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
+
 RUN python3 -m venv $VIRTUAL_ENV 
 
 COPY requirements.txt /tmp/
