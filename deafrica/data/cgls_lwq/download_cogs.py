@@ -174,75 +174,77 @@ def download_cogs(
                         da = rioxarray.open_rasterio(f, chunks=True)
                         da = da.squeeze()
 
-                    if "spatial_ref" in list(da.coords):
-                        crs_coord_name = "spatial_ref"
-                    else:
-                        crs_coord_name = "crs"
+                        if "spatial_ref" in list(da.coords):
+                            crs_coord_name = "spatial_ref"
+                        else:
+                            crs_coord_name = "crs"
 
-                    crs = da.rio.crs
+                        crs = da.rio.crs
 
-                    if crs is None:
-                        # Assumption drawn from product manual is
-                        # data is either in EPSG:4326 or OGC:CRS84
-                        if list(da.dims)[0] in ["y", "lat", "latitude"]:
-                            crs = "EPSG:4326"
-                        elif list(da.dims)[0] in ["x", "lon", "longitude"]:
-                            crs = "OGC:CRS84"
+                        if crs is None:
+                            # Assumption drawn from product manual is
+                            # data is either in EPSG:4326 or OGC:CRS84
+                            if list(da.dims)[0] in ["y", "lat", "latitude"]:
+                                crs = "EPSG:4326"
+                            elif list(da.dims)[0] in ["x", "lon", "longitude"]:
+                                crs = "OGC:CRS84"
 
-                    da = assign_crs(da, crs, crs_coord_name=crs_coord_name)
+                        da = assign_crs(da, crs, crs_coord_name=crs_coord_name)
 
-                    # Get attributes to be used in tiled COGs
-                    attrs = da.attrs
-                    exclude = [
-                        "lon#",
-                        "lat#",
-                        "number_of_regions",
-                        "TileSize",
-                        "NETCDF_",
-                        "coordinates",
-                    ]
-                    filtered_attrs = {
-                        k: v
-                        for k, v in attrs.items()
-                        if not any(sub.lower() in k.lower() for sub in exclude)
-                    }
-                    da.attrs = filtered_attrs
+                        # Get attributes to be used in tiled COGs
+                        attrs = da.attrs
+                        exclude = [
+                            "lon#",
+                            "lat#",
+                            "number_of_regions",
+                            "TileSize",
+                            "NETCDF_",
+                            "coordinates",
+                        ]
+                        filtered_attrs = {
+                            k: v
+                            for k, v in attrs.items()
+                            if not any(sub.lower() in k.lower() for sub in exclude)
+                        }
+                        da.attrs = filtered_attrs
 
-                    with tqdm(
-                        iterable=tiles,
-                        desc=f"Cropping band {band_name} COG file",
-                        total=len(tiles),
-                    ) as tiles:
-                        for tile in tiles:
-                            tile_idx, tile_geobox = tile
+                        with tqdm(
+                            iterable=tiles,
+                            desc=f"Cropping band {band_name} COG file",
+                            total=len(tiles),
+                        ) as tiles:
+                            for tile in tiles:
+                                tile_idx, tile_geobox = tile
 
-                            output_cog_url = get_output_cog_url_from_cog(
-                                product_name, output_dir, cog_url, tile_idx
-                            )
-                            if not overwrite:
-                                if check_file_exists(output_cog_url):
-                                    continue
-
-                            cropped_da = da.odc.crop(
-                                tile_geobox.extent.to_crs(da.odc.geobox.crs)
-                            )
-
-                            # Write cog files
-                            if is_local_path(output_cog_url):
-                                cropped_da.odc.write_cog(
-                                    fname=output_cog_url,
-                                    overwrite=True,
-                                    tags=filtered_attrs,
+                                output_cog_url = get_output_cog_url_from_cog(
+                                    product_name, output_dir, cog_url, tile_idx
                                 )
-                            else:
-                                cog_bytes = cropped_da.odc.write_cog(
-                                    fname=":mem:", overwrite=True, tags=filtered_attrs
-                                )
-                                fs = get_filesystem(output_cog_url, anon=False)
-                                with fs.open(output_cog_url, "wb") as f:
-                                    f.write(cog_bytes)
+                                if not overwrite:
+                                    if check_file_exists(output_cog_url):
+                                        continue
 
-                    log.info(f"Written COGs for band {band_name}")
+                                cropped_da = da.odc.crop(
+                                    tile_geobox.extent.to_crs(da.odc.geobox.crs)
+                                ).compute()
+
+                                # Write cog files
+                                if is_local_path(output_cog_url):
+                                    cropped_da.odc.write_cog(
+                                        fname=output_cog_url,
+                                        overwrite=True,
+                                        tags=filtered_attrs,
+                                    )
+                                else:
+                                    cog_bytes = cropped_da.odc.write_cog(
+                                        fname=":mem:",
+                                        overwrite=True,
+                                        tags=filtered_attrs,
+                                    )
+                                    fs = get_filesystem(output_cog_url, anon=False)
+                                    with fs.open(output_cog_url, "wb") as f:
+                                        f.write(cog_bytes)
+
+                        log.info(f"Written COGs for band {band_name}")
                 except Exception as error:
                     log.exception(error)
                     error_msg = f"Failed to generate cogs for the source file {cog_url}"
@@ -258,97 +260,101 @@ def download_cogs(
             with s3_fs.open(netcdf_url, "rb") as f:
                 ds = xr.open_dataset(f, chunks="auto")
                 ds = ds.squeeze()
-            log.inf("Done.")
+                log.inf("Done.")
 
-            if "spatial_ref" in list(ds.coords):
-                crs_coord_name = "spatial_ref"
-            else:
-                crs_coord_name = "crs"
+                if "spatial_ref" in list(ds.coords):
+                    crs_coord_name = "spatial_ref"
+                else:
+                    crs_coord_name = "crs"
 
-            crs = ds.rio.crs
+                crs = ds.rio.crs
 
-            if crs is None:
-                # Assumption drawn from product manual is
-                # data is either in EPSG:4326 or OGC:CRS84
-                if list(ds.dims)[0] in ["y", "lat", "latitude"]:
-                    crs = "EPSG:4326"
-                elif list(ds.dims)[0] in ["x", "lon", "longitude"]:
-                    crs = "OGC:CRS84"
+                if crs is None:
+                    # Assumption drawn from product manual is
+                    # data is either in EPSG:4326 or OGC:CRS84
+                    if list(ds.dims)[0] in ["y", "lat", "latitude"]:
+                        crs = "EPSG:4326"
+                    elif list(ds.dims)[0] in ["x", "lon", "longitude"]:
+                        crs = "OGC:CRS84"
 
-            ds = assign_crs(ds, crs, crs_coord_name=crs_coord_name)
-            dataset_attrs = ds.attrs
+                ds = assign_crs(ds, crs, crs_coord_name=crs_coord_name)
+                dataset_attrs = ds.attrs
 
-            band_names_filter = ["crs"]
-            band_names = [i for i in list(ds.data_vars) if i not in band_names_filter]
-            log.info(f"Found {len(band_names)} bands for the dataset {dataset_url}")
+                band_names_filter = ["crs"]
+                band_names = [
+                    i for i in list(ds.data_vars) if i not in band_names_filter
+                ]
+                log.info(f"Found {len(band_names)} bands for the dataset {dataset_url}")
 
-            for band_name in band_names:
-                log.info(f"Processing band {band_name}")
+                for band_name in band_names:
+                    log.info(f"Processing band {band_name}")
 
-                try:
-                    da = ds[band_name]
-                    # Get attributes to be used in tiled COGs
-                    band_attrs = da.attrs
-                    attrs = {**dataset_attrs, **band_attrs}
-                    exclude = [
-                        "lon#",
-                        "lat#",
-                        "number_of_regions",
-                        "TileSize",
-                        "NETCDF_",
-                        "coordinates",
-                    ]
-                    filtered_attrs = {
-                        k: v
-                        for k, v in attrs.items()
-                        if not any(sub.lower() in k.lower() for sub in exclude)
-                    }
-                    da.attrs = filtered_attrs
+                    try:
+                        da = ds[band_name]
+                        # Get attributes to be used in tiled COGs
+                        band_attrs = da.attrs
+                        attrs = {**dataset_attrs, **band_attrs}
+                        exclude = [
+                            "lon#",
+                            "lat#",
+                            "number_of_regions",
+                            "TileSize",
+                            "NETCDF_",
+                            "coordinates",
+                        ]
+                        filtered_attrs = {
+                            k: v
+                            for k, v in attrs.items()
+                            if not any(sub.lower() in k.lower() for sub in exclude)
+                        }
+                        da.attrs = filtered_attrs
 
-                    with tqdm(
-                        iterable=tiles,
-                        desc=f"Cropping band {band_name} NetCDF file",
-                        total=len(tiles),
-                    ) as tiles:
-                        for tile in tiles:
-                            tile_idx, tile_geobox = tile
+                        with tqdm(
+                            iterable=tiles,
+                            desc=f"Cropping band {band_name} NetCDF file",
+                            total=len(tiles),
+                        ) as tiles:
+                            for tile in tiles:
+                                tile_idx, tile_geobox = tile
 
-                            output_cog_url = get_output_cog_url_from_netcdf(
-                                product_name,
-                                output_dir,
-                                netcdf_url,
-                                band_name,
-                                tile_idx,
-                            )
-                            if not overwrite:
-                                if check_file_exists(output_cog_url):
-                                    continue
-
-                            cropped_da = da.odc.crop(
-                                tile_geobox.extent.to_crs(da.odc.geobox.crs)
-                            )
-
-                            # Write cog files
-                            if is_local_path(output_cog_url):
-                                cropped_da.odc.write_cog(
-                                    fname=output_cog_url,
-                                    overwrite=True,
-                                    tags=filtered_attrs,
+                                output_cog_url = get_output_cog_url_from_netcdf(
+                                    product_name,
+                                    output_dir,
+                                    netcdf_url,
+                                    band_name,
+                                    tile_idx,
                                 )
-                            else:
-                                cog_bytes = cropped_da.odc.write_cog(
-                                    fname=":mem:", overwrite=True, tags=filtered_attrs
-                                )
-                                fs = get_filesystem(output_cog_url, anon=False)
-                                with fs.open(output_cog_url, "wb") as f:
-                                    f.write(cog_bytes)
+                                if not overwrite:
+                                    if check_file_exists(output_cog_url):
+                                        continue
 
-                    log.info(f"Written COGs for band {band_name}")
-                except Exception as error:
-                    log.exception(error)
-                    error_msg = f"Failed to generate cogs for the source file {netcdf_url} band {band_name}"
-                    log.error(error_msg)
-                    failed_tasks.append(error_msg)
+                                cropped_da = da.odc.crop(
+                                    tile_geobox.extent.to_crs(da.odc.geobox.crs)
+                                )
+
+                                # Write cog files
+                                if is_local_path(output_cog_url):
+                                    cropped_da.odc.write_cog(
+                                        fname=output_cog_url,
+                                        overwrite=True,
+                                        tags=filtered_attrs,
+                                    )
+                                else:
+                                    cog_bytes = cropped_da.odc.write_cog(
+                                        fname=":mem:",
+                                        overwrite=True,
+                                        tags=filtered_attrs,
+                                    )
+                                    fs = get_filesystem(output_cog_url, anon=False)
+                                    with fs.open(output_cog_url, "wb") as f:
+                                        f.write(cog_bytes)
+
+                        log.info(f"Written COGs for band {band_name}")
+                    except Exception as error:
+                        log.exception(error)
+                        error_msg = f"Failed to generate cogs for the source file {netcdf_url} band {band_name}"
+                        log.error(error_msg)
+                        failed_tasks.append(error_msg)
     if failed_tasks:
         failed_tasks_json_array = json.dumps(failed_tasks)
 
