@@ -260,7 +260,7 @@ def download_cogs(
             with s3_fs.open(netcdf_url, "rb") as f:
                 ds = xr.open_dataset(f, chunks="auto")
                 ds = ds.squeeze()
-                log.inf("Done.")
+                log.info("Done.")
 
                 if "spatial_ref" in list(ds.coords):
                     crs_coord_name = "spatial_ref"
