@@ -161,12 +161,9 @@ def prepare_dataset(
         )
     ## Complete validate and return
     # validation is against the eo3 specification and your product/dataset definitions
-    try:
-        dataset_uuid, output_path = p.write_stac(
-            validate_correctness=True, sort_measurements=True
-        )
-    except Exception as error:
-        raise error
+    dataset_uuid, output_path = p.write_stac(
+        validate_correctness=True, sort_measurements=True
+    )
 
     log.info(f"Wrote dataset {dataset_uuid} to {output_path}")
 
