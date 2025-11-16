@@ -32,7 +32,6 @@ def get_africa_tiles(grid_res: int | float) -> list:
 
     gridspec = GridSpec(
         crs=CRS("EPSG:6933"),
-        #
         tile_shape=tile_shape,
         resolution=Resolution(y=-grid_res, x=grid_res),
         origin=XY(y=-7392000, x=-17376000),
