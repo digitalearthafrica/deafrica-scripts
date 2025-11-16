@@ -58,7 +58,7 @@ def get_region_code(tile_id: tuple[int, int], sep: str = "") -> str:
     tile_id : tuple[int, int]
         Tile ID for the tile.
     sep : str, optional
-        Seperator between the x and y parts of the region code, by
+        Separator between the x and y parts of the region code, by
         default ""
 
     Returns
