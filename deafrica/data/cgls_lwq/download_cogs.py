@@ -52,7 +52,7 @@ warnings.filterwarnings("ignore", category=NotGeoreferencedWarning)
     default=False,
     show_default=True,
     help=(
-        "If overwrite is True tasks that have already been processed " "will be rerun. "
+        "If overwrite is True, tasks that have already been processed will be rerun."
     ),
 )
 @click.option(
