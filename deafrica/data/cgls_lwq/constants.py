@@ -23,6 +23,8 @@ NETCDF_MANIFEST_FILE_URLS = {
 
 NAMING_PREFIX = "c_gls"
 
+# Band names for products with a COG URL
+# manifests file.
 BAND_NAMES = {
     "cgls_lwq300_2024_nrt": {
         "CHLAMEAN": "chla_mean",
