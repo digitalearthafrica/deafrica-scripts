@@ -66,6 +66,5 @@ def get_region_code(tile_id: tuple[int, int], sep: str = "") -> str:
         Region code for the input tile ID.
     """
     x, y = tile_id
-    region_code_format = "x{x:03d}{sep}y{y:03d}"
-    region_code = region_code_format.format(x=x, y=y, sep=sep)
+    region_code = f"x{x:03d}{sep}y{y:03d}"
     return region_code
