@@ -50,7 +50,7 @@ def get_africa_tiles(grid_res: int | float) -> list:
 def get_region_code(tile_id: tuple[int, int], sep: str = "") -> str:
     """
     Get the region code for a tile from its tile ID in the format
-    format "x{x:03d}{sep}y{y:03d}".
+    "x{x:03d}{sep}y{y:03d}".
 
     Parameters
     ----------
