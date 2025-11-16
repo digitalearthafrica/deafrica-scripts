@@ -31,9 +31,7 @@ from deafrica.utils import split_tasks
     "--overwrite/--no-overwrite",
     default=False,
     show_default=True,
-    help=(
-        "If overwrite is True tasks that have already been processed " "will be rerun. "
-    ),
+    help="If overwrite is True tasks that have already been processed will be rerun.",
 )
 @click.argument(
     "datasets-dir",
