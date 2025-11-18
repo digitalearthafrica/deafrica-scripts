@@ -1,11 +1,12 @@
 #!python3
-
+import json
 import os
 import re
 import uuid
 import warnings
 from pathlib import Path
 from urllib.parse import urlparse
+from uuid import UUID
 
 import boto3
 import numpy
@@ -17,9 +18,22 @@ from eodatasets3 import serialise
 from eodatasets3.images import GridSpec, MeasurementBundler
 from eodatasets3.model import AccessoryDoc, DatasetDoc, ProductDoc
 from eodatasets3.properties import Eo3Interface
-from eodatasets3.validate import Level, ValidationExpectations, validate_dataset
+from eodatasets3.stac import to_stac_item as eo3_to_stac_item
+from eodatasets3.validate import (
+    Level,
+    ValidationExpectations,
+    validate_dataset,
+)
 
-from deafrica.io import get_filesystem, get_gdal_vsi_prefix
+from deafrica.io import (
+    check_directory_exists,
+    check_file_exists,
+    get_basename,
+    get_filesystem,
+    get_gdal_vsi_prefix,
+    get_parent_dir,
+    join_url,
+)
 
 # Uncomment and add logging if and where needed
 # import logging
@@ -29,15 +43,17 @@ from deafrica.io import get_filesystem, get_gdal_vsi_prefix
 # Adapted from
 # https://github.com/opendatacube/tutorial-odc-product/blob/master/tasks/eo3assemble/easi_assemble.py: EasiPrepare()
 
-OUTPUT_NAME = "odc-metadata.yaml"
+# OUTPUT_NAME = "metadata.odc-metadata.yaml"
+OUTPUT_NAME = "metadata.stac-item.json"
 
 
 class EasiPrepare(Eo3Interface):
     def __init__(
         self,
         dataset_path: str,
-        product_yaml: str | Path,
-        output_path: str | Path = None,
+        product_yaml: str | dict,
+        output_path: str = None,
+        input_source_datasets: list[UUID] = None,
     ) -> None:
         """
         Prepare eo3 metadata for a dataset.
@@ -54,6 +70,10 @@ class EasiPrepare(Eo3Interface):
         :param output_path:
             Optional. Specify the output dataset YAML file. Default is to create it next
             to the dataset file(s).
+
+        :param input_source_datasets:
+            Optional. Specify the list of the UUIDs for datasets that were used in the calculation of
+            this dataset.
         """
         # Internal variables
         self._dataset_scheme = None  # Set by self._set_dataset_path()
@@ -65,8 +85,8 @@ class EasiPrepare(Eo3Interface):
 
         # Handle inputs
         self._set_dataset_path(dataset_path)
-        self._set_output_path(str(output_path))
-        self._product_yaml = str(product_yaml)
+        self._set_output_path(output_path)
+        self._product_yaml = product_yaml
 
         # Defaults
         self._dataset = (
@@ -89,7 +109,7 @@ class EasiPrepare(Eo3Interface):
         self._dataset.product = ProductDoc()
         self._dataset.product.name = self.get_product_name()
         self._dataset.accessories = {}
-        self._dataset.lineage = None
+        self._set_dataset_lineage(input_source_datasets)
 
         # Available for user input, else defaults will be used
         self.geometry = None  # BaseGeometry, overrides valid_data polygon
@@ -98,7 +118,6 @@ class EasiPrepare(Eo3Interface):
         )
         self.valid_data_method = None
 
-    # Internal functions
     def _parse_path(self, some_path):
         """
         Parse some_path for validity and type, and resolve to its absolute path.
@@ -112,10 +131,10 @@ class EasiPrepare(Eo3Interface):
             loc = urlparse(str(some_path))
             if loc.scheme in ("",):
                 scheme = "file"
-                new_path = Path(some_path).resolve()
+                new_path = str(Path(some_path).resolve())
             if loc.scheme in ("file",):
                 scheme = "file"
-                new_path = Path("/".join(["", loc.netloc, loc.path])).resolve()
+                new_path = str(Path("/".join(["", loc.netloc, loc.path])).resolve())
             elif loc.scheme in ("s3", "gs", "gcs"):
                 scheme = loc.scheme
                 new_path = some_path
@@ -124,7 +143,7 @@ class EasiPrepare(Eo3Interface):
             elif loc.scheme in ("http", "https"):
                 scheme = loc.scheme
                 new_path = some_path
-                # raise RuntimeError('Location type "http/s" is not implemented yet')
+                raise RuntimeError('Location type "http/s" is not implemented yet')
         return (scheme, new_path, bucket, key)
 
     def _set_dataset_path(self, dataset_path):
@@ -146,35 +165,40 @@ class EasiPrepare(Eo3Interface):
         """
         scheme, new_path, bucket, key = self._parse_path(output_path)
         meta = None
-        if self._dataset_scheme in ("file",):
-            if output_path:
-                # If a directory then + OUTPUT_NAME
-                # If a file then use it
-                if new_path.is_dir():
-                    meta = new_path / OUTPUT_NAME
-                else:
-                    meta = new_path
+
+        if new_path:
+            # Enforce file naming rule
+            if new_path.endswith(".stac-item.json") or new_path.endswith(
+                ".odc-metadata.yaml"
+            ):
+                meta = new_path
             else:
-                if self._dataset_path.is_dir():
-                    meta = self._dataset_path / OUTPUT_NAME
-                else:
-                    meta = self._dataset_path.parent / OUTPUT_NAME
-        if self._dataset_scheme in ("s3", "gs", "gcs", "http", "https"):
-            if output_path:
-                # Make sure its local
-                # If a directory then + OUTPUT_NAME
-                # If a file then use it
-                if scheme in ("file",):
-                    if new_path.is_dir():
-                        meta = new_path / OUTPUT_NAME
-                    else:
-                        meta = new_path
+                raise ValueError(
+                    f"Invalid `output_path` file name: '{output_path}'. "
+                    f"File name must end with either '.stac-item.json' "
+                    "or '.odc-metadata.yaml'"
+                )
+        else:
+            if check_directory_exists(self._dataset_path):
+                meta = join_url(self._dataset_path, OUTPUT_NAME)
+            elif check_file_exists(self._dataset_path):
+                meta = join_url(get_parent_dir(self._dataset_path), OUTPUT_NAME)
+
         if meta is None:
-            # Error, need a writable local path
+            # Error, need a writable path
             raise RuntimeError(
-                f"Require a local output_path to write to: {output_path}"
+                f"Require a valid output_path to write to: {output_path}"
             )
         self._output_path = meta
+
+    def _set_dataset_lineage(self, input_source_datasets: list[UUID]):
+        """
+        Add the UUIDs of the source datasets to the lineage.
+        """
+        if input_source_datasets is None:
+            self._dataset.lineage = None
+        else:
+            self._dataset.lineage = {"inputs": input_source_datasets}
 
     def __enter__(self):
         return self
@@ -241,24 +265,35 @@ class EasiPrepare(Eo3Interface):
         """
         Return the product name from the product yaml
         """
-        fs = get_filesystem(self._product_yaml)
-        with fs.open(self._product_yaml) as f:
-            y = yaml.load(f, Loader=yaml.FullLoader)
-            return y["name"]
+        if isinstance(self._product_yaml, str):
+            fs = get_filesystem(self._product_yaml)
+            with fs.open(self._product_yaml) as f:
+                y = yaml.load(f, Loader=yaml.FullLoader)
+                return y["name"]
+        elif isinstance(self._product_yaml, dict):
+            return self._product_yaml["name"]
 
     def get_product_measurements(self) -> list:
         """
         Return list of (measurement, alias, ..) tuples
         """
         measurements = []  # list of tuples (measurement name, alias, ...)
-        fs = get_filesystem(self._product_yaml)
-        with fs.open(self._product_yaml) as f:
-            y = yaml.load(f, Loader=yaml.FullLoader)
-            for m in y["measurements"]:
+        if isinstance(self._product_yaml, str):
+            fs = get_filesystem(self._product_yaml)
+            with fs.open(self._product_yaml) as f:
+                y = yaml.load(f, Loader=yaml.FullLoader)
+                for m in y["measurements"]:
+                    t = [m["name"]]
+                    if "aliases" in m:
+                        t.extend(m["aliases"])
+                    measurements.append(tuple(t))
+        elif isinstance(self._product_yaml, dict):
+            for m in self._product_yaml["measurements"]:
                 t = [m["name"]]
                 if "aliases" in m:
                     t.extend(m["aliases"])
                 measurements.append(tuple(t))
+
         return measurements
 
     def _match_measurement_names_to_band_ids(
@@ -328,16 +363,16 @@ class EasiPrepare(Eo3Interface):
 
         # File system
         if self._dataset_scheme == "file":
-            if self._dataset_path.is_dir():
-                for filename in self._dataset_path.rglob("*.*"):
+            if Path(self._dataset_path).is_dir():
+                for filename in Path(self._dataset_path).rglob("*.*"):
                     m = p.search(str(filename))
                     if m:
                         band_ids[m.group(1)] = filename
             else:
-                filename = self._dataset_path
+                filename = Path(self._dataset_path)
                 m = p.search(str(filename.name))
                 if m:
-                    band_ids[m.group(1)] = filename
+                    band_ids[m.group(1)] = str(filename)
 
         # S3; obtain a list of object keys for the dataset
         if self._dataset_scheme == "s3":
@@ -564,6 +599,22 @@ class EasiPrepare(Eo3Interface):
 
         return dataset
 
+    def to_stac_item(
+        self,
+        validate_correctness: bool = True,
+        sort_measurements: bool = True,
+        expect_geometry: bool = True,
+    ) -> dict:
+        dataset = self.to_dataset_doc(
+            validate_correctness=validate_correctness,
+            sort_measurements=sort_measurements,
+            expect_geometry=expect_geometry,
+        )
+        stac_item = eo3_to_stac_item(
+            dataset=dataset, stac_item_destination_url=self._output_path
+        )
+        return stac_item
+
     def write_eo3(
         self, validate_correctness: bool = True, sort_measurements: bool = True
     ) -> tuple:
@@ -583,12 +634,48 @@ class EasiPrepare(Eo3Interface):
             sort_measurements=sort_measurements,
         )
         doc = serialise.to_formatted_doc(dataset)
-        serialise.dump_yaml(self._output_path, doc)
+
+        output_yaml = self._output_path
+        if not get_basename(output_yaml).lower().endswith(".yaml"):
+            raise ValueError(
+                f"YAML filename doesn't end in *.yaml (?). Received {output_yaml!r}"
+            )
+
+        fs = get_filesystem(output_yaml, anon=False)
+        with fs.open(output_yaml, "w") as stream:
+            yaml = serialise._init_yaml()
+            yaml.dump_all([doc], stream)
         return dataset.id, self._output_path
 
-    def done(self, *args, **kwargs):
-        """Deprecated"""
-        return self.write_eo3(*args, **kwargs)
+    def write_stac(
+        self, validate_correctness: bool = True, sort_measurements: bool = True
+    ) -> tuple:
+        """
+        Validate and write the dataset doc to a stac file.
+
+        :param validate_correctness:
+            Run the eo3-validator on the dataset doc
+        :param sort_measurements:
+            Order measurements alphabetically (instead of insert-order)
+
+        :returns: The id and final path to the dataset doc file.
+        """
+        stac_item = self.to_stac_item(
+            validate_correctness=validate_correctness,
+            sort_measurements=sort_measurements,
+        )
+
+        output_json = self._output_path
+        if not get_basename(output_json).lower().endswith(".json"):
+            raise ValueError(
+                f"JSON filename doesn't end in *.json (?). Received {output_json!r}"
+            )
+
+        fs = get_filesystem(output_json, anon=False)
+        with fs.open(output_json, "w") as file:
+            json.dump(stac_item, file, indent=2)  # `indent=4` makes it human-readable
+
+        return stac_item["id"], self._output_path
 
     # Borrowed from https://github.com/opendatacube/eo-datasets/blob/develop/eodatasets3/assemble.py
     def _crs_str(self, crs) -> str:
