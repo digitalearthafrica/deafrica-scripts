@@ -2,17 +2,16 @@
 Manifest files and measurements of interest for the
 Copernicus Global Land Service - Lake Water Quality products.
 """
-
+# Download using COG manifest
 COG_MANIFEST_FILE_URLS = {
     "cgls_lwq300_2002_2012": "https://s3.waw3-1.cloudferro.com/swift/v1/CatalogueCSV/bio-geophysical/lake_water_quality/lwq-reproc_global_300m_10daily_v1/lwq-reproc_global_300m_10daily_v1_cog.csv",
     "cgls_lwq300_2016_2024": "https://s3.waw3-1.cloudferro.com/swift/v1/CatalogueCSV/bio-geophysical/lake_water_quality/lwq-nrt_global_300m_10daily_v1/lwq-nrt_global_300m_10daily_v1_cog.csv",
     "cgls_lwq100_2019_2024": "https://s3.waw3-1.cloudferro.com/swift/v1/CatalogueCSV/bio-geophysical/lake_water_quality/lwq-nrt_global_100m_10daily_v1/lwq-nrt_global_100m_10daily_v1_cog.csv",
     "cgls_lwq300_2024_nrt": "https://s3.waw3-1.cloudferro.com/swift/v1/CatalogueCSV/bio-geophysical/lake_water_quality/lwq-nrt_global_300m_10daily_v2/lwq-nrt_global_300m_10daily_v2_cog.csv",
     # As of November 2025 the Lake Water Quality 2024-present (raster 100 m), global, 10-daily – version 2 COG manifest is not available
-    # download using the NetCDF manifest
-    # "cgls_lwq100_2024_nrt": "https://s3.waw3-1.cloudferro.com/swift/v1/CatalogueCSV/bio-geophysical/lake_water_quality/lwq-nrt_global_100m_10daily_v2/lwq-nrt_global_100m_10daily_v2_cog.csv",
 }
 
+# Download using NetCDF manifest
 NETCDF_MANIFEST_FILE_URLS = {
     "cgls_lwq300_2002_2012": "https://s3.waw3-1.cloudferro.com/swift/v1/CatalogueCSV/bio-geophysical/lake_water_quality/lwq-reproc_global_300m_10daily_v1/lwq-reproc_global_300m_10daily_v1_nc.csv",
     "cgls_lwq300_2016_2024": "https://s3.waw3-1.cloudferro.com/swift/v1/CatalogueCSV/bio-geophysical/lake_water_quality/lwq-nrt_global_300m_10daily_v1/lwq-nrt_global_300m_10daily_v1_nc.csv",
