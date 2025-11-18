@@ -853,7 +853,7 @@ uc-micro-py==1.0.3
     # via linkify-it-py
 url-normalize==2.2.1
     # via requests-cache
-irllib3==2.5.0
+urllib3==2.3.0
     # via
     #   botocore
     #   distributed
