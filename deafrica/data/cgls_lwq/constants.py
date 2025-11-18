@@ -2,6 +2,7 @@
 Manifest files and measurements of interest for the
 Copernicus Global Land Service - Lake Water Quality products.
 """
+
 # Download using COG manifest
 COG_MANIFEST_FILE_URLS = {
     "cgls_lwq300_2002_2012": "https://s3.waw3-1.cloudferro.com/swift/v1/CatalogueCSV/bio-geophysical/lake_water_quality/lwq-reproc_global_300m_10daily_v1/lwq-reproc_global_300m_10daily_v1_cog.csv",
