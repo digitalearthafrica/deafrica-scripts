@@ -40,7 +40,6 @@ def check_deadletter_queues(
         # Send a Slack message
         if slack_url is not None:
             send_slack_notification(slack_url, "Dead Letter Checker", message)
-        sys.exit(1)
 
     # Exit with 0 if no errors
     sys.exit(0)
