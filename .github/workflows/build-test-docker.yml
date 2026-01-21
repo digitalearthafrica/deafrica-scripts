@@ -1,7 +1,7 @@
 name : Scripts Test and Push
 
 env:
-  IMAGE_NAME: digitalearthafrica/deafrica-scripts
+  IMAGE_NAME: ${{ secrets.DEAFRICA_DOCKER_USERNAME }}/deafrica-scripts
 
 on:
   pull_request:
