@@ -2,8 +2,8 @@ import logging
 from datetime import datetime
 
 import click
-import datacube
 import toolz
+from datacube import Datacube
 
 from deafrica.io import check_directory_exists, get_filesystem, get_parent_dir, join_url
 from deafrica.logs import setup_logging
@@ -30,10 +30,20 @@ from deafrica.logs import setup_logging
     show_default=True,
     help="control the log level, e.g., --log=error",
 )
+@click.option(
+    "--time-range",
+    type=str,
+    help=(
+        "Time range to find duplicate datasets for. "
+        "To specify the start and end date, separate the two dates using a comma ',' "
+        'e.g., "2019-01,2019-03".'
+    ),
+)
 def cli(
     product: str,
     output_dir: str,
     log: str,
+    time_range: str,
 ):
     """
     Find duplicate datasets in the specified ODC PRODUCT and write the
@@ -45,10 +55,15 @@ def cli(
     log_level = getattr(logging, log.upper())
     _log = setup_logging(log_level)
 
-    dc = datacube.Datacube()
+    query = {"product": product}
+    if time_range:
+        time = tuple([p.strip() for p in time_range.split(",")])
+        query["time"] = time
+
+    dc = Datacube(app="FindDuplicateScenes")
 
     _log.info(f"Searching for datasets in product: {product}")
-    datasets = dc.find_datasets_lazy(product=product)
+    datasets = dc.find_datasets_lazy(query)
     grouped_by_s3_uri = toolz.groupby(lambda ds: ds.uri, datasets)
 
     _log.info(f"Searching for duplicate datasets in product: {product}")
