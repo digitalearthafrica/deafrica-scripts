@@ -42,7 +42,7 @@ def cli(
     dry_run: bool = False,
 ):
     """
-    Archive and purge datasets whose metadata document file path is listed in the in the REPORT_PATH text file and write a status report to the OUTPUT_DIR directory.
+    Archive and purge datasets whose metadata document file path is listed in the REPORT_PATH text file and write a status report to the OUTPUT_DIR directory.
 
     MAX_PARALLEL_STEPS: The total number of parallel workers or pods
     expected in the workflow. This value is used to divide the list of
