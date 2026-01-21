@@ -141,7 +141,7 @@ def cli(
 
             fs = get_filesystem(path=tmp_dir, anon=False)
             if not check_directory_exists(path=tmp_dir):
-                fs.mkdirs(path=tmp_dir, exist_ok=True)
+                fs.makedirs(path=tmp_dir, exist_ok=True)
 
             with fs.open(output_file, "a") as file:
                 file.write(json.dumps(failed_to_archive) + "\n")
@@ -152,7 +152,7 @@ def cli(
 
             fs = get_filesystem(path=tmp_dir, anon=False)
             if not check_directory_exists(path=tmp_dir):
-                fs.mkdirs(path=tmp_dir, exist_ok=True)
+                fs.makedirs(path=tmp_dir, exist_ok=True)
 
             with fs.open(output_file, "a") as file:
                 file.write(json.dumps(failed_to_purge) + "\n")
