@@ -46,19 +46,22 @@ def cli(
 
     log.info(f"{len(datasets_to_delete)} {product} scenes with duplicates")
 
-    output_file = join_url(
-        output_dir,
-        "status-report",
-        f"{product}_duplicate_datasets_{datetime.now().strftime('%Y-%m-%d')}.txt",
-    )
-    fs = get_filesystem(output_file, anon=False)
+    if datasets_to_delete:
+        output_file = join_url(
+            output_dir,
+            "status-report",
+            f"{product}_duplicate_datasets_{datetime.now().strftime('%Y-%m-%d')}.txt",
+        )
+        fs = get_filesystem(output_file, anon=False)
 
-    parent_dir = get_parent_dir(output_file)
-    if not check_directory_exists(parent_dir):
-        fs.makedirs(parent_dir, exist_ok=True)
+        parent_dir = get_parent_dir(output_file)
+        if not check_directory_exists(parent_dir):
+            fs.makedirs(parent_dir, exist_ok=True)
 
-    with fs.open(output_file, "w") as file:
-        for s3_uri in datasets_to_delete:
-            file.write(f"{s3_uri}\n")
+        with fs.open(output_file, "w") as file:
+            for s3_uri in datasets_to_delete:
+                file.write(f"{s3_uri}\n")
 
-    log.info(f"{product} duplicate dataset URIs written to {output_file}")
+        log.info(f"{product} duplicate dataset URIs written to {output_file}")
+    else:
+        log.info(f"No duplicate datasets for {product} found.")

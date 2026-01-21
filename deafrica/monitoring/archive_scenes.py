@@ -76,7 +76,7 @@ def cli(
     failed_to_archive = []
     failed_to_purge = []
     for idx, ds_uri in enumerate(dataset_uris):
-        log.info(f"Processing deletion of {ds_uri} : {idx + 1} of {len(dataset_uris)}")
+        log.info(f"Processing datasets for {ds_uri} : {idx + 1} of {len(dataset_uris)}")
 
         datasets = list(
             dc.index.datasets.get_datasets_for_location(ds_uri, mode="exact")
@@ -116,7 +116,7 @@ def cli(
         output_csv_file = join_url(
             output_dir,
             "status-report",
-            f"archived_{datetime.now().strftime('%Y-%m-%d')}.csv",
+            f"archived_{datetime.now().strftime('%Y-%m-%d')}_worker_{worker_idx}.csv",
         )
         fs = get_filesystem(output_csv_file, anon=False)
 
@@ -128,6 +128,7 @@ def cli(
 
         with fs.open(output_csv_file, mode="w") as f:
             archived_df.to_csv(f, index=False)
+        log.info(f"{len(archived_info)} datasets archived and purged.")
         log.info(f"Archived and purged datasets report written to {output_csv_file}")
 
     if failed_to_archive or failed_to_purge:
