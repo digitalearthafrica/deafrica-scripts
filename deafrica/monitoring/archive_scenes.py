@@ -146,7 +146,7 @@ def cli(
             with fs.open(output_file, "a") as file:
                 file.write(json.dumps(failed_to_archive) + "\n")
             log.info(f"Failed to archive scenes written to {output_file}")
-        elif failed_to_purge:
+        if failed_to_purge:
             tmp_dir = "/tmp/"
             output_file = join_url(tmp_dir, "failed_to_purge")
 
