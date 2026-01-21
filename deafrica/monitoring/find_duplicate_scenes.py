@@ -40,8 +40,8 @@ def cli(
     grouped_by_s3_uri = toolz.groupby(lambda ds: ds.uri, datasets)
 
     datasets_to_delete = []
-    for s3_uri, datasets in grouped_by_s3_uri.items():
-        if len(datasets) > 1:
+    for s3_uri, duplicate_datasets in grouped_by_s3_uri.items():
+        if len(duplicate_datasets) > 1:
             datasets_to_delete.append(s3_uri)
 
     log.info(f"{len(datasets_to_delete)} {product} scenes with duplicates")
