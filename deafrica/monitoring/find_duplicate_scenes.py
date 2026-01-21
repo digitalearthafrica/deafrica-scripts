@@ -63,7 +63,7 @@ def cli(
     dc = Datacube(app="FindDuplicateScenes")
 
     _log.info(f"Searching for datasets in product: {product}")
-    datasets = dc.find_datasets_lazy(query)
+    datasets = dc.find_datasets_lazy(**query)
     grouped_by_s3_uri = toolz.groupby(lambda ds: ds.uri, datasets)
 
     _log.info(f"Searching for duplicate datasets in product: {product}")
