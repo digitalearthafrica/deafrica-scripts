@@ -191,6 +191,9 @@ def download_cogs(
 
                         da = assign_crs(da, crs, crs_coord_name=crs_coord_name)
 
+                        # Convert 9.96921e+36 values to NaN
+                        da = da.where(da != da.rio.nodata)
+
                         # Get attributes to be used in tiled COGs
                         attrs = da.attrs
                         exclude = [
