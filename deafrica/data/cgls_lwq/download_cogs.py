@@ -193,7 +193,7 @@ def download_cogs(
                         da = assign_crs(da, crs, crs_coord_name=crs_coord_name)
 
                         # Convert 9.96921e+36 values to NaN
-                        da = da.rio.write_nodata(np.nan, inplace=True)
+                        da.rio.write_nodata(np.nan, inplace=True)
 
                         # Get attributes to be used in tiled COGs
                         attrs = da.attrs
@@ -284,7 +284,7 @@ def download_cogs(
                 ds = assign_crs(ds, crs, crs_coord_name=crs_coord_name)
 
                 # Convert 9.96921e+36 values to NaN
-                ds = ds.rio.write_nodata(np.nan, inplace=True)
+                ds.rio.write_nodata(np.nan, inplace=True)
 
                 dataset_attrs = ds.attrs
 
