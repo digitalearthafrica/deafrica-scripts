@@ -1,7 +1,8 @@
 name : Scripts Test and Push
 
 env:
-  IMAGE_NAME: ${{ secrets.DEAFRICA_DOCKER_USERNAME }}/deafrica-scripts
+  ORG_NAME: ${{ vars.DOCKER_ORG_NAME || 'digitalearthafrica' }}
+  IMAGE_NAME: ${{ env.ORG_NAME }}/deafrica-scripts
 
 on:
   pull_request:
