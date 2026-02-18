@@ -9,6 +9,7 @@ import sys
 import warnings
 
 import click
+import numpy as np
 import pandas as pd
 import rioxarray
 import xarray as xr
@@ -191,6 +192,9 @@ def download_cogs(
 
                         da = assign_crs(da, crs, crs_coord_name=crs_coord_name)
 
+                        # Convert 9.96921e+36 values to NaN
+                        da.rio.write_nodata(np.nan, inplace=True)
+
                         # Get attributes to be used in tiled COGs
                         attrs = da.attrs
                         exclude = [
@@ -278,6 +282,10 @@ def download_cogs(
                         crs = "OGC:CRS84"
 
                 ds = assign_crs(ds, crs, crs_coord_name=crs_coord_name)
+
+                # Convert 9.96921e+36 values to NaN
+                ds.rio.write_nodata(np.nan, inplace=True)
+
                 dataset_attrs = ds.attrs
 
                 band_names_filter = ["crs"]
