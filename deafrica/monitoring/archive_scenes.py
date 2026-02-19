@@ -1,4 +1,5 @@
 import json
+import logging
 import sys
 from datetime import datetime
 
@@ -34,11 +35,21 @@ from deafrica.utils import split_tasks
 @click.option(
     "--dry-run", is_flag=True, help="Show what would be done without making changes"
 )
+@click.option(
+    "--log",
+    type=click.Choice(
+        ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False
+    ),
+    default="WARNING",
+    show_default=True,
+    help="control the log level, e.g., --log=error",
+)
 def cli(
     report_path: str,
     output_dir: str,
     max_parallel_steps: int,
     worker_idx: int,
+    log: str,
     dry_run: bool = False,
 ):
     """
@@ -54,8 +65,8 @@ def cli(
 
     >Note this script requires delete permissions on the ODC database.
     """
-
-    log = setup_logging()
+    log_level = getattr(logging, log.upper())
+    _log = setup_logging(log_level)
 
     fs = get_filesystem(report_path, anon=True)
 
@@ -65,10 +76,10 @@ def cli(
     dataset_uris = split_tasks(all_dataset_uris, max_parallel_steps, worker_idx)
 
     if not dataset_uris:
-        log.warning(f"Worker {worker_idx} has no scenes to process. Exiting.")
+        _log.warning(f"Worker {worker_idx} has no scenes to process. Exiting.")
         sys.exit(0)
 
-    log.info(f"Worker {worker_idx} processing {len(dataset_uris)} scenes")
+    _log.info(f"Worker {worker_idx} processing {len(dataset_uris)} scenes")
 
     dc = Datacube()
 
@@ -76,33 +87,35 @@ def cli(
     failed_to_archive = []
     failed_to_purge = []
     for idx, ds_uri in enumerate(dataset_uris):
-        log.info(f"Processing datasets for {ds_uri} : {idx + 1} of {len(dataset_uris)}")
+        _log.info(
+            f"Processing datasets for {ds_uri} : {idx + 1} of {len(dataset_uris)}"
+        )
 
         datasets = list(
             dc.index.datasets.get_datasets_for_location(ds_uri, mode="exact")
         )
         if not datasets:
-            log.warning(f"No datasets found for location {ds_uri}. Skipping.")
+            _log.warning(f"No datasets found for location {ds_uri}. Skipping.")
             continue
         else:
             for ds in datasets:
                 product = ds.product.name
                 ds_id = str(ds.id)
                 if dry_run:
-                    log.info(f"[Dry Run] Would archive and purge dataset {ds_id}")
+                    _log.info(f"[Dry Run] Would archive and purge dataset {ds_id}")
                     continue
                 else:
                     try:
                         dc.index.datasets.archive([ds_id])
                     except Exception as e:
-                        log.error(f"Failed to archive dataset {ds_id}: {e}")
+                        _log.error(f"Failed to archive dataset {ds_id}: {e}")
                         failed_to_archive.append(ds_uri)
                         continue
                     else:
                         try:
                             dc.index.datasets.purge([ds_id])
                         except Exception as e:
-                            log.error(f"Failed to purge dataset {ds_id}: {e}")
+                            _log.error(f"Failed to purge dataset {ds_id}: {e}")
                             failed_to_purge.append(ds_uri)
                         else:
                             row = {
@@ -128,11 +141,11 @@ def cli(
 
         with fs.open(output_csv_file, mode="w") as f:
             archived_df.to_csv(f, index=False)
-        log.info(f"{len(archived_info)} datasets archived and purged.")
-        log.info(f"Archived and purged datasets report written to {output_csv_file}")
+        _log.info(f"{len(archived_info)} datasets archived and purged.")
+        _log.info(f"Archived and purged datasets report written to {output_csv_file}")
 
     if failed_to_archive or failed_to_purge:
-        log.error(
+        _log.error(
             f"Worker {worker_idx} completed with {len(failed_to_archive)} failed archives and {len(failed_to_purge)} failed purges."
         )
         if failed_to_archive:
@@ -145,7 +158,7 @@ def cli(
 
             with fs.open(output_file, "a") as file:
                 file.write(json.dumps(failed_to_archive) + "\n")
-            log.info(f"Failed to archive scenes written to {output_file}")
+            _log.info(f"Failed to archive scenes written to {output_file}")
         if failed_to_purge:
             tmp_dir = "/tmp/"
             output_file = join_url(tmp_dir, "failed_to_purge")
@@ -156,7 +169,7 @@ def cli(
 
             with fs.open(output_file, "a") as file:
                 file.write(json.dumps(failed_to_purge) + "\n")
-            log.info(f"Failed to purge scenes written to {output_file}")
+            _log.info(f"Failed to purge scenes written to {output_file}")
         sys.exit(1)
     else:
         sys.exit(0)

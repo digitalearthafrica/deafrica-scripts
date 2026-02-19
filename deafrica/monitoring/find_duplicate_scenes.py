@@ -1,8 +1,9 @@
+import logging
 from datetime import datetime
 
 import click
-import datacube
 import toolz
+from datacube import Datacube
 
 from deafrica.io import check_directory_exists, get_filesystem, get_parent_dir, join_url
 from deafrica.logs import setup_logging
@@ -20,9 +21,29 @@ from deafrica.logs import setup_logging
     "output-dir",
     type=str,
 )
+@click.option(
+    "--log",
+    type=click.Choice(
+        ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False
+    ),
+    default="WARNING",
+    show_default=True,
+    help="control the log level, e.g., --log=error",
+)
+@click.option(
+    "--time-range",
+    type=str,
+    help=(
+        "Time range to find duplicate datasets for. "
+        "To specify the start and end date, separate the two dates using a comma ',' "
+        'e.g., "2019-01,2019-03".'
+    ),
+)
 def cli(
     product: str,
     output_dir: str,
+    log: str,
+    time_range: str,
 ):
     """
     Find duplicate datasets in the specified ODC PRODUCT and write the
@@ -31,20 +52,27 @@ def cli(
     Datasets are considered duplicates if they have the same STAC file path.
 
     """
-    log = setup_logging()
+    log_level = getattr(logging, log.upper())
+    _log = setup_logging(log_level)
 
-    dc = datacube.Datacube()
+    query = {"product": product}
+    if time_range:
+        time = tuple([p.strip() for p in time_range.split(",")])
+        query["time"] = time
 
-    datasets = dc.find_datasets(product=product)
+    dc = Datacube(app="FindDuplicateScenes")
 
+    _log.info(f"Searching for datasets in product: {product}")
+    datasets = dc.find_datasets_lazy(**query)
     grouped_by_s3_uri = toolz.groupby(lambda ds: ds.uri, datasets)
 
+    _log.info(f"Searching for duplicate datasets in product: {product}")
     datasets_to_delete = []
     for s3_uri, duplicate_datasets in grouped_by_s3_uri.items():
         if len(duplicate_datasets) > 1:
             datasets_to_delete.append(s3_uri)
 
-    log.info(f"{len(datasets_to_delete)} {product} scenes with duplicates")
+    _log.info(f"{len(datasets_to_delete)} {product} scenes with duplicates")
 
     if datasets_to_delete:
         output_file = join_url(
@@ -62,6 +90,6 @@ def cli(
             for s3_uri in datasets_to_delete:
                 file.write(f"{s3_uri}\n")
 
-        log.info(f"{product} duplicate dataset URIs written to {output_file}")
+        _log.info(f"{product} duplicate dataset URIs written to {output_file}")
     else:
-        log.info(f"No duplicate datasets for {product} found.")
+        _log.info(f"No duplicate datasets for {product} found.")
