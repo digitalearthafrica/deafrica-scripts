@@ -175,6 +175,9 @@ def download_cogs(
                         da = rioxarray.open_rasterio(f, chunks=True)
                         da = da.squeeze()
 
+                        is_float = np.issubdtype(da.dtype, np.floating)
+                        is_int = np.issubdtype(da.dtype, np.integer)
+
                         if "spatial_ref" in list(da.coords):
                             crs_coord_name = "spatial_ref"
                         else:
@@ -192,8 +195,11 @@ def download_cogs(
 
                         da = assign_crs(da, crs, crs_coord_name=crs_coord_name)
 
-                        # Convert 9.96921e+36 values to NaN
-                        da.rio.write_nodata(np.nan, inplace=True)
+                        # For some int bands the nodata value is a float.
+                        # This value will be stored in COG attrs so fixing it here.
+                        da_nodata = da.odc.nodata
+                        if is_int:
+                            da_nodata = int(da_nodata)
 
                         # Get attributes to be used in tiled COGs
                         attrs = da.attrs
@@ -204,6 +210,10 @@ def download_cogs(
                             "TileSize",
                             "NETCDF_",
                             "coordinates",
+                            "_FillValue",
+                            "missing_value",
+                            "fill_value",
+                            "nodata",
                         ]
                         filtered_attrs = {
                             k: v
@@ -227,9 +237,23 @@ def download_cogs(
                                     if check_file_exists(output_cog_url):
                                         continue
 
+                                # Cropping converts int array to float.
+                                # Maintain original data type in cropped image.
                                 cropped_da = da.odc.crop(
                                     tile_geobox.extent.to_crs(da.odc.geobox.crs)
-                                ).compute()
+                                ).astype(da.dtype)
+
+                                # Due to the nodata value for some float32 bands being 9.96921e+36,
+                                # replace nodata value for all float bands with np.nan.
+                                if is_float:
+                                    cropped_da = cropped_da.where(
+                                        cropped_da != da_nodata
+                                    )
+                                    cropped_da.rio.write_nodata(np.nan, inplace=True)
+                                else:
+                                    cropped_da.rio.write_nodata(da_nodata, inplace=True)
+
+                                cropped_da = cropped_da.compute()
 
                                 # Write cog files
                                 if is_local_path(output_cog_url):
@@ -283,9 +307,6 @@ def download_cogs(
 
                 ds = assign_crs(ds, crs, crs_coord_name=crs_coord_name)
 
-                # Convert 9.96921e+36 values to NaN
-                ds.rio.write_nodata(np.nan, inplace=True)
-
                 dataset_attrs = ds.attrs
 
                 band_names_filter = ["crs"]
@@ -299,6 +320,16 @@ def download_cogs(
 
                     try:
                         da = ds[band_name]
+
+                        is_float = np.issubdtype(da.dtype, np.floating)
+                        is_int = np.issubdtype(da.dtype, np.integer)
+
+                        # For some int bands the nodata value is a float.
+                        # This value will be stored in COG attrs so fixing it here.
+                        da_nodata = da.odc.nodata
+                        if is_int:
+                            da_nodata = int(da_nodata)
+
                         # Get attributes to be used in tiled COGs
                         band_attrs = da.attrs
                         attrs = {**dataset_attrs, **band_attrs}
@@ -309,6 +340,10 @@ def download_cogs(
                             "TileSize",
                             "NETCDF_",
                             "coordinates",
+                            "_FillValue",
+                            "missing_value",
+                            "fill_value",
+                            "nodata",
                         ]
                         filtered_attrs = {
                             k: v
@@ -336,9 +371,23 @@ def download_cogs(
                                     if check_file_exists(output_cog_url):
                                         continue
 
+                                # Cropping converts int array to float.
+                                # Maintain original data type in cropped image.
                                 cropped_da = da.odc.crop(
                                     tile_geobox.extent.to_crs(da.odc.geobox.crs)
-                                )
+                                ).astype(da.dtype)
+
+                                # Due to the nodata value for some float32 bands being 9.96921e+36,
+                                # replace nodata value for all float bands with np.nan.
+                                if is_float:
+                                    cropped_da = cropped_da.where(
+                                        cropped_da != da_nodata
+                                    )
+                                    cropped_da.rio.write_nodata(np.nan, inplace=True)
+                                else:
+                                    cropped_da.rio.write_nodata(da_nodata, inplace=True)
+
+                                cropped_da = cropped_da.compute()
 
                                 # Write cog files
                                 if is_local_path(output_cog_url):
