@@ -264,18 +264,26 @@ geopandas==1.1.2
     # via deafrica (setup.py)
 google-api-core[grpc]==2.29.0
     # via
+    #   google-api-python-client
     #   google-cloud-core
     #   google-cloud-storage
     #   google-cloud-storage-control
+google-api-python-client==2.196.0
+    # via deafrica (setup.py)
 google-auth==2.41.1
     # via
+    #   deafrica (setup.py)
     #   gcsfs
     #   google-api-core
+    #   google-api-python-client
+    #   google-auth-httplib2
     #   google-auth-oauthlib
     #   google-cloud-core
     #   google-cloud-storage
     #   google-cloud-storage-control
     #   kubernetes
+google-auth-httplib2==0.4.0
+    # via google-api-python-client
 google-auth-oauthlib==1.2.3
     # via gcsfs
 google-cloud-core==2.5.0
@@ -315,6 +323,10 @@ h5py==3.15.1
     # via
     #   eodatasets3
     #   h5netcdf
+httplib2==0.31.2
+    # via
+    #   google-api-python-client
+    #   google-auth-httplib2
 idna==3.11
     # via
     #   jsonschema
@@ -575,6 +587,8 @@ paramiko==4.0.0
     # via fsspec
 partd==1.4.2
     # via dask
+phonenumbers==9.0.30
+    # via deafrica (setup.py)
 pillow==12.1.0
     # via
     #   bokeh
@@ -650,6 +664,7 @@ pyopenssl==25.1.0
     # via oci
 pyparsing==3.3.1
     # via
+    #   httplib2
     #   matplotlib
     #   rasterio
 pyproj==3.7.2
@@ -909,6 +924,8 @@ uc-micro-py==1.0.3
     # via linkify-it-py
 uri-template==1.3.0
     # via jsonschema
+uritemplate==4.2.0
+    # via google-api-python-client
 url-normalize==2.2.1
     # via requests-cache
 urllib3==2.3.0
