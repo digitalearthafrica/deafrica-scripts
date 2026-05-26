@@ -47,14 +47,24 @@ def check_values(
     return year, month, day
 
 
-def check_for_url_existence(href):
-    response = requests.head(href)
+def check_for_url_existence(href: str) -> bool:
+    """Check if a remote URL exists. Uses a polite User-Agent."""
     try:
+        headers = {
+            "User-Agent": "DigitalEarthAfrica-Scripts/1.0 (+https://github.com/digitalearthafrica/deafrica-scripts)"
+        }
+        response = requests.head(
+            href, timeout=15, headers=headers, allow_redirects=True
+        )
+        log.info(f"URL check {href} -> {response.status_code}")
         response.raise_for_status()
-    except requests.exceptions.HTTPError:
+        return True
+    except requests.exceptions.HTTPError as e:
         log.error(f"{href} returned {response.status_code}")
         return False
-    return True
+    except Exception as e:
+        log.error(f"Failed to check URL {href}: {e}")
+        return False
 
 
 def download_and_cog_chirps(
@@ -64,6 +74,7 @@ def download_and_cog_chirps(
     day: str = None,
     overwrite: bool = False,
     slack_url: str = None,
+    test_local_file: str = None,   # For offline testing
 ):
     # Cleaning and sanity checks
     s3_dst = s3_dst.rstrip("/")
@@ -74,15 +85,17 @@ def download_and_cog_chirps(
         in_file = f"chirps-v2.0.{year}.{month}.{day}.tif.gz"
         in_href = DAILY_URL_TEMPLATE.format(year=year, in_file=in_file)
         in_data = f"/vsigzip//vsicurl/{in_href}"
-        if not check_for_url_existence(in_href):
-            log.warning("Couldn't find the gzipped file, trying the .tif")
-            in_file = f"chirps-v2.0.{year}.{month}.{day}.tif"
-            in_href = DAILY_URL_TEMPLATE.format(year=year, in_file=in_file)
-            in_data = f"/vsicurl/{in_href}"
 
+        if test_local_file is None:   # Only do real check in production
             if not check_for_url_existence(in_href):
-                log.error("Couldn't find the .tif file either, aborting")
-                sys.exit(1)
+                log.warning("Couldn't find the gzipped file, trying the .tif")
+                in_file = f"chirps-v2.0.{year}.{month}.{day}.tif"
+                in_href = DAILY_URL_TEMPLATE.format(year=year, in_file=in_file)
+                in_data = f"/vsicurl/{in_href}"
+
+                if not check_for_url_existence(in_href):
+                    log.error("Couldn't find the .tif file either, aborting")
+                    sys.exit(1)
 
         file_base = f"{s3_dst}/{year}/{month}/chirps-v2.0_{year}.{month}.{day}"
         out_data = f"{file_base}.tif"
@@ -96,15 +109,17 @@ def download_and_cog_chirps(
         in_file = f"chirps-v2.0.{year}.{month}.tif.gz"
         in_href = MONTHLY_URL_TEMPLATE.format(in_file=in_file)
         in_data = f"/vsigzip//vsicurl/{in_href}"
-        if not check_for_url_existence(in_href):
-            log.warning("Couldn't find the gzipped file, trying the .tif")
-            in_file = f"chirps-v2.0.{year}.{month}.tif"
-            in_href = MONTHLY_URL_TEMPLATE.format(in_file=in_file)
-            in_data = f"/vsicurl/{in_href}"
 
+        if test_local_file is None:   # Only do real check in production
             if not check_for_url_existence(in_href):
-                log.error("Couldn't find the .tif file either, aborting")
-                sys.exit(1)
+                log.warning("Couldn't find the gzipped file, trying the .tif")
+                in_file = f"chirps-v2.0.{year}.{month}.tif"
+                in_href = MONTHLY_URL_TEMPLATE.format(in_file=in_file)
+                in_data = f"/vsicurl/{in_href}"
+
+                if not check_for_url_existence(in_href):
+                    log.error("Couldn't find the .tif file either, aborting")
+                    sys.exit(1)
 
         file_base = f"{s3_dst}/chirps-v2.0_{year}.{month}"
         out_data = f"{file_base}.tif"
@@ -117,6 +132,14 @@ def download_and_cog_chirps(
 
         # Set to 15 for the STAC metadata
         day = 15
+
+    # === TEST OVERRIDE ===
+    if test_local_file is not None:
+        if test_local_file.endswith('.gz'):
+            in_data = f"/vsigzip/{test_local_file}"
+        else:
+            in_data = test_local_file
+        log.info(f"TEST MODE: Using local test file {test_local_file}")
 
     try:
         # Check if file already exists
