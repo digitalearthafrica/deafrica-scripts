@@ -74,7 +74,7 @@ def download_and_cog_chirps(
     day: str = None,
     overwrite: bool = False,
     slack_url: str = None,
-    test_local_file: str = None,   # For offline testing
+    test_local_file: str = None,  # For offline testing
 ):
     # Cleaning and sanity checks
     s3_dst = s3_dst.rstrip("/")
@@ -86,7 +86,7 @@ def download_and_cog_chirps(
         in_href = DAILY_URL_TEMPLATE.format(year=year, in_file=in_file)
         in_data = f"/vsigzip//vsicurl/{in_href}"
 
-        if test_local_file is None:   # Only do real check in production
+        if test_local_file is None:  # Only do real check in production
             if not check_for_url_existence(in_href):
                 log.warning("Couldn't find the gzipped file, trying the .tif")
                 in_file = f"chirps-v2.0.{year}.{month}.{day}.tif"
@@ -110,7 +110,7 @@ def download_and_cog_chirps(
         in_href = MONTHLY_URL_TEMPLATE.format(in_file=in_file)
         in_data = f"/vsigzip//vsicurl/{in_href}"
 
-        if test_local_file is None:   # Only do real check in production
+        if test_local_file is None:  # Only do real check in production
             if not check_for_url_existence(in_href):
                 log.warning("Couldn't find the gzipped file, trying the .tif")
                 in_file = f"chirps-v2.0.{year}.{month}.tif"
@@ -135,7 +135,7 @@ def download_and_cog_chirps(
 
     # === TEST OVERRIDE ===
     if test_local_file is not None:
-        if test_local_file.endswith('.gz'):
+        if test_local_file.endswith(".gz"):
             in_data = f"/vsigzip/{test_local_file}"
         else:
             in_data = test_local_file

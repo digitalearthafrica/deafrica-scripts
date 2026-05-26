@@ -35,9 +35,7 @@ def test_one_month():
     local_file = get_test_file(is_daily=False, use_gz=True)
 
     download_and_cog_chirps(
-        YEAR, MONTH, s3_dst,
-        overwrite=True,
-        test_local_file=local_file
+        YEAR, MONTH, s3_dst, overwrite=True, test_local_file=local_file
     )
     check_s3_paths(s3_client, f"chirps-v2.0_{YEAR}.{MONTH}")
 
@@ -48,10 +46,7 @@ def test_one_day():
     local_file = get_test_file(is_daily=True, use_gz=True)
 
     download_and_cog_chirps(
-        YEAR, MONTH, s3_dst,
-        day=DAY,
-        overwrite=True,
-        test_local_file=local_file
+        YEAR, MONTH, s3_dst, day=DAY, overwrite=True, test_local_file=local_file
     )
     check_s3_paths(s3_client, f"{YEAR}/{MONTH}/chirps-v2.0_{YEAR}.{MONTH}.{DAY}")
 
@@ -62,9 +57,7 @@ def test_one_month_non_gz():
     local_file = get_test_file(is_daily=False, use_gz=False)
 
     download_and_cog_chirps(
-        YEAR, MONTH, s3_dst,
-        overwrite=True,
-        test_local_file=local_file
+        YEAR, MONTH, s3_dst, overwrite=True, test_local_file=local_file
     )
     check_s3_paths(s3_client, f"chirps-v2.0_{YEAR}.{MONTH}")
 
@@ -75,10 +68,7 @@ def test_one_day_non_gz():
     local_file = get_test_file(is_daily=True, use_gz=False)
 
     download_and_cog_chirps(
-        YEAR, MONTH, s3_dst,
-        day=DAY,
-        overwrite=True,
-        test_local_file=local_file
+        YEAR, MONTH, s3_dst, day=DAY, overwrite=True, test_local_file=local_file
     )
     check_s3_paths(s3_client, f"{YEAR}/{MONTH}/chirps-v2.0_{YEAR}.{MONTH}.{DAY}")
 
