@@ -56,7 +56,10 @@ def phone_number_country(phone_number):
     except NumberParseException:
         return ""
 
-    return geocoder.country_name_for_number(parsed_number, "en") or ""
+    region_code = phonenumbers.region_code_for_number(parsed_number)
+    country_name = geocoder.country_name_for_number(parsed_number, "en")
+
+    return country_name or region_code or ""
 
 
 def report_environment(environment):
