@@ -211,9 +211,7 @@ def write_report(
                 ),
                 "pod_memory_cost": round(cost(pod_data.get("ramCost")), 4),
                 "pod_pvc_storage_avg_gib": round(gib(pod_data.get("pvBytes")), 4),
-                "pod_pvc_storage_gib_hours": round(
-                    gib(pod_data.get("pvByteHours")), 4
-                ),
+                "pod_pvc_storage_gib_hours": round(gib(pod_data.get("pvByteHours")), 4),
                 "pod_pvc_storage_cost": round(cost(pod_data.get("pvCost")), 4),
                 "pod_pvc_claims": pv_claims(pod_data.get("pvs")),
             }
