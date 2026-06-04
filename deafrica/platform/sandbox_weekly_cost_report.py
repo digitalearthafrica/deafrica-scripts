@@ -16,6 +16,8 @@ DEFAULT_KUBECOST_URL = "http://kubecost-cost-analyzer.kubecost.svc.cluster.local
 DEFAULT_REPORT_PATH = "/tmp/sandbox_weekly_cost_report.csv"
 GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
 CSV_MIME_TYPE = "text/csv"
+# Kubecost returns RAM/PV sizes in bytes; report them in GiB for readability.
+BYTES_PER_GIB = 1024**3
 
 
 def report_date():
@@ -65,6 +67,18 @@ def accumulated_data(response):
 
 def cost(value):
     return float(value or 0.0)
+
+
+def gib(value):
+    return cost(value) / BYTES_PER_GIB
+
+
+def pv_claims(pvs):
+    if not isinstance(pvs, dict):
+        return ""
+
+    # Kubecost exposes PV allocations as a map keyed by claim/PV identity.
+    return ";".join(sorted(str(claim) for claim in pvs.keys()))
 
 
 def node_asset_key(asset_key, asset):
@@ -159,6 +173,8 @@ def write_report(
 
         node_name = properties.get("node", "")
         node_asset = find_node_asset(node_name, node_assets, node_index)
+        pod_runtime_hours = cost(pod_data.get("minutes")) / 60
+        pod_total_cost = cost(pod_data.get("totalCost"))
 
         rows.append(
             {
@@ -167,7 +183,7 @@ def write_report(
                 "node_name": node_name,
                 "pod_allocation_start": pod_data.get("start", ""),
                 "pod_allocation_end": pod_data.get("end", ""),
-                "pod_runtime_hours": round(cost(pod_data.get("minutes")) / 60, 2),
+                "pod_runtime_hours": round(pod_runtime_hours, 2),
                 "node_start": (node_asset or {}).get("start", ""),
                 "node_end": (node_asset or {}).get("end", ""),
                 "total_node_runtime_hours": round(
@@ -178,7 +194,28 @@ def write_report(
                 "total_instance_cost": round(
                     cost((node_asset or {}).get("totalCost")), 4
                 ),
-                "pod_total_cost": round(cost(pod_data.get("totalCost")), 4),
+                "pod_total_cost": round(pod_total_cost, 4),
+                # Additional Allocation API fields for pod size, usage, and PV cost.
+                "pod_avg_cpu_requested_cores": round(
+                    cost(pod_data.get("cpuCoreRequestAverage")), 4
+                ),
+                "pod_avg_cpu_used_cores": round(
+                    cost(pod_data.get("cpuCoreUsageAverage")), 4
+                ),
+                "pod_cpu_cost": round(cost(pod_data.get("cpuCost")), 4),
+                "pod_avg_memory_requested_gib": round(
+                    gib(pod_data.get("ramByteRequestAverage")), 4
+                ),
+                "pod_avg_memory_used_gib": round(
+                    gib(pod_data.get("ramByteUsageAverage")), 4
+                ),
+                "pod_memory_cost": round(cost(pod_data.get("ramCost")), 4),
+                "pod_pvc_storage_avg_gib": round(gib(pod_data.get("pvBytes")), 4),
+                "pod_pvc_storage_gib_hours": round(
+                    gib(pod_data.get("pvByteHours")), 4
+                ),
+                "pod_pvc_storage_cost": round(cost(pod_data.get("pvCost")), 4),
+                "pod_pvc_claims": pv_claims(pod_data.get("pvs")),
             }
         )
 
@@ -196,6 +233,16 @@ def write_report(
         "node_provider_id",
         "total_instance_cost",
         "pod_total_cost",
+        "pod_avg_cpu_requested_cores",
+        "pod_avg_cpu_used_cores",
+        "pod_cpu_cost",
+        "pod_avg_memory_requested_gib",
+        "pod_avg_memory_used_gib",
+        "pod_memory_cost",
+        "pod_pvc_storage_avg_gib",
+        "pod_pvc_storage_gib_hours",
+        "pod_pvc_storage_cost",
+        "pod_pvc_claims",
     ]
 
     with open(report_path, "w", newline="") as report:
