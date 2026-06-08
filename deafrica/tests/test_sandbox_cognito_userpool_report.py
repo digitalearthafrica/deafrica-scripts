@@ -44,7 +44,6 @@ def test_phone_number_country_ignores_non_geographic_numbers():
     assert report.phone_number_country("+80012345678") == ""
 
 
-
 class FakePaginator:
     def __init__(self, operation_name):
         self.operation_name = operation_name
