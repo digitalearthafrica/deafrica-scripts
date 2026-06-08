@@ -10,14 +10,16 @@ import boto3
 import click
 import pandas as pd
 import phonenumbers
+from babel import Locale
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-from phonenumbers import NumberParseException, geocoder
+from phonenumbers import NumberParseException
 
 DEFAULT_SENDER_EMAIL = "info@digitalearthafrica.org"
 GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
 XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+ENGLISH_LOCALE = Locale.parse("en")
 REPORT_COLUMNS = [
     "Username",
     "email",
@@ -56,7 +58,14 @@ def phone_number_country(phone_number):
     except NumberParseException:
         return ""
 
-    return geocoder.country_name_for_number(parsed_number, "en") or ""
+    if not phonenumbers.is_valid_number(parsed_number):
+        return ""
+
+    region_code = phonenumbers.region_code_for_number(parsed_number)
+    if not region_code or region_code == "001":
+        return ""
+
+    return ENGLISH_LOCALE.territories.get(region_code, "")
 
 
 def report_environment(environment):
