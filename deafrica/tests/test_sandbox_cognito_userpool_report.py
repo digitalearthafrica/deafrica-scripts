@@ -44,6 +44,21 @@ def test_phone_number_country_ignores_non_geographic_numbers():
     assert report.phone_number_country("+80012345678") == ""
 
 
+def test_phone_number_country_falls_back_to_region_code(monkeypatch):
+    monkeypatch.setattr(
+        report.geocoder,
+        "country_name_for_number",
+        lambda *_args: "",
+    )
+    monkeypatch.setattr(
+        report.phonenumbers,
+        "region_code_for_number",
+        lambda _parsed_number: "XX",
+    )
+
+    assert report.phone_number_country("+254700000000") == "XX"
+
+
 class FakePaginator:
     def __init__(self, operation_name):
         self.operation_name = operation_name
