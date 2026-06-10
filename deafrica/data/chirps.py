@@ -51,7 +51,7 @@ def check_for_url_existence(href: str) -> bool:
     """Check if a remote URL exists. Uses a polite User-Agent."""
     try:
         headers = {
-            "User-Agent": "DigitalEarthAfrica-Scripts/1.0 (+https://github.com/digitalearthafrica/deafrica-scripts)"
+            "User-Agent": "Mozilla/5.0"
         }
         response = requests.head(
             href, timeout=15, headers=headers, allow_redirects=True
