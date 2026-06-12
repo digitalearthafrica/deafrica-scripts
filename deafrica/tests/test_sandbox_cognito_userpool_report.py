@@ -30,21 +30,18 @@ def test_users_to_dataframe_handles_missing_attributes():
 def test_phone_number_country_handles_invalid_values():
     assert report.phone_number_country("") == ""
     assert report.phone_number_country("not a phone number") == ""
+    assert report.phone_number_country("+254000000000") == ""
 
 
-def test_phone_number_country_falls_back_to_region_code(monkeypatch):
-    monkeypatch.setattr(
-        report.geocoder,
-        "country_name_for_number",
-        lambda *_args: "",
-    )
-    monkeypatch.setattr(
-        report.phonenumbers,
-        "region_code_for_number",
-        lambda _parsed_number: "XX",
-    )
+def test_phone_number_country_returns_full_country_names():
+    assert report.phone_number_country("+254712345678") == "Kenya"
+    assert report.phone_number_country("+61412345678") == "Australia"
+    assert report.phone_number_country("+79161234567") == "Russia"
+    assert report.phone_number_country("+447911123456") == "Guernsey"
 
-    assert report.phone_number_country("+254700000000") == "XX"
+
+def test_phone_number_country_ignores_non_geographic_numbers():
+    assert report.phone_number_country("+80012345678") == ""
 
 
 class FakePaginator:
