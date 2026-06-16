@@ -10,9 +10,9 @@ SATELLITES = {
             "orthorectify": True,
             "demInstance": "COPERNICUS_30",
             "backCoeff": "GAMMA0_TERRAIN",
-            "radiometricTerrainOversampling": 2
+            "radiometricTerrainOversampling": 2,
         },
         "tiling_grid": {"type": "tiling-grid", "id": 3, "resolution": 0.0002},
-        "evalscript_file": "evalscripts/s1_rtc.js"
+        "evalscript_file": "evalscripts/s1_rtc.js",
     }
 }

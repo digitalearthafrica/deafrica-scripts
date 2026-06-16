@@ -42,9 +42,7 @@ SH_BATCH_URL = "https://sh.dataspace.copernicus.eu/api/v2/batch/process"
 S1_COLLECTION = "sentinel-1-grd"
 
 TILING_GRID = "https://s3.eu-central-1.amazonaws.com/sh-batch-grids/tiling-grid-3.zip"
-AFRICA_EXTENT_URL = (
-    "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/master/africa-extent.json"
-)
+AFRICA_EXTENT_URL = "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/master/africa-extent.json"
 
 S1_BUCKET_NAME = "deafrica-sentinel-1"
 BASE_FOLDER_NAME = "s1_rtc"
@@ -56,6 +54,7 @@ DEFAULT_OUTPUT_BUCKET = "cdse_batch_test_bucket"
 
 log = setup_logging()
 
+
 def get_africa_grid() -> gpd.GeoDataFrame:
     "Loads the global tiling grid and clips it to the Africa extent."
     log.info("Loading tiling grid and Africa extent ...")
@@ -66,9 +65,10 @@ def get_africa_grid() -> gpd.GeoDataFrame:
     )
     return gpd.overlay(grid, africa_extent, how="intersection")
 
+
 def _keep_iw_scene(filename: str) -> bool:
     """
-    Determines whether a Sentinel-1 filename corresponds to an IW GRD 1SDV product, 
+    Determines whether a Sentinel-1 filename corresponds to an IW GRD 1SDV product,
     which are the only ones relevant for our Radiometric Terrain Correction (RTC) processing.
     """
     scene_id = filename.replace(".SAFE", "").removesuffix("_COG")
@@ -79,6 +79,7 @@ def _keep_iw_scene(filename: str) -> bool:
         and parts[2] == "GRDH"
         and parts[3] == "1SDV"
     )
+
 
 def _frame_from_features(features: list[dict]) -> gpd.GeoDataFrame:
     "Converts a list of GeoJSON-like features into a GeoDataFrame."
@@ -119,7 +120,9 @@ def search_sh_catalog(session, bbox: list[float], date: str) -> gpd.GeoDataFrame
     return _frame_from_features(features)
 
 
-def search_scenes(bbox: list[float], start_date: str, end_date: str) -> gpd.GeoDataFrame:
+def search_scenes(
+    bbox: list[float], start_date: str, end_date: str
+) -> gpd.GeoDataFrame:
     "Searches the SentinelHub catalogue for Sentinel-1 IW GRD scenes intersecting the given bbox and date range, returning a GeoDataFrame of results."
     session = get_session()
 
@@ -139,6 +142,7 @@ def search_scenes(bbox: list[float], start_date: str, end_date: str) -> gpd.GeoD
         return _frame_from_features([])
     return gpd.GeoDataFrame(pd.concat(frames, ignore_index=True), crs="EPSG:4326")
 
+
 def create_dataset_names(grided_results: gpd.GeoDataFrame) -> list[str]:
     "Converts the grided search results into a list of expected s1_rtc dataset URIs in the DE Africa bucket."
     datasets = set()
@@ -152,11 +156,13 @@ def create_dataset_names(grided_results: gpd.GeoDataFrame) -> list[str]:
         )
     return sorted(datasets)
 
+
 def expected_metadata_key(dataset: str) -> str:
     "Given a dataset URI like s3://bucket/s1_rtc/TILE/YYYY/MM/DD/DATATAKE, returns the expected S3 key for the metadata JSON file that should exist alongside the tif files."
     p = dataset.split("/")
     filename = f"{p[0]}_{p[5]}_{p[1]}_{p[2]}_{p[3]}_{p[4]}_metadata.json"
     return f"{dataset}/{filename}"
+
 
 def check_metadata_exists(s3, dataset: str) -> tuple[str, bool]:
     "Checks whether the expected metadata JSON file exists in S3 for the given dataset URI, returning a tuple of (dataset, exists)."
@@ -169,13 +175,16 @@ def check_metadata_exists(s3, dataset: str) -> tuple[str, bool]:
             return dataset, False
         raise
 
+
 def find_missing(datasets: list[str], n_workers: int = 32) -> list[str]:
     "Checks which of the expected datasets are missing from the S3 bucket by verifying the existence of their metadata JSON files, using a thread pool for concurrency."
     s3 = boto3.client(
         "s3", region_name=REGION_NAME, config=Config(signature_version=UNSIGNED)
     )
     missing_datasets = []
-    log.info(f"Checking {len(datasets)} expected datasets against s3://{S1_BUCKET_NAME} ...")
+    log.info(
+        f"Checking {len(datasets)} expected datasets against s3://{S1_BUCKET_NAME} ..."
+    )
     with ThreadPoolExecutor(max_workers=n_workers) as pool:
         futures = {pool.submit(check_metadata_exists, s3, d): d for d in datasets}
         for i, future in enumerate(as_completed(futures), 1):
@@ -186,7 +195,10 @@ def find_missing(datasets: list[str], n_workers: int = 32) -> list[str]:
                 log.info(f"  checked {i}/{len(datasets)}")
     return sorted(missing_datasets)
 
-def submit_backfill_jobs(missing: list[str], grid: gpd.GeoDataFrame, output_bucket: str) -> list[dict]:
+
+def submit_backfill_jobs(
+    missing: list[str], grid: gpd.GeoDataFrame, output_bucket: str
+) -> list[dict]:
     """For each missing s1_rtc dataset URI, build + submit + start a CDSE batch job."""
     session = get_session()
     results = []
@@ -194,12 +206,20 @@ def submit_backfill_jobs(missing: list[str], grid: gpd.GeoDataFrame, output_buck
     for uri in missing:
         # s3://deafrica-sentinel-1/s1_rtc/<TILE>/<YYYY>/<MM>/<DD>/<DATATAKE>
         parts = uri.replace(f"s3://{S1_BUCKET_NAME}/", "").split("/")
-        tile, year, month, day, datatake = parts[1], parts[2], parts[3], parts[4], parts[5]
+        tile, year, month, day, datatake = (
+            parts[1],
+            parts[2],
+            parts[3],
+            parts[4],
+            parts[5],
+        )
 
         cell = grid[grid["NAME"] == tile]
         if cell.empty:
             log.error(f"  tile {tile} not found in grid - skipping {uri}")
-            results.append({"uri": uri, "status": "error", "error": "tile not found in grid"})
+            results.append(
+                {"uri": uri, "status": "error", "error": "tile not found in grid"}
+            )
             continue
 
         geometry = mapping(cell.to_crs("EPSG:4326").union_all().buffer(-1e-5))
@@ -216,9 +236,9 @@ def submit_backfill_jobs(missing: list[str], grid: gpd.GeoDataFrame, output_buck
             resolution=RESOLUTION,
         )
 
-        payload["output"]["delivery"]["s3"]["url"] = (
-            f"s3://{output_bucket}/s1_rtc/{year}/{month}/{day}/{datatake}"
-        )
+        payload["output"]["delivery"]["s3"][
+            "url"
+        ] = f"s3://{output_bucket}/s1_rtc/{year}/{month}/{day}/{datatake}"
 
         try:
             resp = session.post(SH_BATCH_URL, json=payload)
@@ -229,7 +249,15 @@ def submit_backfill_jobs(missing: list[str], grid: gpd.GeoDataFrame, output_buck
             session.post(f"{SH_BATCH_URL}/{job_id}/start")
 
             log.info(f"Created + started job for {tile} {datatake}: {job_id}")
-            results.append({"uri": uri, "status": "started", "job_id": job_id, "tile": tile, "datatake": datatake})
+            results.append(
+                {
+                    "uri": uri,
+                    "status": "started",
+                    "job_id": job_id,
+                    "tile": tile,
+                    "datatake": datatake,
+                }
+            )
         except Exception as e:
             log.error(f"  job submission failed for {uri}: {e}")
             results.append({"uri": uri, "status": "error", "error": str(e)})
@@ -333,7 +361,9 @@ def cli(start_date, end_date, output_bucket, n_workers, dry_run, limit, output):
     if missing_datasets and not dry_run:
         to_submit = missing_datasets[:limit] if limit else missing_datasets
         if limit:
-            log.info(f"Limiting submission to {len(to_submit)} of {len(missing_datasets)} missing datasets")
+            log.info(
+                f"Limiting submission to {len(to_submit)} of {len(missing_datasets)} missing datasets"
+            )
         report["jobs"] = submit_backfill_jobs(to_submit, africa_grid, output_bucket)
 
     print(json.dumps(report, indent=2))

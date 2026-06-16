@@ -1,6 +1,7 @@
 from utils import load_evalscript
 import os
 
+
 def build_batch_payload(
     sat_config,
     time_from,
@@ -21,17 +22,14 @@ def build_batch_payload(
     if (bbox is None) == (geometry is None):
         raise ValueError("Provide exactly one of bbox or geometry")
 
-    bounds = {
-        "properties": {"crs": "http://www.opengis.net/def/crs/EPSG/0/4326"}
-    }
+    bounds = {"properties": {"crs": "http://www.opengis.net/def/crs/EPSG/0/4326"}}
     if bbox is not None:
         bounds["bbox"] = bbox
     else:
         bounds["geometry"] = geometry
 
     responses = [
-        {"identifier": b, "format": {"type": "image/tiff"}}
-        for b in sat_config["bands"]
+        {"identifier": b, "format": {"type": "image/tiff"}} for b in sat_config["bands"]
     ]
 
     return {
@@ -43,33 +41,33 @@ def build_batch_payload(
             "id": tiling_id,
             "resolution": resolution,
         },
-
         # =========================
         # PROCESS REQUEST (Sentinel Hub request)
         # =========================
         "processRequest": {
             "input": {
                 "bounds": bounds,
-                "data": [{
-                    "type": sat_config["type"],
-                    "dataFilter": {
-                        "timeRange": {
-                            "from": time_from,
-                            "to": time_to,
+                "data": [
+                    {
+                        "type": sat_config["type"],
+                        "dataFilter": {
+                            "timeRange": {
+                                "from": time_from,
+                                "to": time_to,
+                            },
+                            "acquisitionMode": sat_config.get("acquisitionMode"),
+                            "polarization": sat_config.get("polarization"),
+                            "resolution": sat_config.get("resolution"),
                         },
-                        "acquisitionMode": sat_config.get("acquisitionMode"),
-                        "polarization": sat_config.get("polarization"),
-                        "resolution": sat_config.get("resolution"),
-                    },
-                    "processing": sat_config.get("processing"),
-                }],
+                        "processing": sat_config.get("processing"),
+                    }
+                ],
             },
             "output": {
                 "responses": responses,
             },
             "evalscript": load_evalscript(sat_config["evalscript_file"]),
         },
-
         # =========================
         # OUTPUT (S3 delivery)
         # =========================
@@ -84,6 +82,5 @@ def build_batch_payload(
             },
             "cogOutput": True,
         },
-
         "description": "Batch Sentinel-1 Job",
     }
