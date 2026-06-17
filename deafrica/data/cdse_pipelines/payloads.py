@@ -1,4 +1,4 @@
-from utils import load_evalscript
+from .utils import load_evalscript
 import os
 
 
