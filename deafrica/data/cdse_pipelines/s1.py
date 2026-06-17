@@ -265,7 +265,7 @@ def submit_backfill_jobs(
     return results
 
 
-@click.command("s1-gap-check")
+@click.command("s1-cdse-pipeline")
 @click.option(
     "--start-date",
     "-s",
@@ -316,9 +316,9 @@ def cli(start_date, end_date, output_bucket, n_workers, dry_run, limit, output):
 
     Example command:
 
-    s1-gap-check --start-date 2026-06-03 --end-date 2026-06-10 --dry-run
+    s1-cdse-pipeline --start-date 2026-06-03 --end-date 2026-06-10 --dry-run
 
-    s1-gap-check --start-date 2026-06-03 --end-date 2026-06-10 -o gaps.json
+    s1-cdse-pipeline --start-date 2026-06-03 --end-date 2026-06-10 -o gaps.json
     """
     now = datetime.now(timezone.utc)
 
