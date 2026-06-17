@@ -30,9 +30,9 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 from shapely.geometry import mapping
 
-from auth import get_session
-from payloads import build_batch_payload
-from satellites import SATELLITES
+from .auth import get_session
+from .payloads import build_batch_payload
+from .satellites import SATELLITES
 
 from deafrica.logs import setup_logging
 
