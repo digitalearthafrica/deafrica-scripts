@@ -1,5 +1,6 @@
 import math
 
+
 def snap_bbox_to_grid(bbox, origin_x, origin_y, dx, dy):
     minx, miny, maxx, maxy = bbox
     i0 = math.floor((minx - origin_x) / dx)
@@ -16,6 +17,7 @@ def snap_bbox_to_grid(bbox, origin_x, origin_y, dx, dy):
     height = int(round((maxy_s - miny_s) / dy))
 
     return [minx_s, miny_s, maxx_s, maxy_s], width, height
+
 
 def load_evalscript(path):
     with open(path) as f:

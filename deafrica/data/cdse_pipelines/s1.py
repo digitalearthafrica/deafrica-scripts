@@ -177,7 +177,9 @@ def check_metadata_exists(s3, dataset: str, bucket_name: str) -> tuple[str, bool
         raise
 
 
-def find_missing(datasets: list[str], bucket_name: str, n_workers: int = 32) -> list[str]:
+def find_missing(
+    datasets: list[str], bucket_name: str, n_workers: int = 32
+) -> list[str]:
     "Checks which of the expected datasets are missing from the S3 bucket by verifying the existence of their metadata JSON files, using a thread pool for concurrency."
     s3 = boto3.client(
         "s3", region_name=REGION_NAME, config=Config(signature_version=UNSIGNED)
@@ -187,7 +189,9 @@ def find_missing(datasets: list[str], bucket_name: str, n_workers: int = 32) -> 
         f"Checking {len(datasets)} expected datasets against s3://{bucket_name} ..."
     )
     with ThreadPoolExecutor(max_workers=n_workers) as pool:
-        futures = {pool.submit(check_metadata_exists, s3, d, bucket_name): d for d in datasets}
+        futures = {
+            pool.submit(check_metadata_exists, s3, d, bucket_name): d for d in datasets
+        }
         for i, future in enumerate(as_completed(futures), 1):
             dataset, exists = future.result()
             if not exists:
@@ -316,7 +320,16 @@ def submit_backfill_jobs(
     default=None,
     help="Optional path to write the JSON report to.",
 )
-def cli(start_date, end_date, output_bucket, s3_bucket_name, n_workers, dry_run, limit, output):
+def cli(
+    start_date,
+    end_date,
+    output_bucket,
+    s3_bucket_name,
+    n_workers,
+    dry_run,
+    limit,
+    output,
+):
     """
     Check for missing s1_rtc datasets in the DE Africa bucket and submit CDSE
     batch backfill jobs for any gaps found.
@@ -354,7 +367,9 @@ def cli(start_date, end_date, output_bucket, s3_bucket_name, n_workers, dry_run,
     datasets = create_dataset_names(grided)
     log.info(f"Expecting {len(datasets)} datasets for {start_date} -> {end_date}")
 
-    missing_datasets = find_missing(datasets, bucket_name=s3_bucket_name, n_workers=n_workers)
+    missing_datasets = find_missing(
+        datasets, bucket_name=s3_bucket_name, n_workers=n_workers
+    )
     log.info(f"Missing: {len(missing_datasets)}")
 
     report = {
@@ -371,7 +386,9 @@ def cli(start_date, end_date, output_bucket, s3_bucket_name, n_workers, dry_run,
             log.info(
                 f"Limiting submission to {len(to_submit)} of {len(missing_datasets)} missing datasets"
             )
-        report["jobs"] = submit_backfill_jobs(to_submit, africa_grid, output_bucket, bucket_name=s3_bucket_name)
+        report["jobs"] = submit_backfill_jobs(
+            to_submit, africa_grid, output_bucket, bucket_name=s3_bucket_name
+        )
 
     print(json.dumps(report, indent=2))
 
