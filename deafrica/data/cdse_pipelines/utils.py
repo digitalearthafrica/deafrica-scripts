@@ -1,4 +1,5 @@
 import math
+from importlib.resources import files
 
 
 def snap_bbox_to_grid(bbox, origin_x, origin_y, dx, dy):
@@ -20,5 +21,4 @@ def snap_bbox_to_grid(bbox, origin_x, origin_y, dx, dy):
 
 
 def load_evalscript(path):
-    with open(path) as f:
-        return f.read()
+    return files("deafrica.data.cdse_pipelines").joinpath(path).read_text()
