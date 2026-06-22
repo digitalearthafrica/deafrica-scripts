@@ -14,5 +14,6 @@ SATELLITES = {
         },
         "tiling_grid": {"type": "tiling-grid", "id": 3, "resolution": 0.0002},
         "evalscript_file": "evalscripts/s1_rtc.js",
+        "odc_product": "s1_rtc_cdse",
     }
 }

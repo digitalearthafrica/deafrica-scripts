@@ -281,11 +281,10 @@ def build_stac_item(
     tile: str,
     date: str,
     datatake: str,
-    output_bucket: str,
     sat_config: dict,
     bands: list[str],
     grid: gpd.GeoDataFrame,
-    job_id: str | None = None,
+    s3_bucket_name: str = S1_BUCKET_NAME,
 ) -> pystac.Item | None:
     """
     Build a validated pystac.Item for a CDSE batch output tile.
@@ -400,10 +399,7 @@ def build_stac_item(
     proj_transform = [RESOLUTION, 0.0, bbox[0], 0.0, -RESOLUTION, bbox[3]]
 
     year, month, day = date.split("-")
-    if job_id:
-        base_uri = f"s3://{output_bucket}/s1_rtc/{year}/{month}/{day}/{datatake}/{job_id}/{tile}"
-    else:
-        base_uri = f"s3://{output_bucket}/s1_rtc/{year}/{month}/{day}/{datatake}/{tile}"
+    base_uri = f"s3://{s3_bucket_name}/{BASE_FOLDER_NAME}/{tile}/{year}/{month}/{day}/{datatake}"
     filename_prefix = f"s1_rtc_{datatake}_{tile}_{year}_{month}_{day}"
 
     # Polarization bands (VV, VH, etc.) - vary by sat_config
@@ -518,7 +514,7 @@ def upload_stac_item(local_path: str, item: pystac.Item, output_bucket: str) -> 
         )
 
     s3_uri = self_link.target
-    key = s3_uri.replace(f"s3://{output_bucket}/", "")
+    key = "/".join(s3_uri.split("/")[3:])
 
     s3 = boto3.client(
         "s3",
@@ -603,11 +599,10 @@ def submit_backfill_jobs(
                     tile,
                     date,
                     datatake,
-                    output_bucket,
                     SATELLITES["s1"],
                     ["VV", "VH"],
                     grid,
-                    job_id=job_id,
+                    s3_bucket_name=bucket_name,
                 )
                 if item:
                     out_path = save_stac_item(item)
@@ -777,6 +772,7 @@ def cli(
             SATELLITES["s1"],
             ["VV", "VH"],
             africa_grid,
+            s3_bucket_name=s3_bucket_name,
         )
         if item:
             out_path = save_stac_item(item)
