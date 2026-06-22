@@ -44,7 +44,8 @@ from pystac.extensions.sar import (
 )
 from pystac.extensions.sat import SatExtension, OrbitState
 from pystac.extensions.projection import ProjectionExtension
-from shapely.geometry import mapping
+from shapely.geometry import mapping, shape
+from shapely.ops import unary_union
 
 from .auth import get_session
 from .payloads import build_batch_payload
@@ -102,6 +103,22 @@ def _frame_from_features(features: list[dict]) -> gpd.GeoDataFrame:
     if not features:
         return gpd.GeoDataFrame(columns=["filename", "geometry"], crs="EPSG:4326")
     return gpd.GeoDataFrame.from_features(features, crs="EPSG:4326")
+
+
+def _clip_scenes_to_tile(scenes: list[dict], tile_geom) -> object:
+    """
+    Returns the intersection of all scene footprints with the tile geometry.
+    For a single scene this is a clean polygon. For multiple scenes the footprints
+    should tessellate perfectly, but floating point gaps in the SH catalog geometries
+    can produce a MultiPolygon — in that case we fall back to the convex hull to
+    guarantee a single Polygon.
+    """
+    clipped = tile_geom.intersection(
+        unary_union([shape(s["geometry"]) for s in scenes])
+    )
+    if clipped.geom_type == "MultiPolygon":
+        clipped = clipped.convex_hull
+    return clipped
 
 
 def search_sh_catalog(session, bbox: list[float], date: str) -> gpd.GeoDataFrame:
@@ -277,26 +294,26 @@ def _parse_datetime(dt_str: str) -> datetime:
 
 
 def build_stac_item(
-    session,
     tile: str,
     date: str,
     datatake: str,
     sat_config: dict,
     bands: list[str],
     grid: gpd.GeoDataFrame,
+    scenes: list[dict],
+    geom,
     s3_bucket_name: str = S1_BUCKET_NAME,
 ) -> pystac.Item | None:
     """
     Build a validated pystac.Item for a CDSE batch output tile.
 
-    A tile/date/datatake combination may correspond to multiple source
-    scenes (e.g. tile spans two adjacent passes) - all are added as
-    separate derived_from links. Scene properties (orbit, platform, etc.)
-    are taken from the first match.
+    scenes and geom are pre-computed by the caller (fetch_scenes_from_sh +
+    _clip_scenes_to_tile) so this function does not hit the SH catalog itself.
+    Scene properties (orbit, platform, etc.) are taken from the first scene.
+    All scenes are added as separate derived_from links.
     """
-    scenes = fetch_scenes_from_sh(session, tile, date, datatake, grid)
     if not scenes:
-        log.warning(f"No matching scene found for {tile}/{date}/{datatake}")
+        log.warning(f"No scenes provided for {tile}/{date}/{datatake}")
         return None
 
     primary = scenes[0]
@@ -307,8 +324,10 @@ def build_stac_item(
         log.warning(f"Tile {tile} not found in grid")
         return None
 
-    geom = cell.to_crs("EPSG:4326").geometry.iloc[0]
-    bbox = list(cell.to_crs("EPSG:4326").total_bounds)
+    # tile bounds drive proj:shape and proj:transform (full tile extent)
+    # geom.bounds drives the STAC item bbox (actual scene coverage)
+    tile_bbox = list(cell.to_crs("EPSG:4326").total_bounds)
+    item_bbox = list(geom.bounds)
 
     item_id = f"{tile}_{date.replace('-', '_')}_{datatake}"
     item_datetime = (
@@ -320,7 +339,7 @@ def build_stac_item(
     item = pystac.Item(
         id=item_id,
         geometry=geom.__geo_interface__,
-        bbox=bbox,
+        bbox=item_bbox,
         datetime=item_datetime,
         properties={
             "odc:region_code": tile,
@@ -387,16 +406,14 @@ def build_stac_item(
     )
     item.properties["end_datetime"] = props.get("end_datetime", props.get("datetime"))
 
-    # Assets (batch output tifs)
-    # Per-asset proj:shape/proj:transform - derived from the tile's bbox and
-    # the resolution used in the batch payload (RESOLUTION, in degrees).
-    # Shape is constant across all RTC outputs for a tile since they're all
-    # processed at the same resolution over the same extent.
+    # Assets (Batch output tifs)
+    # proj:shape and proj:transform are derived from the full tile bbox and
+    # resolution
     proj_shape = [
-        round((bbox[3] - bbox[1]) / RESOLUTION),  # height (lat extent / res)
-        round((bbox[2] - bbox[0]) / RESOLUTION),  # width  (lon extent / res)
+        round((tile_bbox[3] - tile_bbox[1]) / RESOLUTION),  # height
+        round((tile_bbox[2] - tile_bbox[0]) / RESOLUTION),  # width
     ]
-    proj_transform = [RESOLUTION, 0.0, bbox[0], 0.0, -RESOLUTION, bbox[3]]
+    proj_transform = [RESOLUTION, 0.0, tile_bbox[0], 0.0, -RESOLUTION, tile_bbox[3]]
 
     year, month, day = date.split("-")
     base_uri = f"s3://{s3_bucket_name}/{BASE_FOLDER_NAME}/{tile}/{year}/{month}/{day}/{datatake}"
@@ -407,7 +424,7 @@ def build_stac_item(
         item.add_asset(
             band.lower(),
             pystac.Asset(
-                href=f"{base_uri}/{band}.tif",
+                href=f"{base_uri}/{filename_prefix}_{band}.tif",
                 title=f"{filename_prefix}_{band}",
                 media_type=pystac.MediaType.COG,
                 description=f"polarization {band}",
@@ -424,7 +441,7 @@ def build_stac_item(
     # regardless of polarization config, so these are not driven by `bands`.
     rtc_fixed_assets = {
         "area": {
-            "filename": "AREA.tif",
+            "filename": f"{filename_prefix}_AREA.tif",
             "title": f"{filename_prefix}_AREA",
             "description": "normalized scattering area",
             "media_type": pystac.MediaType.COG,
@@ -432,7 +449,7 @@ def build_stac_item(
             "has_proj": True,
         },
         "angle": {
-            "filename": "ANGLE.tif",
+            "filename": f"{filename_prefix}_ANGLE.tif",
             "title": f"{filename_prefix}_ANGLE",
             "description": "local incidence angle",
             "media_type": pystac.MediaType.COG,
@@ -440,7 +457,7 @@ def build_stac_item(
             "has_proj": True,
         },
         "mask": {
-            "filename": "MASK.tif",
+            "filename": f"{filename_prefix}_MASK.tif",
             "title": f"{filename_prefix}_MASK",
             "description": "data mask",
             "media_type": pystac.MediaType.COG,
@@ -563,11 +580,26 @@ def submit_backfill_jobs(
             )
             continue
 
-        geometry = mapping(cell.to_crs("EPSG:4326").union_all().buffer(-1e-5))
+        scenes = fetch_scenes_from_sh(session, tile, date, datatake, grid)
+        if not scenes:
+            log.error(
+                f"  no scenes found for {tile} {date} {datatake} - skipping {uri}"
+            )
+            results.append(
+                {
+                    "uri": uri,
+                    "status": "error",
+                    "error": "no scenes found in SH catalog",
+                }
+            )
+            continue
+
+        tile_geom = cell.to_crs("EPSG:4326").geometry.iloc[0]
+        clipped_geom = _clip_scenes_to_tile(scenes, tile_geom)
 
         payload = build_batch_payload(
             sat_config=SATELLITES["s1"],
-            geometry=geometry,
+            geometry=mapping(clipped_geom),
             time_from=f"{date}T00:00:00Z",
             time_to=f"{year}-{month}-{int(day) + 1:02d}T00:00:00Z",
             tiling_id=TILING_ID,
@@ -595,13 +627,14 @@ def submit_backfill_jobs(
 
             if generate_stac:
                 item = build_stac_item(
-                    session,
                     tile,
                     date,
                     datatake,
                     SATELLITES["s1"],
                     ["VV", "VH"],
                     grid,
+                    scenes=scenes,
+                    geom=clipped_geom,
                     s3_bucket_name=bucket_name,
                 )
                 if item:
@@ -763,15 +796,28 @@ def cli(
 
         log.info(f"Generating test STAC item for {tile} {date} {datatake} ...")
         session = get_session()
+
+        tile_scenes = fetch_scenes_from_sh(session, tile, date, datatake, africa_grid)
+        if not tile_scenes:
+            log.warning("No scenes found in SH catalog — cannot generate STAC item.")
+            sys.exit(0)
+
+        tile_geom = (
+            africa_grid[africa_grid["NAME"] == tile]
+            .to_crs("EPSG:4326")
+            .geometry.iloc[0]
+        )
+        clipped_geom = _clip_scenes_to_tile(tile_scenes, tile_geom)
+
         item = build_stac_item(
-            session,
             tile,
             date,
             datatake,
-            output_bucket,
             SATELLITES["s1"],
             ["VV", "VH"],
             africa_grid,
+            scenes=tile_scenes,
+            geom=clipped_geom,
             s3_bucket_name=s3_bucket_name,
         )
         if item:
@@ -784,7 +830,7 @@ def cli(
                 log.error(f"Failed to upload STAC item to S3: {e}")
             print(json.dumps(item.to_dict(), indent=2))
         else:
-            log.warning("No STAC item generated - no matching scene found.")
+            log.warning("No STAC item generated.")
         sys.exit(0)
 
     if missing_datasets and not dry_run:
