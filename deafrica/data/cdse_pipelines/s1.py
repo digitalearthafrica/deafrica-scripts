@@ -516,22 +516,13 @@ def save_stac_item(item: pystac.Item, out_dir: str = "stac_items") -> str:
     return out_path
 
 
-def upload_stac_item(local_path: str, item: pystac.Item, output_bucket: str) -> str:
+def upload_stac_item(local_path: str, s3_key: str, output_bucket: str) -> str:
     """
     Upload a locally saved STAC item JSON to S3 alongside the tif assets.
-    Uses the item's self link to determine the S3 key.
     S3 credentials are read from env vars S3_ACCESS_KEY and S3_SECRET_ACCESS_KEY —
     the same credentials used in the batch payload delivery.
     Returns the S3 URI the item was uploaded to.
     """
-    self_link = item.get_single_link("self")
-    if self_link is None:
-        raise ValueError(
-            f"Item {item.id} has no self link — cannot determine S3 upload path"
-        )
-
-    s3_uri = self_link.target
-    key = "/".join(s3_uri.split("/")[3:])
 
     s3 = boto3.client(
         "s3",
@@ -542,11 +533,11 @@ def upload_stac_item(local_path: str, item: pystac.Item, output_bucket: str) -> 
     s3.upload_file(
         local_path,
         output_bucket,
-        key,
+        s3_key,
         ExtraArgs={"ContentType": "application/json"},
     )
-    log.info(f"  uploaded STAC item to s3://{output_bucket}/{key}")
-    return f"s3://{output_bucket}/{key}"
+    log.info(f"  uploaded STAC item to s3://{output_bucket}/{s3_key}")
+    return f"s3://{output_bucket}/{s3_key}"
 
 
 def submit_backfill_jobs(
@@ -641,7 +632,11 @@ def submit_backfill_jobs(
                     out_path = save_stac_item(item)
                     log.info(f"  wrote STAC item locally: {out_path}")
                     try:
-                        s3_uri = upload_stac_item(out_path, item, output_bucket)
+                        filename_prefix = (
+                            f"s1_rtc_{datatake}_{tile}_{year}_{month}_{day}"
+                        )
+                        s3_key = f"s1_rtc/{year}/{month}/{day}/{datatake}/{job_id}/{tile}/{filename_prefix}_metadata.json"
+                        s3_uri = upload_stac_item(out_path, s3_key, output_bucket)
                         result["stac_item"] = s3_uri
                     except Exception as e:
                         log.error(f"  failed to upload STAC item to S3: {e}")
