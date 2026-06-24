@@ -31,6 +31,7 @@ def build_batch_payload(
     responses = [
         {"identifier": b, "format": {"type": "image/tiff"}} for b in sat_config["bands"]
     ]
+    responses.append({"identifier": "userdata", "format": {"type": "application/json"}})
 
     return {
         # =========================
