@@ -64,7 +64,9 @@ RUN mkdir -p /code
 WORKDIR /code
 COPY . /code/
 
-RUN pip install /code \
+RUN --mount=type=secret,id=github_token \
+    pip install /code \
+    && pip install git+https://$(cat /run/secrets/github_token)@github.com/digitalearthafrica/card4l.git@master \
     && pip cache purge
 
 CMD ["python", "--version"]
