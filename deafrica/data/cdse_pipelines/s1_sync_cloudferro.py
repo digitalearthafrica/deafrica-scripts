@@ -33,13 +33,14 @@ from botocore.exceptions import ClientError
 
 from deafrica.logs import setup_logging
 
-
 DEFAULT_SOURCE_BUCKET = "cdse_batch_test_bucket"
 DEFAULT_DESTINATION_BUCKET = "deafrica-sentinel-1-staging-frankfurt-cdse"
 DEFAULT_CLOUDFERRO_ENDPOINT_URL = "https://s3.waw3-1.cloudferro.com"
 DEFAULT_CLOUDFERRO_REGION = "RegionOne"
 DEFAULT_MIN_OBJECT_AGE_MINUTES = 60
-DEFAULT_CDSE_BATCH_PROCESS_URL = "https://sh.dataspace.copernicus.eu/api/v2/batch/process"
+DEFAULT_CDSE_BATCH_PROCESS_URL = (
+    "https://sh.dataspace.copernicus.eu/api/v2/batch/process"
+)
 DEFAULT_CDSE_TOKEN_URL = (
     "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/"
     "protocol/openid-connect/token"
@@ -412,7 +413,9 @@ def validate_required_files(source_objects: list[dict]) -> dict:
     }
 
 
-def classify_source_objects(source_objects: list[dict]) -> tuple[list[dict], list[dict]]:
+def classify_source_objects(
+    source_objects: list[dict],
+) -> tuple[list[dict], list[dict]]:
     """Split CloudFerro objects into deliverables and source-side/internal files."""
     copyable = []
     skipped = []
