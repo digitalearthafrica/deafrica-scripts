@@ -464,6 +464,14 @@ def build_stac_item(
             "roles": ["data"],
             "has_proj": True,
         },
+        "metadata": {
+            "filename": f"{filename_prefix}_metadata.xml",
+            "title": f"{filename_prefix}_metadata",
+            "description": "CARD4L (CEOS Analysis Ready Data for Land) processing metadata",
+            "media_type": "application/xml",
+            "roles": ["metadata", "card4l"],
+            "has_proj": False,
+        },
     }
 
     for key, cfg in rtc_fixed_assets.items():
