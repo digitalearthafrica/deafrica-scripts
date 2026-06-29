@@ -51,6 +51,8 @@ jobs:
           type=local,src=/tmp/.buildx-cache
         cache-to: |
           type=local,dest=/tmp/.buildx-cache-new
+        secrets: |
+          github_token=${{ secrets.CARD4L_GITHUB_TOKEN }}
 
     # This ugly bit is necessary if you don't want your cache to grow forever
     # till it hits GitHub's limit of 5GB.
@@ -101,3 +103,5 @@ jobs:
           target: base
           push: true
           tags: ${{ env.IMAGE_NAME }}:latest,${{ env.IMAGE_NAME }}:${{ env.VERSION }}
+          secrets: |
+            github_token=${{ secrets.CARD4L_GITHUB_TOKEN }}
