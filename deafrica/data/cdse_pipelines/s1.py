@@ -826,11 +826,6 @@ def cli(
         if item:
             out_path = save_stac_item(item)
             log.info(f"Wrote test STAC item locally: {out_path}")
-            try:
-                s3_uri = upload_stac_item(out_path, item, output_bucket)
-                log.info(f"Uploaded test STAC item to: {s3_uri}")
-            except Exception as e:
-                log.error(f"Failed to upload STAC item to S3: {e}")
             print(json.dumps(item.to_dict(), indent=2))
         else:
             log.warning("No STAC item generated.")
