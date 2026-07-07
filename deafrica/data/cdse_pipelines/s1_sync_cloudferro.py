@@ -325,9 +325,7 @@ def sync_all_prefixes(
 ) -> dict:
     """Discover completed tile prefixes and sync them with bounded parallelism."""
     product = product or DEFAULT_PRODUCT_SPEC
-    discovery_prefix = normalize_s3_prefix(
-        discovery_prefix or product.discovery_prefix
-    )
+    discovery_prefix = normalize_s3_prefix(discovery_prefix or product.discovery_prefix)
     max_workers = max(1, max_workers)
     if max_prefixes is not None:
         max_prefixes = max(1, max_prefixes)

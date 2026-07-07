@@ -312,8 +312,7 @@ def test_s3_lfr_classify_copies_tifs_and_metadata_but_not_userdata():
 def test_s3_lfr_discovery_accepts_direct_layout_and_ignores_job_nested_layout():
     direct_prefix = "s3_lfr_test/2026/02/09/44HME_0_0/"
     job_nested_prefix = (
-        "s3_lfr_test/2026/02/09/"
-        "bb61e2d6-8615-4001-9115-85616ba290b7/37NBB_0_0/"
+        "s3_lfr_test/2026/02/09/" "bb61e2d6-8615-4001-9115-85616ba290b7/37NBB_0_0/"
     )
     request_key = "s3_lfr_test/2026/02/09/request-04eeefea-dde1.json"
     client = FakeS3Client(
