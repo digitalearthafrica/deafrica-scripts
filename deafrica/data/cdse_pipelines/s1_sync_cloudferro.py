@@ -1061,9 +1061,29 @@ S3_OLCI_L2_LFR_CDSE_PRODUCT = ProductSyncSpec(
     stac_item_from_objects=find_metadata_json_stac_item,
 )
 
+S3_OLCI_L2_WFR_CDSE_SOURCE_PREFIX = "s3_wfr_test"
+S3_OLCI_L2_WFR_CDSE_PRODUCT = ProductSyncSpec(
+    name="s3_olci_l2_wfr_cdse",
+    discovery_prefix=f"{S3_OLCI_L2_WFR_CDSE_SOURCE_PREFIX}/",
+    default_destination_bucket=None,
+    required_files=frozenset({"metadata.json", "userdata.json"}),
+    key_prefix_from_key=direct_product_prefix_from_key_factory(
+        S3_OLCI_L2_WFR_CDSE_SOURCE_PREFIX,
+        allow_nested_files=False,
+    ),
+    key_transform=identity_transform_key,
+    skip_reason=direct_product_skip_reason_factory(
+        expected_prefix=S3_OLCI_L2_WFR_CDSE_SOURCE_PREFIX,
+        allowed_filename_patterns=("*.tif", "metadata.json"),
+        allow_nested_files=False,
+    ),
+    stac_item_from_objects=find_metadata_json_stac_item,
+)
+
 PRODUCT_SPECS = {
     S1_RTC_PRODUCT.name: S1_RTC_PRODUCT,
     S3_OLCI_L2_LFR_CDSE_PRODUCT.name: S3_OLCI_L2_LFR_CDSE_PRODUCT,
+    S3_OLCI_L2_WFR_CDSE_PRODUCT.name: S3_OLCI_L2_WFR_CDSE_PRODUCT,
 }
 DEFAULT_PRODUCT_SPEC = S1_RTC_PRODUCT
 

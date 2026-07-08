@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 import deafrica.data.cdse_pipelines.s1_sync_cloudferro as sync_module
 from deafrica.data.cdse_pipelines.s1_sync_cloudferro import (
     S3_OLCI_L2_LFR_CDSE_PRODUCT,
+    S3_OLCI_L2_WFR_CDSE_PRODUCT,
     SyncConfig,
     classify_source_objects,
     discover_completed_prefixes,
@@ -429,3 +430,48 @@ def test_s3_lfr_transform_is_identity():
     key = "s3_lfr_test/2026/02/09/44HME_0_0/metadata.json"
 
     assert transform_key(key, S3_OLCI_L2_LFR_CDSE_PRODUCT) == key
+
+
+def test_s3_wfr_direct_copy_product_rules():
+    prefix = "s3_wfr_test/2026/02/09/37NBB_0_0/"
+    source_objects = [
+        source_object(f"{prefix}userdata.json"),
+        source_object(f"{prefix}metadata.json"),
+        source_object(f"{prefix}CHL_NN.tif"),
+        source_object(f"{prefix}MASK.tif"),
+    ]
+
+    assert validate_required_files(source_objects, S3_OLCI_L2_WFR_CDSE_PRODUCT) == {
+        "required_files_present": True,
+        "missing_required_files": [],
+    }
+
+    copyable, skipped = classify_source_objects(
+        source_objects, S3_OLCI_L2_WFR_CDSE_PRODUCT
+    )
+    assert [obj["Key"].rsplit("/", 1)[-1] for obj in copyable] == [
+        "metadata.json",
+        "CHL_NN.tif",
+        "MASK.tif",
+    ]
+    assert skipped == [
+        {"source_key": f"{prefix}userdata.json", "reason": "excluded_userdata_json"}
+    ]
+
+    discovery = discover_completed_prefixes(
+        FakeS3Client(source_objects),
+        "bucket",
+        "s3_wfr_test/",
+        S3_OLCI_L2_WFR_CDSE_PRODUCT,
+    )
+    assert discovery["completed_prefixes"] == [
+        {
+            "source_prefix": prefix,
+            "stac_item": f"{prefix}metadata.json",
+            "found": 4,
+        }
+    ]
+
+    assert transform_key(f"{prefix}metadata.json", S3_OLCI_L2_WFR_CDSE_PRODUCT) == (
+        f"{prefix}metadata.json"
+    )
