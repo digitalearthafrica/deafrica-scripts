@@ -125,9 +125,11 @@ def redact_payload(payload: dict) -> dict:
     redacted = copy.deepcopy(payload)
     for s3 in (
         redacted.get("output", {}).get("delivery", {}).get("s3"),
-        redacted.get("input", {}).get("features", {}).get("s3")
-        if redacted.get("input", {}).get("type") == "geopackage"
-        else None,
+        (
+            redacted.get("input", {}).get("features", {}).get("s3")
+            if redacted.get("input", {}).get("type") == "geopackage"
+            else None
+        ),
     ):
         if s3:
             if "accessKey" in s3:

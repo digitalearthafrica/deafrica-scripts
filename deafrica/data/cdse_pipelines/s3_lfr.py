@@ -90,6 +90,7 @@ EXTENSION_ORDER = ("/product/", "/projection/", "/eo/")
 # Final home of the products - the bucket all STAC hrefs point at by default (--href-bucket)
 DEAFRICA_S3_BUCKET = "deafrica-sentinel-3-olci-l2-land"
 
+
 def deafrica_base_uri(
     date: str, tile: str, timeliness: str, bucket: str = DEAFRICA_S3_BUCKET
 ) -> str:
@@ -103,6 +104,7 @@ def deafrica_base_uri(
     dataset = f"S3_{PRODUCT_TYPE}_{year}{month}{day}_{timeliness}_{tile}"
     return f"s3://{bucket}/Sentinel-3/OLCI/{PRODUCT_TYPE}/{year}/{month}/{dataset}"
 
+
 LICENSE = "CC-BY-4.0"
 LICENSE_URL = "https://creativecommons.org/licenses/by/4.0/deed.en"
 
@@ -112,6 +114,7 @@ PRODUCT_EXT_SCHEMA = "https://stac-extensions.github.io/product/v0.1.0/schema.js
 TEST_BBOX = [37.2, 1.806, 38.103, 2.715]
 
 log = setup_logging()
+
 
 def _fetch_grid_from_cloudferro(grid_href: str) -> str:
     """
@@ -196,7 +199,9 @@ def epsg_from_tile_name(tile: str) -> int:
     return (32600 if band >= "N" else 32700) + zone
 
 
-def tiles_for_bbox(grid: gpd.GeoDataFrame, bbox: list[float] | None) -> gpd.GeoDataFrame:
+def tiles_for_bbox(
+    grid: gpd.GeoDataFrame, bbox: list[float] | None
+) -> gpd.GeoDataFrame:
     "Return grid features intersecting bbox (EPSG:4326), or all features if bbox is None."
     if bbox is None:
         return grid
@@ -204,7 +209,9 @@ def tiles_for_bbox(grid: gpd.GeoDataFrame, bbox: list[float] | None) -> gpd.GeoD
     minx, miny, maxx, maxy = bbox
     mask = grid_4326.intersects(
         gpd.GeoSeries.from_wkt(
-            [f"POLYGON(({minx} {miny},{maxx} {miny},{maxx} {maxy},{minx} {maxy},{minx} {miny}))"]
+            [
+                f"POLYGON(({minx} {miny},{maxx} {miny},{maxx} {maxy},{minx} {maxy},{minx} {miny}))"
+            ]
         ).iloc[0]
     )
     return grid[mask.values]
@@ -251,9 +258,7 @@ def fetch_s3_lfr_scenes(session, bbox: list[float], date: str) -> list[dict]:
         resp = session.post(SH_CATALOG_URL, json=body, timeout=120)
         resp.raise_for_status()
         data = resp.json()
-        features.extend(
-            f for f in data.get("features", []) if PRODUCT_TYPE in f["id"]
-        )
+        features.extend(f for f in data.get("features", []) if PRODUCT_TYPE in f["id"])
         nxt = data.get("context", {}).get("next")
         if nxt is None:
             break
@@ -286,7 +291,9 @@ def resolve_job_timeliness(session, date: str, bbox: list[float]) -> str:
     scenes = fetch_s3_lfr_scenes(session, bbox, date)
     cats = {_timeliness(s["id"]) for s in scenes}
     if not cats:
-        log.warning(f"No scenes found for {date} over AOI; defaulting folder timeliness to NT")
+        log.warning(
+            f"No scenes found for {date} over AOI; defaulting folder timeliness to NT"
+        )
         return "NT"
     if len(cats) > 1:
         chosen = "NT" if "NT" in cats else sorted(cats)[0]
@@ -301,7 +308,7 @@ def resolve_job_timeliness(session, date: str, bbox: list[float]) -> str:
 
 def _r15(v: float) -> float:
     """
-    Round to 15 significant figures. Used to serialise all 
+    Round to 15 significant figures. Used to serialise all
     coordinate / bbox / proj:transform floats at %.15g precision.
     """
     return float(f"{v:.15g}")
@@ -432,16 +439,18 @@ def build_s3_lfr_stac_item(
             "license": LICENSE,
             "license_url": LICENSE_URL,
             # Processing timestamp
-            "odc:processing_datetime": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "odc:processing_datetime": datetime.now(timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            ),
         },
     )
 
     if start_dt:
-        item.properties["start_datetime"] = (
-            start_dt.isoformat(timespec="seconds").replace("+00:00", "Z")
-        )
-        item.properties["end_datetime"] = (
-            end_dt.isoformat(timespec="seconds").replace("+00:00", "Z")
+        item.properties["start_datetime"] = start_dt.isoformat(
+            timespec="seconds"
+        ).replace("+00:00", "Z")
+        item.properties["end_datetime"] = end_dt.isoformat(timespec="seconds").replace(
+            "+00:00", "Z"
         )
 
     # Item-level proj:code abiding by Projection extension v2.0.0
@@ -531,7 +540,7 @@ def generate_stac_items(
     max_workers: int = 8,
 ) -> list[dict]:
     """
-    Build a STAC item for every grid tile in the processed AOI 
+    Build a STAC item for every grid tile in the processed AOI
     and upload it to output_bucket alongside the delivered
     tifs. Tiles are processed in parallel (default 8 workers - all I/O bound).
     """
@@ -543,7 +552,9 @@ def generate_stac_items(
     )
 
     tiles = tiles_for_bbox(grid, bbox)
-    log.info(f"Generating STAC items for {len(tiles)} tiles (max_workers={max_workers}) ...")
+    log.info(
+        f"Generating STAC items for {len(tiles)} tiles (max_workers={max_workers}) ..."
+    )
 
     def process_tile(row) -> dict:
         tile = row["name"]
@@ -560,7 +571,11 @@ def generate_stac_items(
         try:
             s3_cf.head_object(Bucket=output_bucket, Key=s3_key)
             log.info(f"  {tile}: metadata.json already exists - skipping")
-            return {"tile": tile, "status": "exists", "stac_item": f"s3://{output_bucket}/{s3_key}"}
+            return {
+                "tile": tile,
+                "status": "exists",
+                "stac_item": f"s3://{output_bucket}/{s3_key}",
+            }
         except botocore.exceptions.ClientError:
             pass  # doesn't exist, proceed
 
@@ -620,6 +635,7 @@ def generate_stac_items(
 
     return results
 
+
 def poll_status(
     session, job_id: str, terminal: set, interval: int = 30, timeout: int = 3600
 ) -> dict:
@@ -635,6 +651,7 @@ def poll_status(
             return info
         time.sleep(interval)
     raise TimeoutError(f"Job {job_id} did not reach {terminal} within {timeout}s")
+
 
 _date_option = click.option(
     "--date",
@@ -694,7 +711,9 @@ def cli():
     """
 
 
-def _submit_one(session, sat_config, grid, date, output_bucket, aoi_bbox, dry_run) -> dict:
+def _submit_one(
+    session, sat_config, grid, date, output_bucket, aoi_bbox, dry_run
+) -> dict:
     """
     Create, analyse, and start the batch job for one date. Returns
     {"date", "job_id", "timeliness", "status"}; raises on any failure so the
@@ -702,7 +721,9 @@ def _submit_one(session, sat_config, grid, date, output_bucket, aoi_bbox, dry_ru
     """
     timeliness_bbox = aoi_bbox or [round(v, 4) for v in grid.total_bounds]
     job_timeliness = resolve_job_timeliness(session, date, timeliness_bbox)
-    log.info(f"{date}: archive folder timeliness (from product filenames): {job_timeliness}")
+    log.info(
+        f"{date}: archive folder timeliness (from product filenames): {job_timeliness}"
+    )
 
     payload = build_batch_payload(
         sat_config=sat_config,
@@ -759,7 +780,12 @@ def _submit_one(session, sat_config, grid, date, output_bucket, aoi_bbox, dry_ru
         f"- same keys as the final archive"
     )
 
-    return {"date": date, "job_id": job_id, "timeliness": job_timeliness, "status": "started"}
+    return {
+        "date": date,
+        "job_id": job_id,
+        "timeliness": job_timeliness,
+        "status": "started",
+    }
 
 
 @cli.command("submit")
@@ -791,7 +817,9 @@ def submit(date, end_date, output_bucket, full_aoi, dry_run):
     for d in _date_range(date, end_date):
         try:
             jobs.append(
-                _submit_one(session, sat_config, grid, d, output_bucket, aoi_bbox, dry_run)
+                _submit_one(
+                    session, sat_config, grid, d, output_bucket, aoi_bbox, dry_run
+                )
             )
         except Exception as e:
             log.error(f"{d}: submit failed: {e}")
@@ -935,7 +963,9 @@ def stac(date, end_date, output_bucket, href_bucket, full_aoi, timeliness, test)
         else:
             timeliness_bbox = aoi_bbox or [round(v, 4) for v in grid.total_bounds]
             job_timeliness = resolve_job_timeliness(session, d, timeliness_bbox)
-        log.info(f"{d}: archive folder timeliness (from product filenames): {job_timeliness}")
+        log.info(
+            f"{d}: archive folder timeliness (from product filenames): {job_timeliness}"
+        )
 
         all_results[d] = generate_stac_items(
             session, grid, d, output_bucket, href_bucket, aoi_bbox, job_timeliness
