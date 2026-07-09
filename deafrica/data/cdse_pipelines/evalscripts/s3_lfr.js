@@ -47,10 +47,10 @@ function evaluatePixel(sample) {
         : sample.IWV_L
     ],
 
-    // Index -> int16 scaled by 10000
+    // Index -> uint16 scaled by 10000
     OTCI: [
       isNaN(sample.OTCI)
-        ? 32767
+        ? 65535
         : Math.round(sample.OTCI * 10000)
     ],
 
