@@ -701,7 +701,7 @@ def _date_range(start: str, end: str | None) -> list[str]:
     ]
 
 
-@click.group("s3-lfr-batch-test")
+@click.group("s3-lfr-cdse-pipeline")
 def cli():
     """
     Run s3_lfr batch jobs (one per date) in three stages, each independently
