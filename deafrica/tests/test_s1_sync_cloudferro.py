@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from io import BytesIO
 
 import deafrica.data.cdse_pipelines.s1_sync_cloudferro as sync_module
 from deafrica.data.cdse_pipelines.s1_sync_cloudferro import (
@@ -40,12 +41,55 @@ class FakeS3Client:
         return FakePaginator(self.objects)
 
 
-def source_object(key):
+class FakeCopyS3Client(FakeS3Client):
+    def __init__(self, objects=None, bodies=None):
+        super().__init__(objects or [])
+        self.bodies = bodies or {}
+        self.uploads = []
+
+    def head_object(self, Bucket, Key):
+        if Key not in self.bodies:
+            raise sync_module.ClientError(
+                {"Error": {"Code": "404"}},
+                "HeadObject",
+            )
+        return {"ContentLength": len(self.bodies[Key])}
+
+    def get_object(self, Bucket, Key):
+        if Key not in self.bodies:
+            raise sync_module.ClientError(
+                {"Error": {"Code": "404"}},
+                "GetObject",
+            )
+        return {"Body": BytesIO(self.bodies[Key])}
+
+    def upload_fileobj(self, body, Bucket, Key, ExtraArgs=None):
+        self.bodies[Key] = body.read()
+        self.uploads.append(Key)
+
+
+def source_object(key, size=1):
     return {
         "Key": key,
-        "Size": 1,
+        "Size": size,
         "LastModified": datetime(2026, 6, 23, tzinfo=timezone.utc),
     }
+
+
+def sync_config(source_prefix):
+    return SyncConfig(
+        source_bucket="source-bucket",
+        source_prefix=source_prefix,
+        stac_item="",
+        destination_bucket="destination-bucket",
+        dry_run=False,
+        min_object_age_minutes=0,
+        job_id=None,
+        cloudferro_endpoint_url="https://cloudferro.example",
+        cloudferro_region="RegionOne",
+        cdse_batch_process_url="https://batch.example",
+        cdse_token_url="https://token.example",
+    )
 
 
 def test_validate_required_files_detects_complete_output():
@@ -245,9 +289,18 @@ def test_discover_completed_prefixes_counts_invalid_objects_with_examples():
 
 
 def test_s3_lfr_required_files_need_userdata_and_metadata_json():
+    renamed_metadata = (
+        "s3_lfr_test/2026/02/09/44HME_0_0/"
+        "S3_OL_2_LFR_20260209_NT_44HME_0_0_metadata.json"
+    )
     complete = [
         {"Key": "s3_lfr_test/2026/02/09/44HME_0_0/userdata.json"},
         {"Key": "s3_lfr_test/2026/02/09/44HME_0_0/metadata.json"},
+        {"Key": "s3_lfr_test/2026/02/09/44HME_0_0/OTCI.tif"},
+    ]
+    complete_with_renamed_metadata = [
+        {"Key": "s3_lfr_test/2026/02/09/44HME_0_0/userdata.json"},
+        {"Key": renamed_metadata},
         {"Key": "s3_lfr_test/2026/02/09/44HME_0_0/OTCI.tif"},
     ]
     incomplete = [
@@ -259,9 +312,15 @@ def test_s3_lfr_required_files_need_userdata_and_metadata_json():
         "required_files_present": True,
         "missing_required_files": [],
     }
+    assert validate_required_files(
+        complete_with_renamed_metadata, S3_OLCI_L2_LFR_CDSE_PRODUCT
+    ) == {
+        "required_files_present": True,
+        "missing_required_files": [],
+    }
     assert validate_required_files(incomplete, S3_OLCI_L2_LFR_CDSE_PRODUCT) == {
         "required_files_present": False,
-        "missing_required_files": ["metadata.json"],
+        "missing_required_files": ["*metadata.json"],
     }
 
 
@@ -273,6 +332,13 @@ def test_s3_lfr_skip_reason_uses_userdata_as_marker_only():
         == "excluded_userdata_json"
     )
     assert skip_reason(f"{prefix}/metadata.json", S3_OLCI_L2_LFR_CDSE_PRODUCT) is None
+    assert (
+        skip_reason(
+            f"{prefix}/S3_OL_2_LFR_20260209_NT_44HME_0_0_metadata.json",
+            S3_OLCI_L2_LFR_CDSE_PRODUCT,
+        )
+        is None
+    )
     assert skip_reason(f"{prefix}/OTCI.tif", S3_OLCI_L2_LFR_CDSE_PRODUCT) is None
     assert (
         skip_reason(
@@ -292,7 +358,7 @@ def test_s3_lfr_classify_copies_tifs_and_metadata_but_not_userdata():
     source_objects = [
         {"Key": f"{prefix}/OTCI.tif"},
         {"Key": f"{prefix}/RC681.tif"},
-        {"Key": f"{prefix}/metadata.json"},
+        {"Key": f"{prefix}/S3_OL_2_LFR_20260209_NT_44HME_0_0_metadata.json"},
         {"Key": f"{prefix}/userdata.json"},
     ]
 
@@ -303,11 +369,99 @@ def test_s3_lfr_classify_copies_tifs_and_metadata_but_not_userdata():
     assert [obj["Key"].rsplit("/", 1)[-1] for obj in copyable] == [
         "OTCI.tif",
         "RC681.tif",
-        "metadata.json",
+        "S3_OL_2_LFR_20260209_NT_44HME_0_0_metadata.json",
     ]
     assert skipped == [
         {"source_key": f"{prefix}/userdata.json", "reason": "excluded_userdata_json"}
     ]
+
+
+def test_s3_direct_copy_requires_at_least_one_data_asset(monkeypatch):
+    prefix = "s3_wfr_test/2026/02/09/37NBB_0_0/"
+    source_objects = [
+        source_object(f"{prefix}userdata.json"),
+        source_object(f"{prefix}metadata.json"),
+    ]
+    source_s3 = FakeCopyS3Client(source_objects)
+    destination_s3 = FakeCopyS3Client()
+
+    monkeypatch.setattr(sync_module, "cloudferro_client", lambda _config: source_s3)
+    monkeypatch.setattr(sync_module, "aws_client", lambda: destination_s3)
+
+    summary = sync_module.sync_prefix(
+        sync_config(prefix),
+        product=S3_OLCI_L2_WFR_CDSE_PRODUCT,
+    )
+
+    assert summary["skip_reason"] == "missing_data_assets"
+    assert summary["data_assets_present"] is False
+    assert summary["copied"] == 0
+    assert destination_s3.uploads == []
+
+
+def test_s3_direct_copy_copies_metadata_json_last(monkeypatch):
+    prefix = "s3_wfr_test/2026/02/09/37NBB_0_0/"
+    metadata_key = f"{prefix}S3_OL_2_WFR_20260209_NT_37NBB_0_0_metadata.json"
+    data_key = f"{prefix}CHL_NN.tif"
+    source_bodies = {
+        metadata_key: b'{"type":"Feature"}',
+        data_key: b"tif-data",
+    }
+    source_objects = [
+        source_object(metadata_key, size=len(source_bodies[metadata_key])),
+        source_object(f"{prefix}userdata.json"),
+        source_object(data_key, size=len(source_bodies[data_key])),
+    ]
+    source_s3 = FakeCopyS3Client(source_objects, bodies=source_bodies)
+    destination_s3 = FakeCopyS3Client()
+
+    monkeypatch.setattr(sync_module, "cloudferro_client", lambda _config: source_s3)
+    monkeypatch.setattr(sync_module, "aws_client", lambda: destination_s3)
+
+    summary = sync_module.sync_prefix(
+        sync_config(prefix),
+        product=S3_OLCI_L2_WFR_CDSE_PRODUCT,
+    )
+
+    assert summary["failed"] == 0
+    assert summary["copied"] == 2
+    assert destination_s3.uploads == [data_key, metadata_key]
+
+
+def test_s3_direct_copy_refreshes_changed_metadata_but_not_tif(monkeypatch):
+    prefix = "s3_wfr_test/2026/02/09/37NBB_0_0/"
+    metadata_key = f"{prefix}S3_OL_2_WFR_20260209_NT_37NBB_0_0_metadata.json"
+    data_key = f"{prefix}CHL_NN.tif"
+    source_bodies = {
+        metadata_key: b'{"version":"new"}',
+        data_key: b"new-tif",
+    }
+    destination_bodies = {
+        metadata_key: b'{"version":"old"}',
+        data_key: b"old",
+    }
+    source_objects = [
+        source_object(data_key, size=len(source_bodies[data_key])),
+        source_object(metadata_key, size=len(source_bodies[metadata_key])),
+        source_object(f"{prefix}userdata.json"),
+    ]
+    source_s3 = FakeCopyS3Client(source_objects, bodies=source_bodies)
+    destination_s3 = FakeCopyS3Client(bodies=destination_bodies)
+
+    monkeypatch.setattr(sync_module, "cloudferro_client", lambda _config: source_s3)
+    monkeypatch.setattr(sync_module, "aws_client", lambda: destination_s3)
+
+    summary = sync_module.sync_prefix(
+        sync_config(prefix),
+        product=S3_OLCI_L2_WFR_CDSE_PRODUCT,
+    )
+
+    assert summary["failed"] == 0
+    assert summary["copied"] == 1
+    assert summary["skipped_mismatched"] == 1
+    assert destination_s3.uploads == [metadata_key]
+    assert destination_s3.bodies[metadata_key] == source_bodies[metadata_key]
+    assert destination_s3.bodies[data_key] == destination_bodies[data_key]
 
 
 def test_s3_lfr_discovery_accepts_direct_layout_and_ignores_job_nested_layout():
@@ -362,6 +516,116 @@ def test_s3_lfr_discovery_accepts_direct_layout_and_ignores_job_nested_layout():
             "reason": "unexpected_key_layout",
         },
     ]
+
+
+def test_s3_lfr_discovery_accepts_operational_source_root_prefix():
+    source_root = "Sentinel-3/OLCI/OL_2_LFR"
+    prefix = f"{source_root}/2026/02/09/44HME_0_0/"
+    product = sync_module.direct_copy_product_spec_for_source_root(
+        S3_OLCI_L2_LFR_CDSE_PRODUCT,
+        source_root,
+    )
+    source_objects = [
+        source_object(f"{prefix}userdata.json"),
+        source_object(f"{prefix}metadata.json"),
+        source_object(f"{prefix}OTCI.tif"),
+    ]
+
+    discovery = discover_completed_prefixes(
+        FakeS3Client(source_objects),
+        "bucket",
+        f"{source_root}/",
+        product,
+    )
+
+    assert discovery["completed_prefixes"] == [
+        {
+            "source_prefix": prefix,
+            "stac_item": f"{prefix}metadata.json",
+            "found": 3,
+        }
+    ]
+    copyable, skipped = classify_source_objects(source_objects, product)
+    assert [object_["Key"].rsplit("/", 1)[-1] for object_ in copyable] == [
+        "metadata.json",
+        "OTCI.tif",
+    ]
+    assert skipped == [
+        {"source_key": f"{prefix}userdata.json", "reason": "excluded_userdata_json"}
+    ]
+    assert transform_key(f"{prefix}metadata.json", product) == f"{prefix}metadata.json"
+
+
+def test_s3_wfr_discovery_accepts_operational_archive_layout():
+    source_root = "Sentinel-3/OLCI/OL_2_WFR"
+    dataset = "S3_OL_2_WFR_20260209_NT_37NBB_0_0"
+    prefix = f"{source_root}/2026/02/{dataset}/"
+    metadata_key = f"{prefix}{dataset}_metadata.json"
+    product = sync_module.direct_copy_product_spec_for_source_root(
+        S3_OLCI_L2_WFR_CDSE_PRODUCT,
+        source_root,
+    )
+    source_objects = [
+        source_object(f"{prefix}userdata.json"),
+        source_object(metadata_key),
+        source_object(f"{prefix}CHL_NN.tif"),
+        source_object(f"{prefix}dataMask.tif"),
+    ]
+
+    discovery = discover_completed_prefixes(
+        FakeS3Client(source_objects),
+        "bucket",
+        f"{source_root}/",
+        product,
+    )
+
+    assert discovery["completed_prefixes"] == [
+        {
+            "source_prefix": prefix,
+            "stac_item": metadata_key,
+            "found": 4,
+        }
+    ]
+    copyable, skipped = classify_source_objects(source_objects, product)
+    assert [object_["Key"].rsplit("/", 1)[-1] for object_ in copyable] == [
+        f"{dataset}_metadata.json",
+        "CHL_NN.tif",
+        "dataMask.tif",
+    ]
+    assert skipped == [
+        {"source_key": f"{prefix}userdata.json", "reason": "excluded_userdata_json"}
+    ]
+    assert transform_key(metadata_key, product) == metadata_key
+
+
+def test_infer_direct_copy_source_root_prefix_from_operational_prefixes():
+    source_root = "Sentinel-3/OLCI/OL_2_LFR"
+    dataset = "S3_OL_2_LFR_20260209_NT_44HME_0_0"
+
+    assert (
+        sync_module.infer_direct_copy_source_root_prefix(f"{source_root}/")
+        == source_root
+    )
+    assert (
+        sync_module.infer_direct_copy_source_root_prefix(f"{source_root}/2026/")
+        == source_root
+    )
+    assert (
+        sync_module.infer_direct_copy_source_root_prefix(f"{source_root}/2026/02/09/")
+        == source_root
+    )
+    assert (
+        sync_module.infer_direct_copy_source_root_prefix(
+            f"{source_root}/2026/02/{dataset}/"
+        )
+        == source_root
+    )
+    assert (
+        sync_module.infer_direct_copy_source_root_prefix(
+            f"{source_root}/2026/02/09/44HME_0_0/"
+        )
+        == source_root
+    )
 
 
 def test_sync_all_prefixes_can_limit_processed_prefixes(monkeypatch):

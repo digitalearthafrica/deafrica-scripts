@@ -11,7 +11,7 @@ such as Sentinel-3 and Sentinel-5P preserve the CloudFerro key layout.
 
 The sync is gated on product-specific completion files, for example:
   - Sentinel-1: metadata.xml and userdata.json
-  - Sentinel-3 LFR: metadata.json and userdata.json
+  - Sentinel-3 LFR/WFR: STAC metadata JSON and userdata.json
 
 Example:
     sentinel-sync-cloudferro \
@@ -34,7 +34,8 @@ Example:
         --product s3_olci_l2_lfr_cdse \
         --source-bucket cdse_batch_test_bucket \
         --all-prefixes \
-        --discovery-prefix s3_lfr_test/ \
+        --discovery-prefix Sentinel-3/OLCI/OL_2_LFR/ \
+        --source-root-prefix Sentinel-3/OLCI/OL_2_LFR/ \
         --max-workers 4 \
         --destination-bucket <destination-bucket>
 """
@@ -101,6 +102,15 @@ class ProductSyncSpec:
     skip_reason: Callable[[str], str | None]
     stac_item_from_objects: Callable[[list[dict]], str | None]
     requires_stac_item_arg: bool = False
+    required_filename_patterns: tuple[str, ...] = ()
+    direct_copy_allowed_filename_patterns: tuple[str, ...] | None = None
+    direct_copy_excluded_filename_patterns: tuple[str, ...] = (
+        "userdata.json",
+        "request-*.json",
+    )
+    direct_copy_allow_nested_files: bool = False
+    direct_copy_date_depths: tuple[int, ...] = (3,)
+    required_data_filename_patterns: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -123,6 +133,76 @@ def product_spec_for_name(name: str) -> ProductSyncSpec:
         return PRODUCT_SPECS[name]
     except KeyError as err:
         raise click.ClickException(f"Unsupported product: {name}") from err
+
+
+def direct_copy_product_spec_for_source_root(
+    product: ProductSyncSpec, source_root_prefix: str | None
+) -> ProductSyncSpec:
+    if not product.direct_copy_allowed_filename_patterns:
+        return product
+    if not source_root_prefix:
+        return product
+
+    source_root_prefix = source_root_prefix.strip("/")
+    return replace(
+        product,
+        discovery_prefix=normalize_s3_prefix(source_root_prefix),
+        key_prefix_from_key=direct_product_prefix_from_key_factory(
+            source_root_prefix,
+            allow_nested_files=product.direct_copy_allow_nested_files,
+            date_depths=product.direct_copy_date_depths,
+        ),
+        skip_reason=direct_product_skip_reason_factory(
+            expected_prefix=source_root_prefix,
+            allowed_filename_patterns=product.direct_copy_allowed_filename_patterns,
+            excluded_filename_patterns=product.direct_copy_excluded_filename_patterns,
+            allow_nested_files=product.direct_copy_allow_nested_files,
+            date_depths=product.direct_copy_date_depths,
+        ),
+    )
+
+
+def infer_direct_copy_source_root_prefix(prefix: str | None) -> str | None:
+    if not prefix:
+        return None
+
+    parts = prefix.strip("/").split("/")
+    if len(parts) >= 4 and is_yyyymmdd(parts[-4:-1]):
+        return "/".join(parts[:-4])
+    if len(parts) >= 3 and is_year_month(parts[-3:-1]):
+        return "/".join(parts[:-3])
+    if len(parts) >= 3 and is_yyyymmdd(parts[-3:]):
+        return "/".join(parts[:-3])
+    if len(parts) >= 2 and is_year_month(parts[-2:]):
+        return "/".join(parts[:-2])
+    if parts and is_year(parts[-1]):
+        return "/".join(parts[:-1])
+
+    return "/".join(parts)
+
+
+def is_yyyymmdd(parts: list[str]) -> bool:
+    return (
+        len(parts) == 3
+        and is_year(parts[0])
+        and parts[1].isdigit()
+        and len(parts[1]) == 2
+        and parts[2].isdigit()
+        and len(parts[2]) == 2
+    )
+
+
+def is_year_month(parts: list[str]) -> bool:
+    return (
+        len(parts) == 2
+        and is_year(parts[0])
+        and parts[1].isdigit()
+        and len(parts[1]) == 2
+    )
+
+
+def is_year(part: str) -> bool:
+    return part.isdigit() and len(part) == 4
 
 
 def as_bool(value) -> bool:
@@ -170,6 +250,7 @@ def sync_prefix(config: SyncConfig, product: ProductSyncSpec = None) -> dict:
     summary = {
         "product": product.name,
         "source_bucket": config.source_bucket,
+        "source_root_prefix": product.discovery_prefix,
         "source_prefix": config.source_prefix,
         "stac_item": config.stac_item,
         "destination_bucket": config.destination_bucket,
@@ -181,6 +262,7 @@ def sync_prefix(config: SyncConfig, product: ProductSyncSpec = None) -> dict:
         "skip_reason": None,
         "required_files_present": False,
         "missing_required_files": [],
+        "data_assets_present": not product.required_data_filename_patterns,
         "ready_to_sync": False,
         "too_recent_files": [],
         "found": 0,
@@ -237,6 +319,17 @@ def sync_prefix(config: SyncConfig, product: ProductSyncSpec = None) -> dict:
     summary["skipped_unexpected"] = sum(
         1 for obj in skipped_source_objects if obj["reason"].startswith("unexpected_")
     )
+    summary["data_assets_present"] = contains_required_data_assets(
+        copyable_objects, product
+    )
+    if not summary["data_assets_present"]:
+        log.warning(
+            "Source prefix has no required data assets matching %s",
+            product.required_data_filename_patterns,
+        )
+        summary["skip_reason"] = "missing_data_assets"
+        return summary
+    copyable_objects = sorted(copyable_objects, key=copy_metadata_last_key)
 
     readiness = validate_source_prefix_ready(
         source_objects, config.min_object_age_minutes
@@ -256,9 +349,17 @@ def sync_prefix(config: SyncConfig, product: ProductSyncSpec = None) -> dict:
             destination_key = source_object.get("DestinationKey") or transform_key(
                 source_key, product
             )
+            metadata_object = is_metadata_json(destination_key)
 
             status = destination_status(
-                destination_s3, config.destination_bucket, destination_key, source_size
+                source_s3=source_s3,
+                destination_s3=destination_s3,
+                source_bucket=source_bucket,
+                source_key=source_key,
+                source_size=source_size,
+                destination_bucket=config.destination_bucket,
+                destination_key=destination_key,
+                allow_metadata_refresh=metadata_object,
             )
 
             if status == "matching":
@@ -360,6 +461,7 @@ def sync_all_prefixes(
         "product": product.name,
         "source_bucket": config.source_bucket,
         "destination_bucket": config.destination_bucket,
+        "source_root_prefix": product.discovery_prefix,
         "dry_run": config.dry_run,
         "min_object_age_minutes": config.min_object_age_minutes,
         "discovery_prefix": discovery_prefix,
@@ -553,6 +655,7 @@ def s1_tile_prefix_from_key(source_key: str) -> str | None:
 def direct_product_prefix_from_key_factory(
     expected_prefix: str,
     allow_nested_files: bool = False,
+    date_depths: tuple[int, ...] = (3,),
 ) -> Callable[[str], str | None]:
     expected_parts = expected_prefix.strip("/").split("/")
 
@@ -562,24 +665,32 @@ def direct_product_prefix_from_key_factory(
             return None
 
         remaining = parts[len(expected_parts) :]
-        if len(remaining) < 5:
-            return None
+        for date_depth in date_depths:
+            if len(remaining) < date_depth + 2:
+                continue
 
-        year, month, day, grouping_id, *filename_parts = remaining
-        if not filename_parts:
-            return None
-        if not allow_nested_files and len(filename_parts) != 1:
-            return None
-        if not (year.isdigit() and len(year) == 4):
-            return None
-        if not (month.isdigit() and len(month) == 2):
-            return None
-        if not (day.isdigit() and len(day) == 2):
-            return None
+            date_parts = remaining[:date_depth]
+            grouping_id = remaining[date_depth]
+            filename_parts = remaining[date_depth + 1 :]
 
-        return "/".join([*expected_parts, year, month, day, grouping_id]) + "/"
+            if not direct_product_date_parts_valid(date_parts):
+                continue
+            if date_depth == 2 and grouping_id.isdigit() and len(grouping_id) == 2:
+                continue
+            if not filename_parts:
+                continue
+            if not allow_nested_files and len(filename_parts) != 1:
+                continue
+
+            return "/".join([*expected_parts, *date_parts, grouping_id]) + "/"
+
+        return None
 
     return key_prefix_from_key
+
+
+def direct_product_date_parts_valid(parts: list[str]) -> bool:
+    return is_yyyymmdd(parts) or is_year_month(parts)
 
 
 def find_stac_item(
@@ -601,10 +712,10 @@ def find_s1_stac_item(source_objects: list[dict]) -> str | None:
 
 
 def find_metadata_json_stac_item(source_objects: list[dict]) -> str | None:
-    """Return the product STAC metadata.json key for a discovered tile prefix."""
+    """Return the product STAC metadata JSON key for a discovered tile prefix."""
     for source_object in sorted(source_objects, key=lambda item: item["Key"]):
         source_key = source_object["Key"]
-        if object_filename(source_key) == "metadata.json":
+        if is_metadata_json(source_key):
             return source_key
 
     return None
@@ -772,7 +883,14 @@ def validate_required_files(
     filenames = {
         object_filename(source_object["Key"]) for source_object in source_objects
     }
-    missing = sorted(product.required_files - filenames)
+    if product.required_filename_patterns:
+        missing = sorted(
+            pattern
+            for pattern in product.required_filename_patterns
+            if not any(fnmatch(filename, pattern) for filename in filenames)
+        )
+    else:
+        missing = sorted(product.required_files - filenames)
 
     return {
         "required_files_present": not missing,
@@ -797,6 +915,29 @@ def classify_source_objects(
             copyable.append(source_object)
 
     return copyable, skipped
+
+
+def contains_required_data_assets(
+    source_objects: list[dict],
+    product: ProductSyncSpec = None,
+) -> bool:
+    product = product or DEFAULT_PRODUCT_SPEC
+    if not product.required_data_filename_patterns:
+        return True
+
+    for source_object in source_objects:
+        filename = object_filename(source_object["Key"])
+        if any(
+            fnmatch(filename, pattern)
+            for pattern in product.required_data_filename_patterns
+        ):
+            return True
+
+    return False
+
+
+def copy_metadata_last_key(source_object: dict) -> bool:
+    return is_metadata_json(source_object.get("DestinationKey") or source_object["Key"])
 
 
 def skip_reason(source_key: str, product: ProductSyncSpec = None) -> str | None:
@@ -849,10 +990,12 @@ def direct_product_skip_reason_factory(
         "request-*.json",
     ),
     allow_nested_files: bool = False,
+    date_depths: tuple[int, ...] = (3,),
 ) -> Callable[[str], str | None]:
     key_prefix_from_key = direct_product_prefix_from_key_factory(
         expected_prefix,
         allow_nested_files=allow_nested_files,
+        date_depths=date_depths,
     )
 
     def skip_reason(source_key: str) -> str | None:
@@ -875,6 +1018,11 @@ def direct_product_skip_reason_factory(
 
 def object_filename(key: str) -> str:
     return key.strip("/").rsplit("/", 1)[-1]
+
+
+def is_metadata_json(key: str) -> bool:
+    filename = object_filename(key)
+    return filename == "metadata.json" or filename.endswith("_metadata.json")
 
 
 def dataset_filename_prefix(source_key: str) -> str:
@@ -952,18 +1100,48 @@ def destination_filename(
     return f"{prefix}{filename}"
 
 
-def destination_status(client, bucket: str, key: str, source_size: int) -> str:
-    """Return missing, matching, or mismatched without allowing overwrites."""
+def destination_status(
+    source_s3,
+    destination_s3,
+    source_bucket: str,
+    source_key: str,
+    source_size: int,
+    destination_bucket: str,
+    destination_key: str,
+    allow_metadata_refresh: bool = False,
+) -> str:
+    """Return missing, matching, changed, or mismatched for a destination object."""
     try:
-        destination = client.head_object(Bucket=bucket, Key=key)
+        destination = destination_s3.head_object(
+            Bucket=destination_bucket,
+            Key=destination_key,
+        )
         destination_size = destination["ContentLength"]
+        if allow_metadata_refresh:
+            if metadata_content_matches(
+                source_s3=source_s3,
+                destination_s3=destination_s3,
+                source_bucket=source_bucket,
+                source_key=source_key,
+                destination_bucket=destination_bucket,
+                destination_key=destination_key,
+            ):
+                return "matching"
+
+            log.info(
+                "Destination metadata differs for s3://%s/%s; it will be refreshed",
+                destination_bucket,
+                destination_key,
+            )
+            return "changed"
+
         if destination_size == source_size:
             return "matching"
         log.warning(
             "Destination object exists but size differs for s3://%s/%s: "
             "source=%s, destination=%s. Not overwriting.",
-            bucket,
-            key,
+            destination_bucket,
+            destination_key,
             source_size,
             destination_size,
         )
@@ -976,6 +1154,30 @@ def destination_status(client, bucket: str, key: str, source_size: int) -> str:
         }:
             return "missing"
         raise
+
+
+def metadata_content_matches(
+    source_s3,
+    destination_s3,
+    source_bucket: str,
+    source_key: str,
+    destination_bucket: str,
+    destination_key: str,
+) -> bool:
+    source_body = read_object_body(source_s3, source_bucket, source_key)
+    destination_body = read_object_body(
+        destination_s3, destination_bucket, destination_key
+    )
+    return source_body == destination_body
+
+
+def read_object_body(client, bucket: str, key: str) -> bytes:
+    obj = client.get_object(Bucket=bucket, Key=key)
+    body = obj["Body"]
+    try:
+        return body.read()
+    finally:
+        body.close()
 
 
 def copy_object(
@@ -1041,24 +1243,32 @@ S3_OLCI_L2_LFR_CDSE_SOURCE_PREFIX = "s3_lfr_test"
 # The nested job-id layout should be ignored:
 #   s3_lfr_test/YYYY/MM/DD/JOB_ID/TILE/file
 #
-# The accepted direct layout is:
+# Accepted direct layouts are:
 #   s3_lfr_test/YYYY/MM/DD/TILE/file
+#   Sentinel-3/OLCI/OL_2_LFR/YYYY/MM/DATASET/file
 S3_OLCI_L2_LFR_CDSE_PRODUCT = ProductSyncSpec(
     name="s3_olci_l2_lfr_cdse",
     discovery_prefix=f"{S3_OLCI_L2_LFR_CDSE_SOURCE_PREFIX}/",
     default_destination_bucket=None,
-    required_files=frozenset({"metadata.json", "userdata.json"}),
+    required_files=frozenset(),
+    required_filename_patterns=("*metadata.json", "userdata.json"),
     key_prefix_from_key=direct_product_prefix_from_key_factory(
         S3_OLCI_L2_LFR_CDSE_SOURCE_PREFIX,
         allow_nested_files=False,
+        date_depths=(3, 2),
     ),
     key_transform=identity_transform_key,
     skip_reason=direct_product_skip_reason_factory(
         expected_prefix=S3_OLCI_L2_LFR_CDSE_SOURCE_PREFIX,
-        allowed_filename_patterns=("*.tif", "metadata.json"),
+        allowed_filename_patterns=("*.tif", "*metadata.json"),
         allow_nested_files=False,
+        date_depths=(3, 2),
     ),
     stac_item_from_objects=find_metadata_json_stac_item,
+    direct_copy_allowed_filename_patterns=("*.tif", "*metadata.json"),
+    direct_copy_allow_nested_files=False,
+    direct_copy_date_depths=(3, 2),
+    required_data_filename_patterns=("*.tif",),
 )
 
 S3_OLCI_L2_WFR_CDSE_SOURCE_PREFIX = "s3_wfr_test"
@@ -1066,18 +1276,25 @@ S3_OLCI_L2_WFR_CDSE_PRODUCT = ProductSyncSpec(
     name="s3_olci_l2_wfr_cdse",
     discovery_prefix=f"{S3_OLCI_L2_WFR_CDSE_SOURCE_PREFIX}/",
     default_destination_bucket=None,
-    required_files=frozenset({"metadata.json", "userdata.json"}),
+    required_files=frozenset(),
+    required_filename_patterns=("*metadata.json", "userdata.json"),
     key_prefix_from_key=direct_product_prefix_from_key_factory(
         S3_OLCI_L2_WFR_CDSE_SOURCE_PREFIX,
         allow_nested_files=False,
+        date_depths=(3, 2),
     ),
     key_transform=identity_transform_key,
     skip_reason=direct_product_skip_reason_factory(
         expected_prefix=S3_OLCI_L2_WFR_CDSE_SOURCE_PREFIX,
-        allowed_filename_patterns=("*.tif", "metadata.json"),
+        allowed_filename_patterns=("*.tif", "*metadata.json"),
         allow_nested_files=False,
+        date_depths=(3, 2),
     ),
     stac_item_from_objects=find_metadata_json_stac_item,
+    direct_copy_allowed_filename_patterns=("*.tif", "*metadata.json"),
+    direct_copy_allow_nested_files=False,
+    direct_copy_date_depths=(3, 2),
+    required_data_filename_patterns=("*.tif",),
 )
 
 PRODUCT_SPECS = {
@@ -1129,7 +1346,17 @@ DEFAULT_PRODUCT_SPEC = S1_RTC_PRODUCT
     envvar="DISCOVERY_PREFIX",
     help=(
         "CloudFerro prefix to scan when --all-prefixes is set. "
-        "Defaults to the selected product prefix."
+        "Defaults to the selected product root prefix."
+    ),
+)
+@click.option(
+    "--source-root-prefix",
+    default=None,
+    envvar="SOURCE_ROOT_PREFIX",
+    help=(
+        "CloudFerro product root prefix used to validate direct-copy product "
+        "layouts. Defaults to the selected product prefix, or is inferred from "
+        "--discovery-prefix/--source-prefix for direct-copy products."
     ),
 )
 @click.option(
@@ -1219,6 +1446,7 @@ def cli(
     stac_item,
     all_prefixes,
     discovery_prefix,
+    source_root_prefix,
     max_workers,
     max_prefixes,
     destination_bucket,
@@ -1233,6 +1461,14 @@ def cli(
 ):
     """Sync CDSE tile outputs from CloudFerro to AWS S3."""
     product_spec = product_spec_for_name(product)
+    if product_spec.direct_copy_allowed_filename_patterns:
+        source_root_prefix = source_root_prefix or infer_direct_copy_source_root_prefix(
+            discovery_prefix if all_prefixes else source_prefix
+        )
+        product_spec = direct_copy_product_spec_for_source_root(
+            product_spec, source_root_prefix
+        )
+
     discovery_prefix = discovery_prefix or product_spec.discovery_prefix
     destination_bucket = destination_bucket or product_spec.default_destination_bucket
     if not destination_bucket:
