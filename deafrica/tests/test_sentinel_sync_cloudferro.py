@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 
-import deafrica.data.cdse_pipelines.s1_sync_cloudferro as sync_module
-from deafrica.data.cdse_pipelines.s1_sync_cloudferro import (
+import deafrica.data.cdse_pipelines.sentinel_sync_cloudferro as sync_module
+from deafrica.data.cdse_pipelines.sentinel_sync_cloudferro import (
     S3_OLCI_L2_LFR_CDSE_PRODUCT,
     S3_OLCI_L2_WFR_CDSE_PRODUCT,
     SyncConfig,
