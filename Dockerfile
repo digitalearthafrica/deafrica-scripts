@@ -8,7 +8,8 @@ ENV CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt\
     USE_PYGEOS=0 \
     GS_NO_SIGN_REQUEST=YES
 
-RUN apt-get update \
+RUN rm -f /etc/apt/sources.list.d/apache-arrow.sources && \
+    apt-get update \
     && apt-get install -y \
         # Developer convenience
         git \
