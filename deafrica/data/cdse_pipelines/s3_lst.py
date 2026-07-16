@@ -945,7 +945,9 @@ def wait(job_ids, interval, timeout):
     help="Generate and print one STAC item for the first tile with scenes, "
     "then exit. Nothing is uploaded.",
 )
-def stac(date, end_date, output_bucket, href_bucket, full_aoi, timeliness, max_workers, test):
+def stac(
+    date, end_date, output_bucket, href_bucket, full_aoi, timeliness, max_workers, test
+):
     """
     Generate a STAC item for every processed tile of every date and upload it
     alongside the tifs on --output-bucket. Idempotent: tiles whose

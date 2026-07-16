@@ -164,6 +164,7 @@ PROPERTY_ORDER = [
 # stac_extensions order
 EXTENSION_ORDER = ("/product/", "/projection/")
 
+
 def deafrica_base_uri(
     cfg: dict, date: str, tile: str, timeliness: str, bucket: str | None = None
 ) -> str:
@@ -691,9 +692,7 @@ def generate_stac_items(
             return {"tile": tile, "status": "error", "error": str(e)}
 
         if not scenes:
-            log.info(
-                f"  {tile}: no {cfg['native_type']} scenes on {date} - skipping"
-            )
+            log.info(f"  {tile}: no {cfg['native_type']} scenes on {date} - skipping")
             return {"tile": tile, "status": "no_scenes"}
 
         tile_timeliness = _timeliness(scenes[0]["id"])
@@ -1039,7 +1038,17 @@ def wait(job_ids, interval, timeout):
     help="Generate and print one STAC item for the first tile with scenes, "
     "then exit. Nothing is uploaded.",
 )
-def stac(product, date, end_date, output_bucket, href_bucket, full_aoi, timeliness, max_workers, test):
+def stac(
+    product,
+    date,
+    end_date,
+    output_bucket,
+    href_bucket,
+    full_aoi,
+    timeliness,
+    max_workers,
+    test,
+):
     """
     Generate a STAC item for every processed tile of every date and upload it
     alongside the tifs on --output-bucket. Idempotent: tiles whose
