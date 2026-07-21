@@ -94,7 +94,7 @@ SATELLITES = {
         "odc_product": "s3_slstr_l2_lst",
     },
     "s3_vg1": {
-        "type": "sentinel-3-syn-l2",
+        "type": "sentinel-3-synergy-l2",
         "bands": [
             "B0_VG1",
             "B2_VG1",

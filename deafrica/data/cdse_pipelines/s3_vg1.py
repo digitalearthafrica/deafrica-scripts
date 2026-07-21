@@ -46,7 +46,7 @@ SH_BATCH_URL = "https://sh.dataspace.copernicus.eu/api/v2/batch/process"
 # CloudFerro staging bucket the batch job delivers into
 DEFAULT_OUTPUT_BUCKET = "cdse_batch_test_bucket"
 
-S3_SYN_L2_COLLECTION = "sentinel-3-syn-l2"
+S3_SYN_L2_COLLECTION = "sentinel-3-synergy-l2"
 PRODUCT_TYPE = "SY_2_VG1"
 ODC_PRODUCT = "s3_syn_2_vg1"
 
