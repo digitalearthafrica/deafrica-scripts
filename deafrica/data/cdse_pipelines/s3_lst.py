@@ -785,18 +785,34 @@ def _submit_one(
     info = poll_status(
         session,
         job_id,
-        terminal={"ANALYSIS_DONE", "FAILED", "CANCELED"},
+        terminal={"ANALYSIS_DONE", "PROCESSING", "DONE", "FAILED", "CANCELED"},
         timeout=900,
     )
-    if info.get("status") != "ANALYSIS_DONE":
-        log.error(f"Analysis did not complete: {json.dumps(info, indent=2)[:2000]}")
-        raise RuntimeError(f"Job {job_id} analysis ended in {info.get('status')}")
+    status = info.get("status")
 
-    start = session.post(f"{SH_BATCH_URL}/{job_id}/start")
-    if not start.ok:
-        log.error(f"Start failed ({start.status_code}): {start.text[:2000]}")
-        start.raise_for_status()
-    log.info(f"Started job {job_id}")
+    if status in ("FAILED", "CANCELED"):
+        log.error(f"Analysis did not complete: {json.dumps(info, indent=2)[:2000]}")
+        raise RuntimeError(f"Job {job_id} analysis ended in {status}")
+
+    if status == "ANALYSIS_DONE":
+        start = session.post(f"{SH_BATCH_URL}/{job_id}/start")
+        if not start.ok:
+            log.error(f"Start failed ({start.status_code}): {start.text[:2000]}")
+            start.raise_for_status()
+        log.info(f"Started job {job_id}")
+    else:
+        # DONE and costPU > 0 - real job already finished
+        log.info(
+            f"Job {job_id} already {status} after analysis "
+            f"(completion={info.get('completionPercentage')}%, "
+            f"costPU={info.get('costPU')}); skipping explicit start"
+        )
+        # DONE and costPU = 0 - outputs already exist
+        if status == "DONE" and not info.get("costPU"):
+            log.info(
+                f"{date}: costPU=0 - all outputs already existed at the "
+                f"delivery prefix; nothing was (re)rendered"
+            )
 
     year, month, day = date.split("-")
     log.info(
