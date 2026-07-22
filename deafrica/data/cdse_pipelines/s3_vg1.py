@@ -18,7 +18,6 @@ import re
 import statistics
 import sys
 import tempfile
-import time
 from datetime import datetime, timedelta, timezone
 
 import boto3
@@ -35,13 +34,11 @@ from pystac.extensions.eo import EOExtension
 from pystac.extensions.projection import ProjectionExtension
 
 from .auth import get_session
-from .payloads import build_batch_payload, redact_payload
 from .satellites import SATELLITES
 from .s1 import SH_CATALOG_URL, _parse_datetime, save_stac_item, upload_stac_item
+from .utils import poll_status, submit_one
 
 from deafrica.logs import setup_logging
-
-SH_BATCH_URL = "https://sh.dataspace.copernicus.eu/api/v2/batch/process"
 
 # CloudFerro staging bucket the batch job delivers into
 DEFAULT_OUTPUT_BUCKET = "cdse_batch_test_bucket"
@@ -663,23 +660,6 @@ def generate_stac_items(
     return results
 
 
-def poll_status(
-    session, job_id: str, terminal: set, interval: int = 30, timeout: int = 3600
-) -> dict:
-    "Poll the batch job until it reaches one of the given terminal states."
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        resp = session.get(f"{SH_BATCH_URL}/{job_id}", timeout=60)
-        resp.raise_for_status()
-        info = resp.json()
-        status = info.get("status")
-        log.info(f"  job {job_id}: {status}")
-        if status in terminal:
-            return info
-        time.sleep(interval)
-    raise TimeoutError(f"Job {job_id} did not reach {terminal} within {timeout}s")
-
-
 _date_option = click.option(
     "--date",
     "-d",
@@ -751,68 +731,17 @@ def _submit_one(
     log.info(
         f"{date}: archive folder timeliness (from product filenames): {job_timeliness}"
     )
-
-    payload = build_batch_payload(
-        sat_config=sat_config,
-        time_from=f"{date}T00:00:00Z",
-        time_to=f"{date}T23:59:59Z",
-        bbox=aoi_bbox,
-    )
-    payload["description"] = f"Batch Sentinel-3 VG1 test {date}"
-
-    # Physical delivery to CF bucket (--output-bucket)
-    payload["output"]["delivery"]["s3"]["url"] = (
-        deafrica_base_uri(date, "<tileName>", job_timeliness, output_bucket)
-        + "/<outputId>.<format>"
-    )
-
-    if dry_run:
-        print(json.dumps(redact_payload(payload), indent=2))
-        return {"date": date, "timeliness": job_timeliness, "status": "dry_run"}
-
-    resp = session.post(SH_BATCH_URL, json=payload)
-    if not resp.ok:
-        # surface the API's validation message - batch 400s are usually specific
-        log.error(f"Create failed ({resp.status_code}): {resp.text[:2000]}")
-        resp.raise_for_status()
-    job_id = resp.json()["id"]
-    log.info(f"Created job {job_id}")
-
-    # Analyse before starting - validates the geopackage and job parameters
-    analyse = session.post(f"{SH_BATCH_URL}/{job_id}/analyse")
-    if not analyse.ok:
-        log.error(f"Analyse failed ({analyse.status_code}): {analyse.text[:2000]}")
-        analyse.raise_for_status()
-
-    info = poll_status(
+    return submit_one(
         session,
-        job_id,
-        terminal={"ANALYSIS_DONE", "FAILED", "CANCELED"},
-        timeout=900,
+        sat_config,
+        date,
+        job_timeliness,
+        delivery_url=deafrica_base_uri(date, "<tileName>", job_timeliness, output_bucket)
+        + "/<outputId>.<format>",
+        description=f"Batch Sentinel-3 VG1 {date}",
+        aoi_bbox=aoi_bbox,
+        dry_run=dry_run,
     )
-    if info.get("status") != "ANALYSIS_DONE":
-        log.error(f"Analysis did not complete: {json.dumps(info, indent=2)[:2000]}")
-        raise RuntimeError(f"Job {job_id} analysis ended in {info.get('status')}")
-
-    start = session.post(f"{SH_BATCH_URL}/{job_id}/start")
-    if not start.ok:
-        log.error(f"Start failed ({start.status_code}): {start.text[:2000]}")
-        start.raise_for_status()
-    log.info(f"Started job {job_id}")
-
-    year, month, day = date.split("-")
-    log.info(
-        f"Outputs will be delivered under "
-        f"s3://{output_bucket}/Sentinel-3/SYN/{PRODUCT_TYPE}/{year}/{month}/ "
-        f"- same keys as the final archive"
-    )
-
-    return {
-        "date": date,
-        "job_id": job_id,
-        "timeliness": job_timeliness,
-        "status": "started",
-    }
 
 
 @cli.command("submit")
