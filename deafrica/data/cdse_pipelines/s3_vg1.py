@@ -2,13 +2,22 @@
 """
 Submits a CDSE Batch Processing V2 job for Sentinel-3 Synergy Level 2 1-day Vegetation (VGT-like) composite (s3_vg1).
 If run in stac mode, generates a STAC item for every processed tile and uploads it alongside the tifs.
-
+ 
 Three stages, each its own subcommand (so each can run as its own Argo step):
-
-    s3-vg1-batch-test submit -d 2026-02-09   # create + analyse + start; prints
-                                             # {"job_id": ..., "timeliness": ...}
-    s3-vg1-batch-test wait --job-id <id>     # poll until terminal; exit 0 iff DONE
-    s3-vg1-batch-test stac -d 2026-02-09     # build + upload STAC items
+ 
+    s3-vg1-cdse-pipeline submit -d 2026-02-09   # create + analyse + start; prints
+                                                # {"jobs": [{date, job_id, timeliness, status}]}
+    s3-vg1-cdse-pipeline wait --job-id <id>     # poll until terminal; exit 0 iff DONE
+    s3-vg1-cdse-pipeline stac -d 2026-02-09     # build + upload STAC items
+ 
+End-to-end example:
+ 
+    DATE=2026-02-09
+    OUT=$(s3-vg1-cdse-pipeline submit -d "$DATE" --full-aoi)
+    JOB_ID=$(jq -r '.jobs[0].job_id' <<< "$OUT")
+    TIMELINESS=$(jq -r '.jobs[0].timeliness' <<< "$OUT")
+    s3-vg1-cdse-pipeline wait --job-id "$JOB_ID"
+    s3-vg1-cdse-pipeline stac -d "$DATE" --timeliness "$TIMELINESS"
 """
 
 import concurrent.futures

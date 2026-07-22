@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
 """
-Submits CDSE Batch Processing V2 jobs for the Sentinel-5P TROPOMI L2
-products (aer_ai, ch4, cloud, co, hcho, no2, o3, so2). All products share
-identical pipeline logic; per-product config lives in S5P_PRODUCTS and is
-selected with --product / -p.
+Submits CDSE Batch Processing V2 jobs for the Sentinel-5P TROPOMI L2 products (aer_ai, ch4, cloud, co, hcho, no2, o3, so2). All products share
+identical pipeline logic; per-product config lives in S5P_PRODUCTS and is selected with --product / -p.
 If run in stac mode, generates a STAC item for every processed tile and uploads it alongside the tifs.
 
 Three stages, each its own subcommand (so each can run as its own Argo step):
-
+ 
     s5p-cdse-pipeline submit -p no2 -d 2026-02-09   # create + analyse + start; prints
-                                                    # {"job_id": ..., "timeliness": ...}
+                                                    # {"jobs": [{date, job_id, timeliness, status}]}
     s5p-cdse-pipeline wait --job-id <id>            # poll until terminal; exit 0 iff DONE
     s5p-cdse-pipeline stac -p no2 -d 2026-02-09     # build + upload STAC items
+
+End-to-end example:
+ 
+    DATE=2026-02-09
+    OUT=$(s5p-cdse-pipeline submit -p no2 -d "$DATE" --full-aoi)
+    JOB_ID=$(jq -r '.jobs[0].job_id' <<< "$OUT")
+    TIMELINESS=$(jq -r '.jobs[0].timeliness' <<< "$OUT")
+    s5p-cdse-pipeline wait --job-id "$JOB_ID"
+    s5p-cdse-pipeline stac -p no2 -d "$DATE" --timeliness "$TIMELINESS"
 """
 
 import concurrent.futures
