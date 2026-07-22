@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Submits CDSE Batch Processing V2 jobs for the Sentinel-5P TROPOMI L2 products (aer_ai, ch4, cloud, co, hcho, no2, o3, so2). All products share
-identical pipeline logic; per-product config lives in S5P_PRODUCTS and is selected with --product / -p.
+Submits CDSE Batch Processing V2 jobs for the Sentinel-5P TROPOMI L2 products (aer_ai, ch4, cloud, co, hcho, no2, o3, so2). 
+All products share identical pipeline logic; per-product config lives in S5P_PRODUCTS and is selected with --product / -p.
 If run in stac mode, generates a STAC item for every processed tile and uploads it alongside the tifs.
 
 Three stages, each its own subcommand (so each can run as its own Argo step):
@@ -831,7 +831,9 @@ def _submit_one(
         sat_config,
         date,
         job_timeliness,
-        delivery_url=deafrica_base_uri(cfg, date, "<tileName>", job_timeliness, output_bucket)
+        delivery_url=deafrica_base_uri(
+            cfg, date, "<tileName>", job_timeliness, output_bucket
+        )
         + "/<outputId>.<format>",
         description=f"Batch Sentinel-5p {cfg['product_type']} {date}",
         aoi_bbox=aoi_bbox,

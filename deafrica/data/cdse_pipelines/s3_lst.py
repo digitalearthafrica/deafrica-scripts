@@ -18,7 +18,7 @@ End-to-end example:
     TIMELINESS=$(jq -r '.jobs[0].timeliness' <<< "$OUT")
     s3-lst-cdse-pipeline wait --job-id "$JOB_ID"
     s3-lst-cdse-pipeline stac -d "$DATE" --timeliness "$TIMELINESS"
-""" 
+"""
 
 import concurrent.futures
 import json
@@ -666,6 +666,7 @@ def generate_stac_items(
 
     return results
 
+
 _date_option = click.option(
     "--date",
     "-d",
@@ -742,12 +743,15 @@ def _submit_one(
         sat_config,
         date,
         job_timeliness,
-        delivery_url=deafrica_base_uri(date, "<tileName>", job_timeliness, output_bucket)
+        delivery_url=deafrica_base_uri(
+            date, "<tileName>", job_timeliness, output_bucket
+        )
         + "/<outputId>.<format>",
         description=f"Batch Sentinel-3 LST {date}",
         aoi_bbox=aoi_bbox,
         dry_run=dry_run,
     )
+
 
 @cli.command("submit")
 @_date_option

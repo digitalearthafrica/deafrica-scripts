@@ -745,7 +745,9 @@ def _submit_one(
         sat_config,
         date,
         job_timeliness,
-        delivery_url=deafrica_base_uri(date, "<tileName>", job_timeliness, output_bucket)
+        delivery_url=deafrica_base_uri(
+            date, "<tileName>", job_timeliness, output_bucket
+        )
         + "/<outputId>.<format>",
         description=f"Batch Sentinel-3 VG1 {date}",
         aoi_bbox=aoi_bbox,
