@@ -111,6 +111,7 @@ class ProductSyncSpec:
     direct_copy_allow_nested_files: bool = False
     direct_copy_date_depths: tuple[int, ...] = (3,)
     required_data_filename_patterns: tuple[str, ...] = ()
+    allowed_source_root_prefixes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -144,6 +145,7 @@ def direct_copy_product_spec_for_source_root(
         return product
 
     source_root_prefix = source_root_prefix.strip("/")
+    validate_direct_copy_source_root(product, source_root_prefix)
     return replace(
         product,
         discovery_prefix=normalize_s3_prefix(source_root_prefix),
@@ -159,6 +161,22 @@ def direct_copy_product_spec_for_source_root(
             allow_nested_files=product.direct_copy_allow_nested_files,
             date_depths=product.direct_copy_date_depths,
         ),
+    )
+
+
+def validate_direct_copy_source_root(
+    product: ProductSyncSpec, source_root_prefix: str
+) -> None:
+    allowed_prefixes = tuple(
+        prefix.strip("/") for prefix in product.allowed_source_root_prefixes
+    )
+    if not allowed_prefixes or source_root_prefix in allowed_prefixes:
+        return
+
+    allowed = ", ".join(repr(prefix) for prefix in allowed_prefixes)
+    raise click.UsageError(
+        f"Source root {source_root_prefix!r} is not valid for product "
+        f"{product.name}. Expected one of: {allowed}"
     )
 
 
@@ -1269,6 +1287,10 @@ S3_OLCI_L2_LFR_CDSE_PRODUCT = ProductSyncSpec(
     direct_copy_allow_nested_files=False,
     direct_copy_date_depths=(3, 2),
     required_data_filename_patterns=("*.tif",),
+    allowed_source_root_prefixes=(
+        S3_OLCI_L2_LFR_CDSE_SOURCE_PREFIX,
+        "Sentinel-3/OLCI/OL_2_LFR",
+    ),
 )
 
 S3_OLCI_L2_WFR_CDSE_SOURCE_PREFIX = "s3_wfr_test"
@@ -1295,12 +1317,111 @@ S3_OLCI_L2_WFR_CDSE_PRODUCT = ProductSyncSpec(
     direct_copy_allow_nested_files=False,
     direct_copy_date_depths=(3, 2),
     required_data_filename_patterns=("*.tif",),
+    allowed_source_root_prefixes=(
+        S3_OLCI_L2_WFR_CDSE_SOURCE_PREFIX,
+        "Sentinel-3/OLCI/OL_2_WFR",
+    ),
+)
+
+
+def direct_copy_cdse_product(
+    name: str,
+    source_root_prefix: str,
+    default_destination_bucket: str | None,
+) -> ProductSyncSpec:
+    source_root_prefix = source_root_prefix.strip("/")
+    return ProductSyncSpec(
+        name=name,
+        discovery_prefix=normalize_s3_prefix(source_root_prefix),
+        default_destination_bucket=default_destination_bucket,
+        required_files=frozenset(),
+        required_filename_patterns=("*metadata.json", "userdata.json"),
+        key_prefix_from_key=direct_product_prefix_from_key_factory(
+            source_root_prefix,
+            allow_nested_files=False,
+            date_depths=(3, 2),
+        ),
+        key_transform=identity_transform_key,
+        skip_reason=direct_product_skip_reason_factory(
+            expected_prefix=source_root_prefix,
+            allowed_filename_patterns=("*.tif", "*metadata.json"),
+            allow_nested_files=False,
+            date_depths=(3, 2),
+        ),
+        stac_item_from_objects=find_metadata_json_stac_item,
+        direct_copy_allowed_filename_patterns=("*.tif", "*metadata.json"),
+        direct_copy_allow_nested_files=False,
+        direct_copy_date_depths=(3, 2),
+        required_data_filename_patterns=("*.tif",),
+        allowed_source_root_prefixes=(source_root_prefix,),
+    )
+
+
+S3_SLSTR_L2_LST_PRODUCT = direct_copy_cdse_product(
+    name="s3_slstr_l2_lst",
+    source_root_prefix="Sentinel-3/SLSTR/SL_2_LST",
+    default_destination_bucket=None,
+)
+S3_SYN_2_VG1_PRODUCT = direct_copy_cdse_product(
+    name="s3_syn_2_vg1",
+    source_root_prefix="Sentinel-3/SYN/SY_2_VG1",
+    default_destination_bucket=None,
+)
+S5P_TROPOMI_L2_AER_AI_PRODUCT = direct_copy_cdse_product(
+    name="s5p_tropomi_l2_aer_ai",
+    source_root_prefix="Sentinel-5p/TROPOMI/TROPO_L2_AI",
+    default_destination_bucket=None,
+)
+S5P_TROPOMI_L2_CH4_PRODUCT = direct_copy_cdse_product(
+    name="s5p_tropomi_l2_ch4",
+    source_root_prefix="Sentinel-5p/TROPOMI/TROPO_L2_CH4",
+    default_destination_bucket=None,
+)
+S5P_TROPOMI_L2_CLOUD_PRODUCT = direct_copy_cdse_product(
+    name="s5p_tropomi_l2_cloud",
+    source_root_prefix="Sentinel-5p/TROPOMI/TROPO_L2_CLOUD",
+    default_destination_bucket=None,
+)
+S5P_TROPOMI_L2_CO_PRODUCT = direct_copy_cdse_product(
+    name="s5p_tropomi_l2_co",
+    source_root_prefix="Sentinel-5p/TROPOMI/TROPO_L2_CO",
+    default_destination_bucket=None,
+)
+S5P_TROPOMI_L2_HCHO_PRODUCT = direct_copy_cdse_product(
+    name="s5p_tropomi_l2_hcho",
+    source_root_prefix="Sentinel-5p/TROPOMI/TROPO_L2_HCHO",
+    default_destination_bucket=None,
+)
+S5P_TROPOMI_L2_NO2_PRODUCT = direct_copy_cdse_product(
+    name="s5p_tropomi_l2_no2",
+    source_root_prefix="Sentinel-5p/TROPOMI/TROPO_L2_NO2",
+    default_destination_bucket=None,
+)
+S5P_TROPOMI_L2_O3_PRODUCT = direct_copy_cdse_product(
+    name="s5p_tropomi_l2_o3",
+    source_root_prefix="Sentinel-5p/TROPOMI/TROPO_L2_O3",
+    default_destination_bucket=None,
+)
+S5P_TROPOMI_L2_SO2_PRODUCT = direct_copy_cdse_product(
+    name="s5p_tropomi_l2_so2",
+    source_root_prefix="Sentinel-5p/TROPOMI/TROPO_L2_SO2",
+    default_destination_bucket=None,
 )
 
 PRODUCT_SPECS = {
     S1_RTC_PRODUCT.name: S1_RTC_PRODUCT,
     S3_OLCI_L2_LFR_CDSE_PRODUCT.name: S3_OLCI_L2_LFR_CDSE_PRODUCT,
     S3_OLCI_L2_WFR_CDSE_PRODUCT.name: S3_OLCI_L2_WFR_CDSE_PRODUCT,
+    S3_SLSTR_L2_LST_PRODUCT.name: S3_SLSTR_L2_LST_PRODUCT,
+    S3_SYN_2_VG1_PRODUCT.name: S3_SYN_2_VG1_PRODUCT,
+    S5P_TROPOMI_L2_AER_AI_PRODUCT.name: S5P_TROPOMI_L2_AER_AI_PRODUCT,
+    S5P_TROPOMI_L2_CH4_PRODUCT.name: S5P_TROPOMI_L2_CH4_PRODUCT,
+    S5P_TROPOMI_L2_CLOUD_PRODUCT.name: S5P_TROPOMI_L2_CLOUD_PRODUCT,
+    S5P_TROPOMI_L2_CO_PRODUCT.name: S5P_TROPOMI_L2_CO_PRODUCT,
+    S5P_TROPOMI_L2_HCHO_PRODUCT.name: S5P_TROPOMI_L2_HCHO_PRODUCT,
+    S5P_TROPOMI_L2_NO2_PRODUCT.name: S5P_TROPOMI_L2_NO2_PRODUCT,
+    S5P_TROPOMI_L2_O3_PRODUCT.name: S5P_TROPOMI_L2_O3_PRODUCT,
+    S5P_TROPOMI_L2_SO2_PRODUCT.name: S5P_TROPOMI_L2_SO2_PRODUCT,
 }
 DEFAULT_PRODUCT_SPEC = S1_RTC_PRODUCT
 
