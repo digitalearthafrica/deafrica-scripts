@@ -67,7 +67,7 @@ COPY . /code/
 
 RUN --mount=type=secret,id=github_token \
     pip install /code \
-    && pip install git+https://$(cat /run/secrets/github_token)@github.com/digitalearthafrica/card4l.git@master \
+    && pip install git+https://x-access-token:$(cat /run/secrets/github_token)@github.com/digitalearthafrica/card4l.git@master \
     && pip cache purge
 
 CMD ["python", "--version"]
