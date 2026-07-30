@@ -1,6 +1,9 @@
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 
+import pytest
+from click.testing import CliRunner
+
 import deafrica.data.cdse_pipelines.sentinel_sync_cloudferro as sync_module
 from deafrica.data.cdse_pipelines.sentinel_sync_cloudferro import (
     S3_OLCI_L2_LFR_CDSE_PRODUCT,
@@ -556,6 +559,55 @@ def test_s3_lfr_discovery_accepts_operational_source_root_prefix():
     assert transform_key(f"{prefix}metadata.json", product) == f"{prefix}metadata.json"
 
 
+def test_direct_copy_product_rejects_source_root_for_different_product():
+    product = sync_module.PRODUCT_SPECS["s5p_tropomi_l2_no2"]
+
+    with pytest.raises(sync_module.click.UsageError) as exc_info:
+        sync_module.direct_copy_product_spec_for_source_root(
+            product,
+            "Sentinel-5p/TROPOMI/TROPO_L2_SO2/",
+        )
+
+    message = str(exc_info.value)
+    assert "Source root 'Sentinel-5p/TROPOMI/TROPO_L2_SO2' is not valid" in message
+    assert "product s5p_tropomi_l2_no2" in message
+    assert "'Sentinel-5p/TROPOMI/TROPO_L2_NO2'" in message
+
+
+@pytest.mark.parametrize(
+    "product_name",
+    [
+        "s3_olci_l2_lfr_cdse",
+        "s3_olci_l2_wfr_cdse",
+        "s3_slstr_l2_lst",
+        "s3_syn_2_vg1",
+        "s5p_tropomi_l2_aer_ai",
+        "s5p_tropomi_l2_ch4",
+        "s5p_tropomi_l2_cloud",
+        "s5p_tropomi_l2_co",
+        "s5p_tropomi_l2_hcho",
+        "s5p_tropomi_l2_no2",
+        "s5p_tropomi_l2_o3",
+        "s5p_tropomi_l2_so2",
+    ],
+)
+def test_cdse_direct_copy_products_require_destination_bucket(product_name):
+    result = CliRunner().invoke(
+        sync_module.cli,
+        [
+            "--product",
+            product_name,
+            "--all-prefixes",
+            "--dry-run",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert (
+        f"--destination-bucket is required for product {product_name}" in result.output
+    )
+
+
 def test_s3_wfr_discovery_accepts_operational_archive_layout():
     source_root = "Sentinel-3/OLCI/OL_2_WFR"
     dataset = "S3_OL_2_WFR_20260209_NT_37NBB_0_0"
@@ -739,3 +791,112 @@ def test_s3_wfr_direct_copy_product_rules():
     assert transform_key(f"{prefix}metadata.json", S3_OLCI_L2_WFR_CDSE_PRODUCT) == (
         f"{prefix}metadata.json"
     )
+
+
+def test_s3_slstr_syn_and_s5p_products_use_direct_copy_rules():
+    product_cases = [
+        (
+            "s3_slstr_l2_lst",
+            "Sentinel-3/SLSTR/SL_2_LST",
+            "S3_SL_2_LST_20260702_NT_37NBB_0_0",
+            "LST.tif",
+        ),
+        (
+            "s3_syn_2_vg1",
+            "Sentinel-3/SYN/SY_2_VG1",
+            "S3_SY_2_VG1_20260702_NT_37NBB_0_0",
+            "NDVI_VG1.tif",
+        ),
+        (
+            "s5p_tropomi_l2_aer_ai",
+            "Sentinel-5p/TROPOMI/TROPO_L2_AI",
+            "S5p_TROPO_L2_AI_20260702_NT_37NBB_0_0",
+            "AER_AI_340_380.tif",
+        ),
+        (
+            "s5p_tropomi_l2_ch4",
+            "Sentinel-5p/TROPOMI/TROPO_L2_CH4",
+            "S5p_TROPO_L2_CH4_20260702_NT_37NBB_0_0",
+            "CH4.tif",
+        ),
+        (
+            "s5p_tropomi_l2_cloud",
+            "Sentinel-5p/TROPOMI/TROPO_L2_CLOUD",
+            "S5p_TROPO_L2_CLOUD_20260702_NT_37NBB_0_0",
+            "CLOUD_FRACTION.tif",
+        ),
+        (
+            "s5p_tropomi_l2_co",
+            "Sentinel-5p/TROPOMI/TROPO_L2_CO",
+            "S5p_TROPO_L2_CO_20260702_NT_37NBB_0_0",
+            "CO.tif",
+        ),
+        (
+            "s5p_tropomi_l2_hcho",
+            "Sentinel-5p/TROPOMI/TROPO_L2_HCHO",
+            "S5p_TROPO_L2_HCHO_20260702_NT_37NBB_0_0",
+            "HCHO.tif",
+        ),
+        (
+            "s5p_tropomi_l2_no2",
+            "Sentinel-5p/TROPOMI/TROPO_L2_NO2",
+            "S5p_TROPO_L2_NO2_20260702_NT_37NBB_0_0",
+            "NO2.tif",
+        ),
+        (
+            "s5p_tropomi_l2_o3",
+            "Sentinel-5p/TROPOMI/TROPO_L2_O3",
+            "S5p_TROPO_L2_O3_20260702_NT_37NBB_0_0",
+            "O3.tif",
+        ),
+        (
+            "s5p_tropomi_l2_so2",
+            "Sentinel-5p/TROPOMI/TROPO_L2_SO2",
+            "S5p_TROPO_L2_SO2_20260702_NT_37NBB_0_0",
+            "SO2.tif",
+        ),
+    ]
+
+    for product_name, source_root, dataset, data_filename in product_cases:
+        product = sync_module.PRODUCT_SPECS[product_name]
+        prefix = f"{source_root}/2026/07/{dataset}/"
+        metadata_key = f"{prefix}metadata.json"
+        data_key = f"{prefix}{data_filename}"
+        source_objects = [
+            source_object(f"{prefix}userdata.json"),
+            source_object(metadata_key),
+            source_object(data_key),
+        ]
+
+        assert product.default_destination_bucket is None
+        assert product.discovery_prefix == f"{source_root}/"
+        assert validate_required_files(source_objects, product) == {
+            "required_files_present": True,
+            "missing_required_files": [],
+        }
+
+        copyable, skipped = classify_source_objects(source_objects, product)
+        assert [obj["Key"].rsplit("/", 1)[-1] for obj in copyable] == [
+            "metadata.json",
+            data_filename,
+        ]
+        assert skipped == [
+            {"source_key": f"{prefix}userdata.json", "reason": "excluded_userdata_json"}
+        ]
+
+        discovery = discover_completed_prefixes(
+            FakeS3Client(source_objects),
+            "bucket",
+            product.discovery_prefix,
+            product,
+        )
+        assert discovery["completed_prefixes"] == [
+            {
+                "source_prefix": prefix,
+                "stac_item": metadata_key,
+                "found": 3,
+            }
+        ]
+
+        assert transform_key(metadata_key, product) == metadata_key
+        assert transform_key(data_key, product) == data_key
