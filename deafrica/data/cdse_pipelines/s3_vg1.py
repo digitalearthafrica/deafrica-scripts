@@ -329,16 +329,14 @@ def _r15(v: float) -> float:
 
 def derived_from_uri(product_id: str) -> str:
     """
-    creo://EODATA source path for a Synergy VG1 product, matching the current
-    archive convention (uppercase EODATA, SYNERGY instrument folder - unlike
-    the "SYN" segment used in the DE Africa paths - and padded product type):
-        creo://EODATA/Sentinel-3/SYNERGY/SY_2_VG1___/YYYY/MM/DD/{id}.SEN3
+    creo://eodata source path for a Synergy VG1 product:
+        creo://eodata/Sentinel-3/SYNERGY/SY_2_VG1___/YYYY/MM/DD/{id}.SEN3
     """
     pid = product_id if product_id.endswith(".SEN3") else f"{product_id}.SEN3"
     padded_type = pid[4:15]  # "SY_2_VG1___"
     start_ts = pid[16:31]  # "20260303T000000"
     year, month, day = start_ts[0:4], start_ts[4:6], start_ts[6:8]
-    return f"creo://EODATA/Sentinel-3/SYNERGY/{padded_type}/{year}/{month}/{day}/{pid}"
+    return f"creo://eodata/Sentinel-3/SYNERGY/{padded_type}/{year}/{month}/{day}/{pid}"
 
 
 def build_s3_vg1_stac_item(
@@ -353,7 +351,7 @@ def build_s3_vg1_stac_item(
 
     Follows the existing archive convention STAC 1.1.0, projection v2.0.0 (proj:code + per-asset shape/transform in
     the tile's UTM CRS), eo (cloud cover averaged over source scenes),
-    product (product:type), derived_from -> creo://EODATA source products.
+    product (product:type), derived_from -> creo://eodata source products.
     """
     if not scenes:
         log.warning(f"No scenes provided for {tile}/{date}")
