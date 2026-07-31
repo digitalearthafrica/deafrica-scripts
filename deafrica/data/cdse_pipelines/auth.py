@@ -22,6 +22,7 @@ class RefreshingOAuth2Session(OAuth2Session):
         self._client_secret = client_secret
         self._token_url = token_url
         self._lock = threading.Lock()
+        self._local = threading.local()
         self._generation = 0
         self._authenticate(None)
 
@@ -29,13 +30,17 @@ class RefreshingOAuth2Session(OAuth2Session):
         with self._lock:
             if seen_generation is not None and seen_generation != self._generation:
                 return  # another thread already re-authenticated
-            super().fetch_token(
-                token_url=self._token_url,
-                client_id=self._client_id,
-                client_secret=self._client_secret,
-                include_client_id=True,
-                timeout=30,
-            )
+            self._local.authenticating = True
+            try:
+                super().fetch_token(
+                    token_url=self._token_url,
+                    client_id=self._client_id,
+                    client_secret=self._client_secret,
+                    include_client_id=True,
+                    timeout=30,
+                )
+            finally:
+                self._local.authenticating = False
             self._generation += 1
 
     def _stale(self):
@@ -43,8 +48,11 @@ class RefreshingOAuth2Session(OAuth2Session):
         return expires_at is None or time.time() >= float(expires_at) - EXPIRY_MARGIN
 
     def request(self, method, url, *args, withhold_token=False, **kwargs):
-        # fetch_token() itself calls request(withhold_token=True) - don't recurse.
-        if withhold_token:
+        # fetch_token() issues its own request through this method - send it
+        # straight out, or we recurse into the lock we are already holding.
+        # Some requests_oauthlib versions omit withhold_token here, so the
+        # thread-local flag is what actually does the work.
+        if withhold_token or getattr(self._local, "authenticating", False):
             return super().request(method, url, *args, withhold_token=True, **kwargs)
 
         generation = self._generation
