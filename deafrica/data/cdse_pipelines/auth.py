@@ -1,19 +1,73 @@
-from oauthlib.oauth2 import BackendApplicationClient
+from oauthlib.oauth2 import BackendApplicationClient, TokenExpiredError
 from requests_oauthlib import OAuth2Session
 import os
+import threading
+import time
+
+TOKEN_URL = (
+    "https://identity.dataspace.copernicus.eu/auth/realms/CDSE"
+    "/protocol/openid-connect/token"
+)
+
+# Re-authenticate this many seconds before the server-stated expiry.
+EXPIRY_MARGIN = 120
+
+
+class RefreshingOAuth2Session(OAuth2Session):
+    "Class for an OAuth2Session that automatically refreshes its token when it is stale or expired."
+
+    def __init__(self, client_id, client_secret, token_url=TOKEN_URL):
+        super().__init__(client=BackendApplicationClient(client_id=client_id))
+        self._client_id = client_id
+        self._client_secret = client_secret
+        self._token_url = token_url
+        self._lock = threading.Lock()
+        self._generation = 0
+        self._authenticate(None)
+
+    def _authenticate(self, seen_generation):
+        with self._lock:
+            if seen_generation is not None and seen_generation != self._generation:
+                return  # another thread already re-authenticated
+            super().fetch_token(
+                token_url=self._token_url,
+                client_id=self._client_id,
+                client_secret=self._client_secret,
+                include_client_id=True,
+                timeout=30,
+            )
+            self._generation += 1
+
+    def _stale(self):
+        expires_at = (self.token or {}).get("expires_at")
+        return expires_at is None or time.time() >= float(expires_at) - EXPIRY_MARGIN
+
+    def request(self, method, url, *args, withhold_token=False, **kwargs):
+        # fetch_token() itself calls request(withhold_token=True) - don't recurse.
+        if withhold_token:
+            return super().request(method, url, *args, withhold_token=True, **kwargs)
+
+        generation = self._generation
+        if self._stale():
+            self._authenticate(generation)
+            generation = self._generation
+
+        try:
+            resp = super().request(method, url, *args, **kwargs)
+        except TokenExpiredError:
+            self._authenticate(generation)
+            return super().request(method, url, *args, **kwargs)
+
+        # Clock skew or server-side revocation: expires_at can still look healthy.
+        if resp.status_code == 401:
+            self._authenticate(generation)
+            resp = super().request(method, url, *args, **kwargs)
+
+        return resp
 
 
 def get_session():
     client_id = os.environ["SH_CLIENT_ID"]
     client_secret = os.environ["SH_CLIENT_SECRET"]
 
-    client = BackendApplicationClient(client_id=client_id)
-    session = OAuth2Session(client=client)
-
-    session.fetch_token(
-        token_url="https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token",
-        client_secret=client_secret,
-        include_client_id=True,
-    )
-
-    return session
+    return RefreshingOAuth2Session(client_id, client_secret)
