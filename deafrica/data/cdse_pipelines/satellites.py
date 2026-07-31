@@ -28,7 +28,7 @@ SATELLITES = {
             "type": "geopackage",
             "features": {
                 "s3": {
-                    "url": "s3://cdse_batch_test_bucket/gpkg/UTM_Tiles_300m.gpkg",
+                    "url": "s3://cdse-bucket/gpkg/UTM_Tiles_300m.gpkg",
                 }
             },
         },
@@ -72,7 +72,7 @@ SATELLITES = {
             "type": "geopackage",
             "features": {
                 "s3": {
-                    "url": "s3://cdse_batch_test_bucket/gpkg/UTM_Tiles_300m.gpkg",
+                    "url": "s3://cdse-bucket/gpkg/UTM_Tiles_300m.gpkg",
                 }
             },
         },
@@ -86,7 +86,7 @@ SATELLITES = {
             "type": "geopackage",
             "features": {
                 "s3": {
-                    "url": "s3://cdse_batch_test_bucket/gpkg/UTM_Tiles_1000m.gpkg",
+                    "url": "s3://cdse-bucket/gpkg/UTM_Tiles_1000m.gpkg",
                 }
             },
         },
@@ -114,7 +114,7 @@ SATELLITES = {
             "type": "geopackage",
             "features": {
                 "s3": {
-                    "url": "s3://cdse_batch_test_bucket/gpkg/UTM_Tiles_1000m.gpkg",
+                    "url": "s3://cdse-bucket/gpkg/UTM_Tiles_1000m.gpkg",
                 }
             },
         },
@@ -128,7 +128,7 @@ SATELLITES = {
             "type": "geopackage",
             "features": {
                 "s3": {
-                    "url": "s3://cdse_batch_test_bucket/gpkg/UTM_Tiles_1000m.gpkg",
+                    "url": "s3://cdse-bucket/gpkg/UTM_Tiles_1000m.gpkg",
                 }
             },
         },
@@ -142,7 +142,7 @@ SATELLITES = {
             "type": "geopackage",
             "features": {
                 "s3": {
-                    "url": "s3://cdse_batch_test_bucket/gpkg/UTM_Tiles_1000m.gpkg",
+                    "url": "s3://cdse-bucket/gpkg/UTM_Tiles_1000m.gpkg",
                 }
             },
         },
@@ -164,7 +164,7 @@ SATELLITES = {
             "type": "geopackage",
             "features": {
                 "s3": {
-                    "url": "s3://cdse_batch_test_bucket/gpkg/UTM_Tiles_1000m.gpkg",
+                    "url": "s3://cdse-bucket/gpkg/UTM_Tiles_1000m.gpkg",
                 }
             },
         },
@@ -178,7 +178,7 @@ SATELLITES = {
             "type": "geopackage",
             "features": {
                 "s3": {
-                    "url": "s3://cdse_batch_test_bucket/gpkg/UTM_Tiles_1000m.gpkg",
+                    "url": "s3://cdse-bucket/gpkg/UTM_Tiles_1000m.gpkg",
                 }
             },
         },
@@ -192,7 +192,7 @@ SATELLITES = {
             "type": "geopackage",
             "features": {
                 "s3": {
-                    "url": "s3://cdse_batch_test_bucket/gpkg/UTM_Tiles_1000m.gpkg",
+                    "url": "s3://cdse-bucket/gpkg/UTM_Tiles_1000m.gpkg",
                 }
             },
         },
@@ -206,7 +206,7 @@ SATELLITES = {
             "type": "geopackage",
             "features": {
                 "s3": {
-                    "url": "s3://cdse_batch_test_bucket/gpkg/UTM_Tiles_1000m.gpkg",
+                    "url": "s3://cdse-bucket/gpkg/UTM_Tiles_1000m.gpkg",
                 }
             },
         },
@@ -220,7 +220,7 @@ SATELLITES = {
             "type": "geopackage",
             "features": {
                 "s3": {
-                    "url": "s3://cdse_batch_test_bucket/gpkg/UTM_Tiles_1000m.gpkg",
+                    "url": "s3://cdse-bucket/gpkg/UTM_Tiles_1000m.gpkg",
                 }
             },
         },
@@ -234,7 +234,7 @@ SATELLITES = {
             "type": "geopackage",
             "features": {
                 "s3": {
-                    "url": "s3://cdse_batch_test_bucket/gpkg/UTM_Tiles_1000m.gpkg",
+                    "url": "s3://cdse-bucket/gpkg/UTM_Tiles_1000m.gpkg",
                 }
             },
         },
