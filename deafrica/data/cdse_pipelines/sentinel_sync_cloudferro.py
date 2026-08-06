@@ -63,6 +63,7 @@ DEFAULT_CLOUDFERRO_REGION = "RegionOne"
 DEFAULT_DRY_RUN = False
 DEFAULT_MIN_OBJECT_AGE_MINUTES = 60
 DEFAULT_MAX_WORKERS = 4
+DELETE_OBJECT_BATCH_SIZE = 1000
 DEFAULT_INVALID_OBJECT_EXAMPLE_LIMIT = 10
 DEFAULT_CDSE_BATCH_PROCESS_URL = (
     "https://sh.dataspace.copernicus.eu/api/v2/batch/process"
@@ -86,6 +87,9 @@ SYNC_COUNTER_FIELDS = (
     "skipped_matching",
     "skipped_mismatched",
     "failed",
+    "would_delete_source_objects",
+    "deleted_source_objects",
+    "source_delete_failed",
 )
 
 log = setup_logging()
@@ -127,6 +131,7 @@ class SyncConfig:
     cloudferro_region: str
     cdse_batch_process_url: str
     cdse_token_url: str
+    delete_source_after_sync: bool = False
 
 
 def product_spec_for_name(name: str) -> ProductSyncSpec:
@@ -294,6 +299,12 @@ def sync_prefix(config: SyncConfig, product: ProductSyncSpec = None) -> dict:
         "skipped_mismatched": 0,
         "failed": 0,
         "failures": [],
+        "delete_source_after_sync": config.delete_source_after_sync,
+        "source_delete_skip_reason": None,
+        "would_delete_source_objects": 0,
+        "deleted_source_objects": 0,
+        "source_delete_failed": 0,
+        "source_delete_failures": [],
     }
 
     if config.job_id:
@@ -431,7 +442,120 @@ def sync_prefix(config: SyncConfig, product: ProductSyncSpec = None) -> dict:
                 }
             )
 
+    maybe_delete_source_prefix(source_s3, config, summary)
+
     log.info("Sync summary: %s", summary)
+    return summary
+
+
+def maybe_delete_source_prefix(source_s3, config: SyncConfig, summary: dict) -> None:
+    """Delete a CloudFerro source prefix only after a fully clean sync."""
+    if not config.delete_source_after_sync:
+        summary["source_delete_skip_reason"] = "delete_source_after_sync_disabled"
+        return
+
+    skip_reason = source_delete_skip_reason(config, summary)
+    if skip_reason:
+        summary["source_delete_skip_reason"] = skip_reason
+        if skip_reason == "dry_run":
+            summary["would_delete_source_objects"] = count_source_prefix_objects(
+                source_s3,
+                bucket=config.source_bucket,
+                prefix=config.source_prefix,
+            )
+        log.info(
+            "Skipping CloudFerro source delete for s3://%s/%s: %s",
+            config.source_bucket,
+            config.source_prefix,
+            skip_reason,
+        )
+        return
+
+    delete_summary = delete_source_prefix(
+        source_s3,
+        bucket=config.source_bucket,
+        prefix=config.source_prefix,
+    )
+    summary.update(delete_summary)
+
+
+def source_delete_skip_reason(config: SyncConfig, summary: dict) -> str | None:
+    if summary.get("skip_reason"):
+        return summary["skip_reason"]
+    if not summary.get("ready_to_sync", False):
+        return "source_not_ready"
+    if summary.get("failed", 0):
+        return "sync_failed"
+    if summary.get("skipped_mismatched", 0):
+        return "skipped_mismatched"
+    if summary.get("skipped_unexpected", 0):
+        return "skipped_unexpected"
+    if summary.get("copyable", 0) == 0:
+        return "no_copyable_objects"
+    synced_objects = summary.get("copied", 0) + summary.get("skipped_matching", 0)
+    if synced_objects != summary.get("copyable", 0):
+        return "sync_not_complete"
+    if config.dry_run:
+        return "dry_run"
+
+    return None
+
+
+def count_source_prefix_objects(source_s3, bucket: str, prefix: str) -> int:
+    return sum(1 for _ in list_source_objects(source_s3, bucket, prefix))
+
+
+def delete_source_prefix(source_s3, bucket: str, prefix: str) -> dict:
+    summary = {
+        "deleted_source_objects": 0,
+        "source_delete_failed": 0,
+        "source_delete_failures": [],
+    }
+    batch = []
+
+    def flush_batch() -> None:
+        if not batch:
+            return
+
+        objects = list(batch)
+        batch.clear()
+        log.info(
+            "Deleting %s CloudFerro source object(s) under s3://%s/%s",
+            len(objects),
+            bucket,
+            prefix,
+        )
+
+        try:
+            response = source_s3.delete_objects(
+                Bucket=bucket,
+                Delete={"Objects": objects, "Quiet": True},
+            )
+        except ClientError as err:
+            error = format_client_error(err)
+            summary["source_delete_failed"] += len(objects)
+            summary["source_delete_failures"].extend(
+                {"source_key": obj["Key"], "error": error} for obj in objects
+            )
+            return
+
+        errors = response.get("Errors", [])
+        summary["deleted_source_objects"] += len(objects) - len(errors)
+        summary["source_delete_failed"] += len(errors)
+        summary["source_delete_failures"].extend(
+            {
+                "source_key": error.get("Key"),
+                "error": error.get("Message") or error.get("Code") or "delete_failed",
+            }
+            for error in errors
+        )
+
+    for source_object in list_source_objects(source_s3, bucket, prefix):
+        batch.append({"Key": source_object["Key"]})
+        if len(batch) == DELETE_OBJECT_BATCH_SIZE:
+            flush_batch()
+
+    flush_batch()
     return summary
 
 
@@ -481,6 +605,7 @@ def sync_all_prefixes(
         "destination_bucket": config.destination_bucket,
         "source_root_prefix": product.discovery_prefix,
         "dry_run": config.dry_run,
+        "delete_source_after_sync": config.delete_source_after_sync,
         "min_object_age_minutes": config.min_object_age_minutes,
         "discovery_prefix": discovery_prefix,
         "max_workers": max_workers,
@@ -1513,6 +1638,16 @@ DEFAULT_PRODUCT_SPEC = S1_RTC_PRODUCT
     help="Report planned copies without uploading objects.",
 )
 @click.option(
+    "--delete-source-after-sync",
+    is_flag=True,
+    default=False,
+    envvar="DELETE_SOURCE_AFTER_SYNC",
+    help=(
+        "Delete the exact CloudFerro source prefix after a fully clean sync. "
+        "Skipped for dry runs, sync failures, mismatches, and incomplete syncs."
+    ),
+)
+@click.option(
     "--min-object-age-minutes",
     default=DEFAULT_MIN_OBJECT_AGE_MINUTES,
     show_default=True,
@@ -1572,6 +1707,7 @@ def cli(
     max_prefixes,
     destination_bucket,
     dry_run,
+    delete_source_after_sync,
     min_object_age_minutes,
     job_id,
     cloudferro_endpoint_url,
@@ -1624,6 +1760,7 @@ def cli(
         cloudferro_region=cloudferro_region,
         cdse_batch_process_url=cdse_batch_process_url,
         cdse_token_url=cdse_token_url,
+        delete_source_after_sync=delete_source_after_sync,
     )
     try:
         if all_prefixes:

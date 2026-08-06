@@ -49,6 +49,7 @@ class FakeCopyS3Client(FakeS3Client):
         super().__init__(objects or [])
         self.bodies = bodies or {}
         self.uploads = []
+        self.deletes = []
 
     def head_object(self, Bucket, Key):
         if Key not in self.bodies:
@@ -70,6 +71,17 @@ class FakeCopyS3Client(FakeS3Client):
         self.bodies[Key] = body.read()
         self.uploads.append(Key)
 
+    def delete_objects(self, Bucket, Delete):
+        deleted = []
+        for obj in Delete["Objects"]:
+            key = obj["Key"]
+            self.deletes.append(key)
+            self.bodies.pop(key, None)
+            self.objects = [source for source in self.objects if source["Key"] != key]
+            deleted.append({"Key": key})
+
+        return {"Deleted": deleted}
+
 
 def source_object(key, size=1):
     return {
@@ -79,20 +91,22 @@ def source_object(key, size=1):
     }
 
 
-def sync_config(source_prefix):
-    return SyncConfig(
-        source_bucket="source-bucket",
-        source_prefix=source_prefix,
-        stac_item="",
-        destination_bucket="destination-bucket",
-        dry_run=False,
-        min_object_age_minutes=0,
-        job_id=None,
-        cloudferro_endpoint_url="https://cloudferro.example",
-        cloudferro_region="RegionOne",
-        cdse_batch_process_url="https://batch.example",
-        cdse_token_url="https://token.example",
-    )
+def sync_config(source_prefix, **overrides):
+    values = {
+        "source_bucket": "source-bucket",
+        "source_prefix": source_prefix,
+        "stac_item": "",
+        "destination_bucket": "destination-bucket",
+        "dry_run": False,
+        "min_object_age_minutes": 0,
+        "job_id": None,
+        "cloudferro_endpoint_url": "https://cloudferro.example",
+        "cloudferro_region": "RegionOne",
+        "cdse_batch_process_url": "https://batch.example",
+        "cdse_token_url": "https://token.example",
+    }
+    values.update(overrides)
+    return SyncConfig(**values)
 
 
 def test_validate_required_files_detects_complete_output():
@@ -465,6 +479,122 @@ def test_s3_direct_copy_refreshes_changed_metadata_but_not_tif(monkeypatch):
     assert destination_s3.uploads == [metadata_key]
     assert destination_s3.bodies[metadata_key] == source_bodies[metadata_key]
     assert destination_s3.bodies[data_key] == destination_bodies[data_key]
+
+
+def test_delete_source_after_clean_direct_copy_sync(monkeypatch):
+    prefix = "s3_wfr_test/2026/02/09/37NBB_0_0/"
+    metadata_key = f"{prefix}S3_OL_2_WFR_20260209_NT_37NBB_0_0_metadata.json"
+    data_key = f"{prefix}CHL_NN.tif"
+    userdata_key = f"{prefix}userdata.json"
+    source_bodies = {
+        metadata_key: b'{"type":"Feature"}',
+        data_key: b"tif-data",
+        userdata_key: b'{"status":"done"}',
+    }
+    source_objects = [
+        source_object(metadata_key, size=len(source_bodies[metadata_key])),
+        source_object(userdata_key, size=len(source_bodies[userdata_key])),
+        source_object(data_key, size=len(source_bodies[data_key])),
+    ]
+    source_s3 = FakeCopyS3Client(source_objects, bodies=source_bodies)
+    destination_s3 = FakeCopyS3Client()
+
+    monkeypatch.setattr(sync_module, "cloudferro_client", lambda _config: source_s3)
+    monkeypatch.setattr(sync_module, "aws_client", lambda: destination_s3)
+
+    summary = sync_module.sync_prefix(
+        sync_config(prefix, delete_source_after_sync=True),
+        product=S3_OLCI_L2_WFR_CDSE_PRODUCT,
+    )
+
+    assert summary["failed"] == 0
+    assert summary["copied"] == 2
+    assert summary["source_delete_skip_reason"] is None
+    assert summary["deleted_source_objects"] == 3
+    assert summary["source_delete_failed"] == 0
+    assert set(source_s3.deletes) == {metadata_key, userdata_key, data_key}
+    assert source_s3.objects == []
+    assert set(destination_s3.uploads) == {metadata_key, data_key}
+
+
+def test_delete_source_after_sync_skips_mismatched_destination(monkeypatch):
+    prefix = "s3_wfr_test/2026/02/09/37NBB_0_0/"
+    metadata_key = f"{prefix}S3_OL_2_WFR_20260209_NT_37NBB_0_0_metadata.json"
+    data_key = f"{prefix}CHL_NN.tif"
+    userdata_key = f"{prefix}userdata.json"
+    source_bodies = {
+        metadata_key: b'{"version":"new"}',
+        data_key: b"new-tif",
+        userdata_key: b'{"status":"done"}',
+    }
+    destination_bodies = {
+        metadata_key: b'{"version":"old"}',
+        data_key: b"old",
+    }
+    source_objects = [
+        source_object(data_key, size=len(source_bodies[data_key])),
+        source_object(metadata_key, size=len(source_bodies[metadata_key])),
+        source_object(userdata_key, size=len(source_bodies[userdata_key])),
+    ]
+    source_s3 = FakeCopyS3Client(source_objects, bodies=source_bodies)
+    destination_s3 = FakeCopyS3Client(bodies=destination_bodies)
+
+    monkeypatch.setattr(sync_module, "cloudferro_client", lambda _config: source_s3)
+    monkeypatch.setattr(sync_module, "aws_client", lambda: destination_s3)
+
+    summary = sync_module.sync_prefix(
+        sync_config(prefix, delete_source_after_sync=True),
+        product=S3_OLCI_L2_WFR_CDSE_PRODUCT,
+    )
+
+    assert summary["failed"] == 0
+    assert summary["copied"] == 1
+    assert summary["skipped_mismatched"] == 1
+    assert summary["source_delete_skip_reason"] == "skipped_mismatched"
+    assert summary["deleted_source_objects"] == 0
+    assert source_s3.deletes == []
+    assert len(source_s3.objects) == 3
+
+
+def test_delete_source_after_sync_dry_run_reports_would_delete(monkeypatch):
+    prefix = "s3_wfr_test/2026/02/09/37NBB_0_0/"
+    metadata_key = f"{prefix}S3_OL_2_WFR_20260209_NT_37NBB_0_0_metadata.json"
+    data_key = f"{prefix}CHL_NN.tif"
+    userdata_key = f"{prefix}userdata.json"
+    source_bodies = {
+        metadata_key: b'{"type":"Feature"}',
+        data_key: b"tif-data",
+        userdata_key: b'{"status":"done"}',
+    }
+    source_objects = [
+        source_object(data_key, size=len(source_bodies[data_key])),
+        source_object(metadata_key, size=len(source_bodies[metadata_key])),
+        source_object(userdata_key, size=len(source_bodies[userdata_key])),
+    ]
+    source_s3 = FakeCopyS3Client(source_objects, bodies=source_bodies)
+    destination_s3 = FakeCopyS3Client(
+        bodies={
+            metadata_key: source_bodies[metadata_key],
+            data_key: source_bodies[data_key],
+        }
+    )
+
+    monkeypatch.setattr(sync_module, "cloudferro_client", lambda _config: source_s3)
+    monkeypatch.setattr(sync_module, "aws_client", lambda: destination_s3)
+
+    summary = sync_module.sync_prefix(
+        sync_config(prefix, delete_source_after_sync=True, dry_run=True),
+        product=S3_OLCI_L2_WFR_CDSE_PRODUCT,
+    )
+
+    assert summary["failed"] == 0
+    assert summary["copied"] == 0
+    assert summary["skipped_matching"] == 2
+    assert summary["source_delete_skip_reason"] == "dry_run"
+    assert summary["would_delete_source_objects"] == 3
+    assert summary["deleted_source_objects"] == 0
+    assert source_s3.deletes == []
+    assert len(source_s3.objects) == 3
 
 
 def test_s3_lfr_discovery_accepts_direct_layout_and_ignores_job_nested_layout():
