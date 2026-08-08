@@ -8,6 +8,7 @@ from pathlib import Path
 
 import boto3
 import click
+import requests
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
@@ -16,6 +17,8 @@ DEFAULT_KUBECOST_URL = "http://kubecost-cost-analyzer.kubecost.svc.cluster.local
 DEFAULT_REPORT_PATH = "/tmp/sandbox_weekly_cost_report.csv"
 GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
 CSV_MIME_TYPE = "text/csv"
+SERVICE_ACCOUNT_TOKEN = Path("/var/run/secrets/kubernetes.io/serviceaccount/token")
+SERVICE_ACCOUNT_CA = Path("/var/run/secrets/kubernetes.io/serviceaccount/ca.crt")
 # Kubecost returns RAM/PV sizes in bytes; report them in GiB for readability.
 BYTES_PER_GIB = 1024**3
 
@@ -73,12 +76,114 @@ def gib(value):
     return cost(value) / BYTES_PER_GIB
 
 
-def pv_claims(pvs):
-    if not isinstance(pvs, dict):
-        return ""
+def pv_key_properties(pv_key):
+    # Kubecost identifies volumes with keys such as
+    # "cluster=cluster-one:name=pvc-<uuid>".
+    properties = {}
+    for component in str(pv_key).split(":"):
+        key, separator, value = component.partition("=")
+        if separator:
+            properties[key] = value
+    return properties
 
-    # Kubecost exposes PV allocations as a map keyed by claim/PV identity.
-    return ";".join(sorted(str(claim) for claim in pvs.keys()))
+
+def pv_name(pv_key):
+    return pv_key_properties(pv_key).get("name") or str(pv_key)
+
+
+def index_persistent_volume_claims(response):
+    claims_by_volume = {}
+    for item in response.get("items", []):
+        metadata = item.get("metadata") or {}
+        spec = item.get("spec") or {}
+        status = item.get("status") or {}
+        volume_name = spec.get("volumeName")
+        claim_name = metadata.get("name")
+        if not volume_name or not claim_name:
+            continue
+
+        # PVC spec.volumeName is the join key for Kubecost's PV allocation data.
+        claims_by_volume[volume_name] = {
+            "namespace": metadata.get("namespace", ""),
+            "name": claim_name,
+            "storage_class": spec.get("storageClassName", ""),
+            "capacity": (status.get("capacity") or {}).get("storage")
+            or ((spec.get("resources") or {}).get("requests") or {}).get("storage", ""),
+        }
+
+    return claims_by_volume
+
+
+def kubernetes_persistent_volume_claims(namespace):
+    host = os.environ.get("KUBERNETES_SERVICE_HOST")
+    port = os.environ.get("KUBERNETES_SERVICE_PORT_HTTPS", "443")
+    if not host or not SERVICE_ACCOUNT_TOKEN.exists():
+        print("Kubernetes API unavailable; PVC names will be marked as unresolved")
+        return {}
+
+    url = (
+        f"https://{host}:{port}/api/v1/namespaces/"
+        f"{urllib.parse.quote(namespace, safe='')}/persistentvolumeclaims"
+    )
+    try:
+        # Authenticate with the service account automatically mounted in the pod.
+        response = requests.get(
+            url,
+            headers={
+                "Authorization": f"Bearer {SERVICE_ACCOUNT_TOKEN.read_text().strip()}"
+            },
+            timeout=30,
+            verify=str(SERVICE_ACCOUNT_CA) if SERVICE_ACCOUNT_CA.exists() else True,
+        )
+        response.raise_for_status()
+    except (OSError, requests.RequestException) as error:
+        print(f"Warning: could not resolve PVC names from Kubernetes: {error}")
+        return {}
+
+    claims_by_volume = index_persistent_volume_claims(response.json())
+    print(
+        f"Resolved {len(claims_by_volume)} persistent volume claims "
+        f"in namespace {namespace}"
+    )
+    return claims_by_volume
+
+
+def pv_allocations(pvs, claims_by_volume, runtime_hours):
+    if not isinstance(pvs, dict):
+        return []
+
+    allocations = []
+    for pv_key, allocation in sorted(pvs.items()):
+        allocation = allocation if isinstance(allocation, dict) else {}
+        key_properties = pv_key_properties(pv_key)
+        volume_name = pv_name(pv_key)
+        claim = claims_by_volume.get(volume_name) or {}
+        byte_hours = cost(allocation.get("byteHours"))
+        claim_namespace = claim.get("namespace", "")
+        claim_name = claim.get("name", "")
+
+        allocations.append(
+            {
+                "claim": (
+                    f"{claim_namespace}/{claim_name}"
+                    if claim_namespace and claim_name
+                    else f"unresolved-pv:{volume_name}"
+                ),
+                "pv": volume_name,
+                "cluster": key_properties.get("cluster", ""),
+                "storage_class": claim.get("storage_class", ""),
+                "capacity": claim.get("capacity", ""),
+                # Kubecost reports byte-hours; divide by runtime for average GiB.
+                "avg_storage_gib": round(
+                    gib(byte_hours) / runtime_hours if runtime_hours else 0.0, 4
+                ),
+                "storage_gib_hours": round(gib(byte_hours), 4),
+                "cost": round(cost(allocation.get("cost")), 4),
+                "provider_id": allocation.get("providerID", ""),
+            }
+        )
+
+    return allocations
 
 
 def node_asset_key(asset_key, asset):
@@ -152,9 +257,16 @@ def provider_id(asset):
 
 
 def write_report(
-    report_path, allocation, node_assets, node_index, namespace, pod_prefix
+    report_path,
+    allocation,
+    node_assets,
+    node_index,
+    namespace,
+    pod_prefix,
+    claims_by_volume=None,
 ):
     rows = []
+    claims_by_volume = claims_by_volume or {}
 
     for allocation_key, pod_data in sorted(allocation.items()):
         if allocation_key.startswith("__"):
@@ -175,6 +287,9 @@ def write_report(
         node_asset = find_node_asset(node_name, node_assets, node_index)
         pod_runtime_hours = cost(pod_data.get("minutes")) / 60
         pod_total_cost = cost(pod_data.get("totalCost"))
+        pod_pv_allocations = pv_allocations(
+            pod_data.get("pvs"), claims_by_volume, pod_runtime_hours
+        )
 
         rows.append(
             {
@@ -213,7 +328,16 @@ def write_report(
                 "pod_pvc_storage_avg_gib": round(gib(pod_data.get("pvBytes")), 4),
                 "pod_pvc_storage_gib_hours": round(gib(pod_data.get("pvByteHours")), 4),
                 "pod_pvc_storage_cost": round(cost(pod_data.get("pvCost")), 4),
-                "pod_pvc_claims": pv_claims(pod_data.get("pvs")),
+                # Keep readable summaries for spreadsheets and JSON for auditing.
+                "pod_pvc_claims": ";".join(
+                    allocation["claim"] for allocation in pod_pv_allocations
+                ),
+                "pod_pv_names": ";".join(
+                    allocation["pv"] for allocation in pod_pv_allocations
+                ),
+                "pod_pvc_allocations_json": json.dumps(
+                    pod_pv_allocations, separators=(",", ":")
+                ),
             }
         )
 
@@ -241,6 +365,8 @@ def write_report(
         "pod_pvc_storage_gib_hours",
         "pod_pvc_storage_cost",
         "pod_pvc_claims",
+        "pod_pv_names",
+        "pod_pvc_allocations_json",
     ]
 
     with open(report_path, "w", newline="") as report:
@@ -252,7 +378,14 @@ def write_report(
     return len(rows)
 
 
-def generate_report(kubecost_url, kubecost_window, report_path, namespace, pod_prefix):
+def generate_report(
+    kubecost_url,
+    kubecost_window,
+    report_path,
+    namespace,
+    pod_prefix,
+    claims_by_volume=None,
+):
     allocation = accumulated_data(
         kubecost_get(
             kubecost_url,
@@ -280,7 +413,13 @@ def generate_report(kubecost_url, kubecost_window, report_path, namespace, pod_p
 
     node_assets, node_index = index_node_assets(assets)
     return write_report(
-        report_path, allocation, node_assets, node_index, namespace, pod_prefix
+        report_path,
+        allocation,
+        node_assets,
+        node_index,
+        namespace,
+        pod_prefix,
+        claims_by_volume,
     )
 
 
@@ -362,7 +501,15 @@ def main(
     environment_suffix = f"-{environment}" if environment else ""
     report_name = f"sandbox-weekly-cost-report{environment_suffix}-{report_date()}.csv"
     Path(report_path).parent.mkdir(parents=True, exist_ok=True)
-    generate_report(kubecost_url, kubecost_window, report_path, namespace, pod_prefix)
+    claims_by_volume = kubernetes_persistent_volume_claims(namespace)
+    generate_report(
+        kubecost_url,
+        kubecost_window,
+        report_path,
+        namespace,
+        pod_prefix,
+        claims_by_volume,
+    )
 
     target = report_upload_target(upload_target)
     print(f"Report upload target: {target}")
