@@ -19,7 +19,7 @@ SATELLITES = {
         # Batch-level input: WGS84 tiling grid at 0.0002 deg (~20 m).
         "input": {"type": "tiling-grid", "id": 3, "resolution": 0.0002},
         "evalscript_file": "evalscripts/s1_rtc.js",
-        "odc_product": "s1_rtc_cdse",
+        "odc_product": "s1_rtc",
     },
     "s3_lfr": {
         "type": "sentinel-3-olci-l2",
