@@ -65,6 +65,7 @@ S1_BUCKET_NAME = "deafrica-sentinel-1"
 BASE_FOLDER_NAME = "s1_rtc"
 REGION_NAME = "af-south-1"
 
+RESOLUTION = SATELLITES["s1"]["input"]["resolution"]
 DEFAULT_OUTPUT_BUCKET = "cdse_batch_test_bucket"
 
 log = setup_logging()
