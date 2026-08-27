@@ -65,8 +65,6 @@ S1_BUCKET_NAME = "deafrica-sentinel-1"
 BASE_FOLDER_NAME = "s1_rtc"
 REGION_NAME = "af-south-1"
 
-TILING_ID = 3
-RESOLUTION = 0.0002
 DEFAULT_OUTPUT_BUCKET = "cdse_batch_test_bucket"
 
 log = setup_logging()
@@ -213,7 +211,12 @@ def find_missing(
 ) -> list[str]:
     "Checks which of the expected datasets are missing from the S3 bucket by verifying the existence of their metadata JSON files, using a thread pool for concurrency."
     s3 = boto3.client(
-        "s3", region_name=REGION_NAME, config=Config(signature_version=UNSIGNED)
+        "s3",
+        region_name=REGION_NAME,
+        config=Config(
+            signature_version=UNSIGNED,
+            max_pool_connections=n_workers,
+        ),
     )
     missing_datasets = []
     log.info(
@@ -601,8 +604,6 @@ def submit_backfill_jobs(
             geometry=mapping(clipped_geom),
             time_from=f"{date}T00:00:00Z",
             time_to=f"{year}-{month}-{int(day) + 1:02d}T00:00:00Z",
-            tiling_id=TILING_ID,
-            resolution=RESOLUTION,
         )
 
         payload["output"]["delivery"]["s3"][
