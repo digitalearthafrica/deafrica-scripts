@@ -380,7 +380,7 @@ def build_metadata(
             "start_datetime": _ts(start),
             "productType": product_type,
             "proj:epsg": epsg,
-            "odc:product": "s1_monthly_mosaic",
+            "odc:product": "s1_monthly_mosaic_cdse",
             "odc:region_code": tile5,
             "sar:instrument_mode": "IW",
             "sar:frequency_band": "C",
