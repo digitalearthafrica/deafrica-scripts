@@ -6,6 +6,10 @@ from deafrica.logs import setup_logging
 
 SH_BATCH_URL = "https://sh.dataspace.copernicus.eu/api/v2/batch/process"
 
+# How long submit waits for analysis (CREATED → ANALYSIS_DONE / PROCESSING / DONE).
+# CDSE publishes no SLA. Override per run with --analyse-timeout on the product CLI.
+DEFAULT_ANALYSE_TIMEOUT = 12 * 3600
+
 log = setup_logging()
 
 
@@ -39,6 +43,7 @@ def submit_one(
     description: str,
     aoi_bbox: list[float] | None,
     dry_run: bool = False,
+    analyse_timeout: int = DEFAULT_ANALYSE_TIMEOUT,
 ) -> dict:
     """
     Create, analyse, and start the batch job for one date. Returns
@@ -52,6 +57,9 @@ def submit_one(
     Handles jobs whose analysis lands directly in DONE (all outputs already
     exist at the delivery prefix, costPU=0, nothing to start) as success
     rather than an error.
+
+    analyse_timeout is how long to poll after POST /analyse before giving up
+    (seconds). Default is DEFAULT_ANALYSE_TIMEOUT (12 hours).
     """
 
     from .payloads import build_batch_payload, redact_payload
@@ -89,7 +97,7 @@ def submit_one(
         session,
         job_id,
         terminal={"ANALYSIS_DONE", "PROCESSING", "DONE", "FAILED", "CANCELED"},
-        timeout=900,
+        timeout=analyse_timeout,
     )
     status = info.get("status")
 
