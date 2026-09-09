@@ -2,7 +2,7 @@
 """
 Sentinel-1 RTC gap check + CDSE batch backfill submission.
 
-1. Runs the s1_rtc gap check reporting missing datasets in the DE Africa bucket 
+1. Runs the s1_rtc gap check reporting missing datasets in the DE Africa bucket
    for a given date range (default: last 7 days) against the SentinelHub (SH) catalogue.
 2. For each missing dataset, builds a CDSE batch processing payload and
    submits and starts the job against the CDSE BatchProcessing V2 API.
@@ -59,7 +59,7 @@ SH_BATCH_URL = "https://sh.dataspace.copernicus.eu/api/v2/batch/process"
 S1_COLLECTION = "sentinel-1-grd"
 
 TILING_GRID = "https://s3.eu-central-1.amazonaws.com/sh-batch-grids/tiling-grid-3.zip"
-AFRICA_EXTENT_URL = "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/master/africa-extent.json"
+AFRICA_EXTENT_URL = "https://cdn.jsdelivr.net/gh/digitalearthafrica/deafrica-extent@master/africa-extent.json"
 
 S1_BUCKET_NAME = "deafrica-sentinel-1"
 BASE_FOLDER_NAME = "s1_rtc"
