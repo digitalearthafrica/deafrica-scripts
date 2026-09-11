@@ -1,6 +1,10 @@
 import csv
+import json
 
-from deafrica.platform.sandbox_weekly_cost_report import write_report
+from deafrica.platform.sandbox_weekly_cost_report import (
+    index_persistent_volume_claims,
+    write_report,
+)
 
 
 def test_write_report_includes_allocation_average_and_storage_fields(tmp_path):
@@ -26,8 +30,16 @@ def test_write_report_includes_allocation_average_and_storage_fields(tmp_path):
             "pvByteHours": 20 * 1024**3,
             "pvCost": 0.25,
             "pvs": {
-                "claim-user": {},
-                "shared-data": {},
+                "cluster=cluster-one:name=pvc-user": {
+                    "byteHours": 16 * 1024**3,
+                    "cost": 0.2,
+                    "providerID": "vol-user",
+                },
+                "cluster=cluster-one:name=pvc-shared": {
+                    "byteHours": 4 * 1024**3,
+                    "cost": 0.05,
+                    "providerID": "vol-shared",
+                },
             },
         }
     }
@@ -45,9 +57,29 @@ def test_write_report_includes_allocation_average_and_storage_fields(tmp_path):
         }
     ]
     node_index = {"ip-10-0-0-1": node_assets[0]}
+    claims_by_volume = {
+        "pvc-user": {
+            "namespace": "sandbox",
+            "name": "claim-user",
+            "storage_class": "gp3",
+            "capacity": "10Gi",
+        },
+        "pvc-shared": {
+            "namespace": "sandbox",
+            "name": "shared-data",
+            "storage_class": "efs-sc",
+            "capacity": "100Gi",
+        },
+    }
 
     row_count = write_report(
-        report_path, allocation, node_assets, node_index, "sandbox", "jupyter-"
+        report_path,
+        allocation,
+        node_assets,
+        node_index,
+        "sandbox",
+        "jupyter-",
+        claims_by_volume,
     )
 
     with open(report_path, newline="") as report:
@@ -63,4 +95,60 @@ def test_write_report_includes_allocation_average_and_storage_fields(tmp_path):
     assert rows[0]["pod_pvc_storage_avg_gib"] == "10.0"
     assert rows[0]["pod_pvc_storage_gib_hours"] == "20.0"
     assert rows[0]["pod_pvc_storage_cost"] == "0.25"
-    assert rows[0]["pod_pvc_claims"] == "claim-user;shared-data"
+    assert rows[0]["pod_pvc_claims"] == "sandbox/shared-data;sandbox/claim-user"
+    assert rows[0]["pod_pv_names"] == "pvc-shared;pvc-user"
+
+    pvc_allocations = json.loads(rows[0]["pod_pvc_allocations_json"])
+    assert pvc_allocations == [
+        {
+            "claim": "sandbox/shared-data",
+            "pv": "pvc-shared",
+            "cluster": "cluster-one",
+            "storage_class": "efs-sc",
+            "capacity": "100Gi",
+            "avg_storage_gib": 2.0,
+            "storage_gib_hours": 4.0,
+            "cost": 0.05,
+            "provider_id": "vol-shared",
+        },
+        {
+            "claim": "sandbox/claim-user",
+            "pv": "pvc-user",
+            "cluster": "cluster-one",
+            "storage_class": "gp3",
+            "capacity": "10Gi",
+            "avg_storage_gib": 8.0,
+            "storage_gib_hours": 16.0,
+            "cost": 0.2,
+            "provider_id": "vol-user",
+        },
+    ]
+
+
+def test_index_persistent_volume_claims_uses_bound_volume_name():
+    response = {
+        "items": [
+            {
+                "metadata": {"namespace": "sandbox", "name": "claim-user"},
+                "spec": {
+                    "volumeName": "pvc-user",
+                    "storageClassName": "gp3",
+                    "resources": {"requests": {"storage": "10Gi"}},
+                },
+                "status": {"capacity": {"storage": "12Gi"}},
+            },
+            {
+                "metadata": {"namespace": "sandbox", "name": "pending-claim"},
+                "spec": {},
+            },
+        ]
+    }
+
+    assert index_persistent_volume_claims(response) == {
+        "pvc-user": {
+            "namespace": "sandbox",
+            "name": "claim-user",
+            "storage_class": "gp3",
+            "capacity": "12Gi",
+        }
+    }
