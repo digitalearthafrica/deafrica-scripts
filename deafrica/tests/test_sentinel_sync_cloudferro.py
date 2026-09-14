@@ -556,6 +556,51 @@ def test_delete_source_after_sync_skips_mismatched_destination(monkeypatch):
     assert len(source_s3.objects) == 3
 
 
+def test_overwrite_allows_source_delete_after_clean_sync(monkeypatch):
+    prefix = "s3_wfr_test/2026/02/09/37NBB_0_0/"
+    metadata_key = f"{prefix}S3_OL_2_WFR_20260209_NT_37NBB_0_0_metadata.json"
+    data_key = f"{prefix}CHL_NN.tif"
+    userdata_key = f"{prefix}userdata.json"
+    source_bodies = {
+        metadata_key: b'{"version":"new"}',
+        data_key: b"new-tif",
+        userdata_key: b'{"status":"done"}',
+    }
+    destination_bodies = {
+        metadata_key: source_bodies[metadata_key],
+        data_key: b"old",
+    }
+    source_objects = [
+        source_object(data_key, size=len(source_bodies[data_key])),
+        source_object(metadata_key, size=len(source_bodies[metadata_key])),
+        source_object(userdata_key, size=len(source_bodies[userdata_key])),
+    ]
+    source_s3 = FakeCopyS3Client(source_objects, bodies=source_bodies)
+    destination_s3 = FakeCopyS3Client(bodies=destination_bodies)
+
+    monkeypatch.setattr(sync_module, "cloudferro_client", lambda _config: source_s3)
+    monkeypatch.setattr(sync_module, "aws_client", lambda: destination_s3)
+
+    summary = sync_module.sync_prefix(
+        sync_config(
+            prefix,
+            delete_source_after_sync=True,
+            overwrite=True,
+        ),
+        product=S3_OLCI_L2_WFR_CDSE_PRODUCT,
+    )
+
+    assert summary["failed"] == 0
+    assert summary["copied"] == 1
+    assert summary["skipped_mismatched"] == 0
+    assert summary["overwrite"] is True
+    assert summary["source_delete_skip_reason"] is None
+    assert summary["deleted_source_objects"] == 3
+    assert destination_s3.uploads == [data_key]
+    assert destination_s3.bodies[data_key] == b"new-tif"
+    assert set(source_s3.deletes) == {metadata_key, data_key, userdata_key}
+
+
 def test_delete_source_after_sync_dry_run_reports_would_delete(monkeypatch):
     prefix = "s3_wfr_test/2026/02/09/37NBB_0_0/"
     metadata_key = f"{prefix}S3_OL_2_WFR_20260209_NT_37NBB_0_0_metadata.json"
@@ -736,6 +781,55 @@ def test_cdse_direct_copy_products_require_destination_bucket(product_name):
     assert (
         f"--destination-bucket is required for product {product_name}" in result.output
     )
+
+
+def test_cli_passes_overwrite_to_all_prefixes(monkeypatch):
+    seen = {}
+
+    def fake_sync_all_prefixes(
+        config,
+        discovery_prefix,
+        max_workers,
+        max_prefixes,
+        product,
+    ):
+        seen["overwrite"] = config.overwrite
+        seen["delete_source_after_sync"] = config.delete_source_after_sync
+        seen["discovery_prefix"] = discovery_prefix
+        seen["product"] = product.name
+        return {
+            "processed_prefixes": 0,
+            "overwrite": config.overwrite,
+        }
+
+    monkeypatch.setattr(sync_module, "sync_all_prefixes", fake_sync_all_prefixes)
+
+    result = CliRunner().invoke(
+        sync_module.cli,
+        [
+            "--product",
+            "s3_olci_l2_wfr_cdse",
+            "--source-bucket",
+            "cdse-s3-wfr",
+            "--destination-bucket",
+            "deafrica-sentinel-3-olci-l2-water",
+            "--all-prefixes",
+            "--discovery-prefix",
+            "Sentinel-3/OLCI/OL_2_WFR/",
+            "--source-root-prefix",
+            "Sentinel-3/OLCI/OL_2_WFR/",
+            "--overwrite",
+            "--delete-source-after-sync",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert seen == {
+        "overwrite": True,
+        "delete_source_after_sync": True,
+        "discovery_prefix": "Sentinel-3/OLCI/OL_2_WFR/",
+        "product": "s3_olci_l2_wfr_cdse",
+    }
 
 
 def test_s3_wfr_discovery_accepts_operational_archive_layout():

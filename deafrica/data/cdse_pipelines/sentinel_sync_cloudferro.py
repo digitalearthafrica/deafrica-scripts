@@ -132,6 +132,7 @@ class SyncConfig:
     cdse_batch_process_url: str
     cdse_token_url: str
     delete_source_after_sync: bool = False
+    overwrite: bool = False
 
 
 def product_spec_for_name(name: str) -> ProductSyncSpec:
@@ -269,6 +270,14 @@ def sync_prefix(config: SyncConfig, product: ProductSyncSpec = None) -> dict:
         config.source_prefix,
         config.destination_bucket,
     )
+    if config.overwrite:
+        log.warning(
+            "Overwrite mismatched mode enabled for s3://%s/%s; existing "
+            "destination objects with different sizes will be replaced from "
+            "CloudFerro source",
+            config.source_bucket,
+            config.source_prefix,
+        )
 
     summary = {
         "product": product.name,
@@ -300,6 +309,7 @@ def sync_prefix(config: SyncConfig, product: ProductSyncSpec = None) -> dict:
         "failed": 0,
         "failures": [],
         "delete_source_after_sync": config.delete_source_after_sync,
+        "overwrite": config.overwrite,
         "source_delete_skip_reason": None,
         "would_delete_source_objects": 0,
         "deleted_source_objects": 0,
@@ -401,13 +411,22 @@ def sync_prefix(config: SyncConfig, product: ProductSyncSpec = None) -> dict:
                 continue
 
             if status == "mismatched":
+                if not config.overwrite:
+                    log.warning(
+                        "Skipping existing mismatched object s3://%s/%s to "
+                        "avoid overwrite",
+                        config.destination_bucket,
+                        destination_key,
+                    )
+                    summary["skipped_mismatched"] += 1
+                    continue
+
                 log.warning(
-                    "Skipping existing mismatched object s3://%s/%s to avoid overwrite",
+                    "Overwriting existing mismatched object s3://%s/%s from "
+                    "CloudFerro source",
                     config.destination_bucket,
                     destination_key,
                 )
-                summary["skipped_mismatched"] += 1
-                continue
 
             log.info(
                 "Copying s3://%s/%s to s3://%s/%s",
@@ -606,6 +625,7 @@ def sync_all_prefixes(
         "source_root_prefix": product.discovery_prefix,
         "dry_run": config.dry_run,
         "delete_source_after_sync": config.delete_source_after_sync,
+        "overwrite": config.overwrite,
         "min_object_age_minutes": config.min_object_age_minutes,
         "discovery_prefix": discovery_prefix,
         "max_workers": max_workers,
@@ -1282,7 +1302,7 @@ def destination_status(
             return "matching"
         log.warning(
             "Destination object exists but size differs for s3://%s/%s: "
-            "source=%s, destination=%s. Not overwriting.",
+            "source=%s, destination=%s.",
             destination_bucket,
             destination_key,
             source_size,
@@ -1648,6 +1668,17 @@ DEFAULT_PRODUCT_SPEC = S1_RTC_PRODUCT
     ),
 )
 @click.option(
+    "--overwrite",
+    is_flag=True,
+    default=False,
+    envvar="OVERWRITE",
+    help=(
+        "Overwrite destination objects whose existing size differs from the "
+        "CloudFerro source object. Use when CloudFerro is the authoritative "
+        "source of truth for the sync."
+    ),
+)
+@click.option(
     "--min-object-age-minutes",
     default=DEFAULT_MIN_OBJECT_AGE_MINUTES,
     show_default=True,
@@ -1708,6 +1739,7 @@ def cli(
     destination_bucket,
     dry_run,
     delete_source_after_sync,
+    overwrite,
     min_object_age_minutes,
     job_id,
     cloudferro_endpoint_url,
@@ -1761,6 +1793,7 @@ def cli(
         cdse_batch_process_url=cdse_batch_process_url,
         cdse_token_url=cdse_token_url,
         delete_source_after_sync=delete_source_after_sync,
+        overwrite=overwrite,
     )
     try:
         if all_prefixes:
