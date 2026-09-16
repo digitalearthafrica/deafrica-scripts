@@ -93,6 +93,18 @@ BEGIN
   EXECUTE format('GRANT USAGE, CREATE ON SCHEMA %I TO %I', explorer_schema, explorer_writer_user);
   EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA %I TO %I', explorer_schema, explorer_writer_user);
   EXECUTE format('GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA %I TO %I', explorer_schema, explorer_writer_user);
+  -- Correct the legacy reverse relationship before applying the intended one.
+  -- Without this, PostgreSQL rejects the grant as a membership cycle.
+  IF EXISTS (
+    SELECT 1
+    FROM pg_auth_members membership
+    JOIN pg_roles granted_role ON granted_role.oid = membership.roleid
+    JOIN pg_roles member_role ON member_role.oid = membership.member
+    WHERE granted_role.rolname = explorer_admin_user
+      AND member_role.rolname = 'odc_admin'
+  ) THEN
+    EXECUTE format('REVOKE %I FROM odc_admin', explorer_admin_user);
+  END IF;
   EXECUTE format('GRANT odc_admin TO %I', explorer_admin_user);
   EXECUTE format('ALTER SCHEMA %I OWNER TO %I', explorer_schema, explorer_admin_user);
 END $$;
