@@ -25,6 +25,7 @@ REPORT_COLUMNS = [
     "email",
     "phone_number",
     "phone_number_country",
+    "phone_number_validation_status",
     "given_name",
     "family_name",
     "custom:organisation",
@@ -48,24 +49,38 @@ REPORT_COLUMNS = [
 current_date = datetime.now().strftime("%Y-%m-%d")
 
 
-def phone_number_country(phone_number):
+def phone_number_details(phone_number):
     phone_number = str(phone_number or "").strip()
     if not phone_number:
-        return ""
+        return "", "missing"
 
     try:
         parsed_number = phonenumbers.parse(phone_number, None)
     except NumberParseException:
-        return ""
+        return "", "unparseable"
 
-    if not phonenumbers.is_valid_number(parsed_number):
-        return ""
-
+    # Resolve the country before validating the subscriber number so a malformed
+    # number can still be associated with its recognized calling-code country.
     region_code = phonenumbers.region_code_for_number(parsed_number)
     if not region_code or region_code == "001":
-        return ""
+        return "", "unknown country"
 
-    return ENGLISH_LOCALE.territories.get(region_code, "")
+    country = ENGLISH_LOCALE.territories.get(region_code, "")
+    if not country:
+        return "", "unknown country"
+
+    if not phonenumbers.is_possible_number(parsed_number):
+        return country, "invalid length"
+
+    if not phonenumbers.is_valid_number(parsed_number):
+        return country, "invalid number"
+
+    return country, "valid"
+
+
+def phone_number_country(phone_number):
+    country, _ = phone_number_details(phone_number)
+    return country
 
 
 def report_environment(environment):
@@ -126,7 +141,10 @@ def users_to_dataframe(users):
             if attr.get("Name"):
                 base[attr["Name"]] = attr.get("Value", "")
 
-        base["phone_number_country"] = phone_number_country(base.get("phone_number"))
+        (
+            base["phone_number_country"],
+            base["phone_number_validation_status"],
+        ) = phone_number_details(base.get("phone_number"))
         records.append(base)
 
     df = pd.DataFrame(records)
@@ -210,8 +228,40 @@ def send_email_with_attachment(recipient_email, report_path, sender_email, ses_c
         print(f"Error sending email via SES: {e}")
 
 
+def find_report_in_google_drive(service, report_name, google_drive_folder_id):
+    response = (
+        service.files()
+        .list(
+            q=(
+                f"name = '{report_name}' and "
+                f"'{google_drive_folder_id}' in parents and trashed = false"
+            ),
+            spaces="drive",
+            fields="files(id, webViewLink)",
+            pageSize=2,
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        )
+        .execute()
+    )
+    files = response.get("files", [])
+
+    # The stable "latest" report must identify exactly one Drive file to update.
+    if len(files) > 1:
+        raise ValueError(
+            f"Multiple Google Drive files named {report_name!r} exist in the "
+            "configured folder"
+        )
+
+    return files[0] if files else None
+
+
 def upload_report_to_google_drive(
-    report_path, report_name, google_drive_folder_id, google_credentials_file
+    report_path,
+    report_name,
+    google_drive_folder_id,
+    google_credentials_file,
+    overwrite_existing=False,
 ):
     if not google_drive_folder_id:
         raise ValueError("GOOGLE_DRIVE_FOLDER_ID is required for Google Drive upload")
@@ -233,24 +283,45 @@ def upload_report_to_google_drive(
     )
     service = build("drive", "v3", credentials=credentials, cache_discovery=False)
 
-    file_metadata = {
-        "name": report_name,
-        "parents": [google_drive_folder_id],
-    }
     media = MediaFileUpload(report_path, mimetype=XLSX_MIME_TYPE, resumable=False)
 
-    uploaded_file = (
-        service.files()
-        .create(
-            body=file_metadata,
-            media_body=media,
-            fields="id, webViewLink",
-            supportsAllDrives=True,
+    existing_file = None
+    if overwrite_existing:
+        existing_file = find_report_in_google_drive(
+            service,
+            report_name,
+            google_drive_folder_id,
         )
-        .execute()
-    )
 
-    print(f"Uploaded report to Google Drive file id {uploaded_file.get('id')}")
+    if existing_file:
+        uploaded_file = (
+            service.files()
+            .update(
+                fileId=existing_file["id"],
+                media_body=media,
+                fields="id, webViewLink",
+                supportsAllDrives=True,
+            )
+            .execute()
+        )
+        action = "Updated"
+    else:
+        uploaded_file = (
+            service.files()
+            .create(
+                body={
+                    "name": report_name,
+                    "parents": [google_drive_folder_id],
+                },
+                media_body=media,
+                fields="id, webViewLink",
+                supportsAllDrives=True,
+            )
+            .execute()
+        )
+        action = "Uploaded"
+
+    print(f"{action} report in Google Drive file id {uploaded_file.get('id')}")
     print(f"Google Drive report link: {uploaded_file.get('webViewLink')}")
     return uploaded_file
 
@@ -268,6 +339,7 @@ def main(
     environment = report_environment(environment)
     environment_suffix = f"_{environment}" if environment else ""
     report_name = f"Users{environment_suffix}_{current_date}.xlsx"
+    latest_report_name = f"Users{environment_suffix}_latest.xlsx"
     report_path = report_name
 
     cognito_client = boto3.client("cognito-idp", region_name=aws_region_cognito)
@@ -278,7 +350,7 @@ def main(
     write_excel_report(report_path, df)
 
     if email_address:
-        print(f"Sending email with attached Excel report...")
+        print("Sending email with attached Excel report...")
         ses_client = boto3.client("ses", region_name=aws_region_ses)
         send_email_with_attachment(
             email_address,
@@ -289,12 +361,26 @@ def main(
     else:
         print("Skipping email because no recipient email address was provided")
 
-    if google_drive_folder_id or google_credentials_file:
+    if google_drive_folder_id and google_credentials_file:
+        # Keep the dated upload as an archive and a stable file for consumers
+        # that always need the most recent report.
         upload_report_to_google_drive(
             report_path,
             report_name,
             google_drive_folder_id,
             google_credentials_file,
+        )
+        upload_report_to_google_drive(
+            report_path,
+            latest_report_name,
+            google_drive_folder_id,
+            google_credentials_file,
+            overwrite_existing=True,
+        )
+    elif google_drive_folder_id or google_credentials_file:
+        raise ValueError(
+            "Both GOOGLE_DRIVE_FOLDER_ID and "
+            "GOOGLE_APPLICATION_CREDENTIALS are required"
         )
     else:
         print("Skipping Google Drive upload")
