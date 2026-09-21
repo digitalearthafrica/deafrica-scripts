@@ -1,6 +1,5 @@
 import json
 import logging
-import sys
 
 import boto3
 import click
@@ -28,6 +27,7 @@ log = logging.getLogger(__name__)
 
 
 @click.command("s1-frankfurt-gap-filler", no_args_is_help=True)
+@click.version_option(version=__version__)
 @click.argument("worker-idx", type=int, nargs=1, required=True)
 @click.argument("max-workers", type=int, nargs=1, required=True)
 @click.argument("report-path", type=str, nargs=1, required=True)
@@ -54,7 +54,6 @@ log = logging.getLogger(__name__)
     help="Publish indexing messages for report candidates already complete in PDS.",
 )
 @click.option("--dryrun", is_flag=True, default=False)
-@click.option("--version", is_flag=True, default=False)
 @limit
 @slack_url
 def cli(
@@ -69,20 +68,17 @@ def cli(
     allow_incomplete_report: bool,
     publish_existing_metadata: bool,
     dryrun: bool,
-    version: bool,
     limit: int | None,
     slack_url: str | None,
 ) -> None:
     log = setup_logging()
 
-    if version:
-        click.echo(__version__)
-        sys.exit(0)
-
     if max_workers < 1:
         raise ValueError("max-workers must be at least 1")
     if worker_idx < 0:
         raise ValueError("worker-idx must be 0 or greater")
+    if worker_idx >= max_workers:
+        raise ValueError("worker-idx must be less than max-workers")
 
     if limit is not None:
         limit = int(limit)
@@ -127,6 +123,7 @@ def cli(
         item["metadata_key"]
         for item in report.get("datasets", [])
         if item.get("status") in fillable_statuses
+        or (publish_existing_metadata and item.get("status") == "complete_in_dest")
     ]
     if limit:
         candidates = candidates[:limit]
@@ -189,10 +186,8 @@ def cli(
 
         should_publish = sns_topic_arn and (
             status == "copied_metadata_last"
-            or (
-                publish_existing_metadata
-                and status == "skipped_status_complete_in_dest"
-            )
+            or status == "dryrun_would_copy_metadata_last"
+            or status == "skipped_status_complete_in_dest"
         )
         if should_publish:
             if dryrun:

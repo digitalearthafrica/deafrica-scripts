@@ -16,14 +16,11 @@ from deafrica.monitoring._s1_frankfurt_gap import (
     build_plan_for_metadata,
     build_plan_for_metadata_without_listing,
     build_report,
-    csv_from_datasets,
-    csv_key_from_report_key,
     describe_exception,
     discover_metadata_keys,
     parse_date,
     plan_to_dict,
     put_json_object,
-    put_text_object,
     report_key,
     s3_client,
     s3_url,
@@ -34,6 +31,7 @@ log = logging.getLogger(__name__)
 
 
 @click.command("s1-frankfurt-gap-report", no_args_is_help=True)
+@click.version_option(version=__version__)
 @click.argument("bucket-name", type=str, nargs=1, required=True)
 @click.option("--start-date", type=str, required=True, help="Start date, YYYY-MM-DD.")
 @click.option("--end-date", type=str, required=True, help="End date, YYYY-MM-DD.")
@@ -56,13 +54,6 @@ log = logging.getLogger(__name__)
     default=None,
     help="Write the JSON report to a local file instead of S3.",
 )
-@click.option(
-    "--local-output-csv",
-    type=click.Path(dir_okay=False, path_type=Path),
-    default=None,
-    help="Write the CSV report to a local file instead of S3.",
-)
-@click.option("--version", is_flag=True, default=False)
 @slack_url
 def cli(
     bucket_name: str,
@@ -77,20 +68,16 @@ def cli(
     metadata_key: str | None,
     output_key: str | None,
     local_output_json: Path | None,
-    local_output_csv: Path | None,
-    version: bool,
     slack_url: str | None,
 ) -> None:
     log = setup_logging()
-
-    if version:
-        click.echo(__version__)
-        sys.exit(0)
 
     start = parse_date(start_date)
     end = parse_date(end_date)
     if end < start:
         raise ValueError("--end-date must be on or after --start-date")
+    if max_datasets is not None and max_datasets < 1:
+        raise ValueError("--max-datasets must be at least 1")
 
     source_s3 = s3_client(source_region)
     destination_s3 = s3_client(destination_region)
@@ -193,35 +180,20 @@ def cli(
     )
 
     if local_output_json:
-        local_output_csv = local_output_csv or local_output_json.with_suffix(".csv")
         local_output_json.parent.mkdir(parents=True, exist_ok=True)
-        local_output_csv.parent.mkdir(parents=True, exist_ok=True)
         local_output_json.write_text(
             json.dumps(report, indent=2) + "\n",
             encoding="utf-8",
         )
-        local_output_csv.write_text(csv_from_datasets(datasets), encoding="utf-8")
         report_url = str(local_output_json)
-        csv_url = str(local_output_csv)
         log.info("Frankfurt gap report written to %s", report_url)
-        log.info("Frankfurt gap CSV written to %s", csv_url)
     else:
         report_s3 = s3_client(destination_region)
         output_key = output_key or report_key(start_date, end_date)
-        csv_key = csv_key_from_report_key(output_key)
         put_json_object(report_s3, bucket_name, output_key, report)
-        put_text_object(
-            report_s3,
-            bucket_name,
-            csv_key,
-            csv_from_datasets(datasets),
-            "text/csv",
-        )
 
         report_url = s3_url(bucket_name, output_key)
-        csv_url = s3_url(bucket_name, csv_key)
         log.info("Frankfurt gap report written to %s", report_url)
-        log.info("Frankfurt gap CSV written to %s", csv_url)
     log.info("Summary: %s", report["summary"])
 
     message = (
@@ -233,7 +205,6 @@ def cli(
         f"Datasets checked: `{len(datasets)}`\n"
         f"Summary: `{report['summary']}`\n"
         f"Report: `{report_url}`\n"
-        f"CSV: `{csv_url}`\n"
     )
     if error:
         message += f"Error: `{error}`\n"

@@ -6,6 +6,7 @@ from botocore.exceptions import ClientError
 from click.testing import CliRunner
 from moto import mock_s3
 
+from deafrica import __version__
 from deafrica.monitoring._s1_frankfurt_gap import (
     REPORT_SCHEMA_VERSION,
     REPORT_TYPE,
@@ -26,6 +27,20 @@ REGION = "us-east-1"
 PREFIX = "s1_rtc/N00E005/2026/06/23/0834AD/"
 BASE = f"{PREFIX}s1_rtc_0834AD_N00E005_2026_06_23"
 METADATA_KEY = f"{BASE}_metadata.json"
+
+
+def test_report_version_does_not_require_arguments():
+    result = CliRunner().invoke(s1_frankfurt_gap_report.cli, ["--version"])
+
+    assert result.exit_code == 0
+    assert __version__ in result.output
+
+
+def test_filler_version_does_not_require_arguments():
+    result = CliRunner().invoke(s1_frankfurt_gap_filler.cli, ["--version"])
+
+    assert result.exit_code == 0
+    assert __version__ in result.output
 
 
 class FakeS3Client:
@@ -81,9 +96,33 @@ class FakeSNSClient:
         return {"ResponseMetadata": {"RequestId": "request-id"}}
 
 
-class FailingSNSClient:
+class AssertingCompleteDestinationSNSClient(FakeSNSClient):
+    def __init__(self, source, destination):
+        super().__init__()
+        self.source = source
+        self.destination = destination
+
     def publish(self, TopicArn, Message):
+        for key, body in self.source.bodies.items():
+            assert self.destination.bodies[key] == body
+        return super().publish(TopicArn, Message)
+
+
+class FailingSNSClient(FakeSNSClient):
+    def publish(self, TopicArn, Message):
+        self.published.append({"TopicArn": TopicArn, "Message": Message})
         raise ClientError({"Error": {"Code": "InternalError"}}, "Publish")
+
+
+class FailingUploadS3Client(FakeS3Client):
+    def __init__(self, bodies=None, fail_key=None):
+        super().__init__(bodies)
+        self.fail_key = fail_key
+
+    def upload_fileobj(self, body, Bucket, Key, ExtraArgs=None):
+        if Key == self.fail_key:
+            raise ClientError({"Error": {"Code": "InternalError"}}, "Upload")
+        return super().upload_fileobj(body, Bucket, Key, ExtraArgs=ExtraArgs)
 
 
 def asset_key(suffix):
@@ -281,10 +320,32 @@ def test_max_datasets_marks_report_incomplete(tmp_path):
     )
 
     assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit)
+    assert result.exception.code == 1
     report = json.loads(output.read_text())
     assert report["complete"] is False
     assert report["error"] == "max_datasets limit reached: 1"
     assert report["total_datasets_checked"] == 1
+
+
+def test_report_rejects_nonpositive_max_datasets(tmp_path):
+    result = CliRunner().invoke(
+        s1_frankfurt_gap_report.cli,
+        [
+            REPORT_BUCKET,
+            "--start-date",
+            "2026-06-23",
+            "--end-date",
+            "2026-06-23",
+            "--max-datasets",
+            "0",
+            "--local-output-json",
+            str(tmp_path / "report.json"),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--max-datasets must be at least 1" in str(result.exception)
 
 
 @mock_s3
@@ -338,6 +399,8 @@ def test_report_tile_filter_limits_discovery(tmp_path):
     assert result.exit_code == 0
     report = json.loads(output.read_text())
     assert [item["metadata_key"] for item in report["datasets"]] == [included]
+    assert output.exists()
+    assert not output.with_suffix(".csv").exists()
     assert report["scope"] == {
         "tile": "N00E005",
         "metadata_key": None,
@@ -376,6 +439,8 @@ def test_check_error_marks_report_incomplete(tmp_path):
     )
 
     assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit)
+    assert result.exception.code == 1
     report = json.loads(output.read_text())
     assert report["complete"] is False
     assert report["check_error_count"] == 1
@@ -431,6 +496,58 @@ def test_filler_refuses_incomplete_report(tmp_path):
     assert "Refusing to fill from an incomplete report" in str(result.exception)
 
 
+def test_filler_rejects_worker_index_outside_worker_range(tmp_path):
+    result = CliRunner().invoke(
+        s1_frankfurt_gap_filler.cli,
+        ["1", "1", str(tmp_path / "report.json"), "--dryrun"],
+    )
+
+    assert result.exit_code != 0
+    assert "worker-idx must be less than max-workers" in str(result.exception)
+
+
+def test_filler_allows_valid_worker_with_no_assigned_work(tmp_path, monkeypatch):
+    report = {
+        "report_type": REPORT_TYPE,
+        "schema_version": REPORT_SCHEMA_VERSION,
+        "complete": True,
+        "source_bucket": SOURCE_BUCKET,
+        "destination_bucket": DESTINATION_BUCKET,
+        "fillable_statuses": ["missing_everything_in_dest"],
+        "datasets": [
+            {
+                "metadata_key": METADATA_KEY,
+                "status": "missing_everything_in_dest",
+            }
+        ],
+    }
+    report_path = tmp_path / "report.json"
+    report_path.write_text(json.dumps(report))
+    monkeypatch.setattr(
+        s1_frankfurt_gap_filler,
+        "s3_client",
+        lambda region_name: (_ for _ in ()).throw(
+            AssertionError("Worker with no assigned work should not create S3 clients")
+        ),
+    )
+
+    result = CliRunner().invoke(
+        s1_frankfurt_gap_filler.cli,
+        [
+            "1",
+            "5",
+            str(report_path),
+            "--source-bucket",
+            SOURCE_BUCKET,
+            "--destination-bucket",
+            DESTINATION_BUCKET,
+            "--dryrun",
+        ],
+    )
+
+    assert result.exit_code == 0
+
+
 def test_s3_event_message_matches_s1_gap_filler_shape():
     assert s3_event_message(DESTINATION_BUCKET, METADATA_KEY) == {
         "Records": [
@@ -447,7 +564,7 @@ def test_s3_event_message_matches_s1_gap_filler_shape():
 def test_filler_publishes_indexing_message_after_copy(tmp_path, monkeypatch):
     source = FakeS3Client(dataset_bodies())
     destination = FakeS3Client({})
-    sns = FakeSNSClient()
+    sns = AssertingCompleteDestinationSNSClient(source, destination)
     report = {
         "report_type": REPORT_TYPE,
         "schema_version": REPORT_SCHEMA_VERSION,
@@ -506,6 +623,8 @@ def test_filler_publishes_indexing_message_after_copy(tmp_path, monkeypatch):
 def test_filler_reports_indexing_failure_after_successful_copy(tmp_path, monkeypatch):
     source = FakeS3Client(dataset_bodies())
     destination = FakeS3Client({})
+    sns = FailingSNSClient()
+    slack_messages = []
     report = {
         "report_type": REPORT_TYPE,
         "schema_version": REPORT_SCHEMA_VERSION,
@@ -531,7 +650,146 @@ def test_filler_reports_indexing_failure_after_successful_copy(tmp_path, monkeyp
     monkeypatch.setattr(
         s1_frankfurt_gap_filler.boto3,
         "client",
-        lambda service_name, region_name=None: FailingSNSClient(),
+        lambda service_name, region_name=None: sns,
+    )
+    monkeypatch.setattr(
+        s1_frankfurt_gap_filler,
+        "send_slack_notification",
+        lambda url, title, message: slack_messages.append(message),
+    )
+
+    result = CliRunner().invoke(
+        s1_frankfurt_gap_filler.cli,
+        [
+            "0",
+            "1",
+            str(report_path),
+            "--sns-topic-arn",
+            "arn:aws:sns:af-south-1:123:index",
+            "--source-bucket",
+            SOURCE_BUCKET,
+            "--destination-bucket",
+            DESTINATION_BUCKET,
+            "--source-region",
+            "source-region",
+            "--destination-region",
+            "destination-region",
+            "--slack_url",
+            "http://example.com/slack",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert isinstance(result.exception, RuntimeError)
+    assert str(result.exception) == "Some Frankfurt gap filler tasks failed"
+    assert destination.bodies[METADATA_KEY] == source.bodies[METADATA_KEY]
+    assert destination.uploads[-1] == METADATA_KEY
+    assert len(sns.published) == 1
+    assert "Copy failures: `0`" in slack_messages[0]
+    assert "Indexing failures: `1`" in slack_messages[0]
+
+
+def test_filler_does_not_publish_or_copy_metadata_after_asset_failure(
+    tmp_path, monkeypatch
+):
+    source = FakeS3Client(dataset_bodies())
+    destination = FailingUploadS3Client({}, fail_key=asset_key("_VV.tif"))
+    sns = FakeSNSClient()
+    slack_messages = []
+    report = {
+        "report_type": REPORT_TYPE,
+        "schema_version": REPORT_SCHEMA_VERSION,
+        "complete": True,
+        "source_bucket": SOURCE_BUCKET,
+        "destination_bucket": DESTINATION_BUCKET,
+        "fillable_statuses": ["missing_everything_in_dest"],
+        "datasets": [
+            {
+                "metadata_key": METADATA_KEY,
+                "status": "missing_everything_in_dest",
+            }
+        ],
+    }
+    report_path = tmp_path / "report.json"
+    report_path.write_text(json.dumps(report))
+
+    monkeypatch.setattr(
+        s1_frankfurt_gap_filler,
+        "s3_client",
+        lambda region_name: source if region_name == "source-region" else destination,
+    )
+    monkeypatch.setattr(
+        s1_frankfurt_gap_filler.boto3,
+        "client",
+        lambda service_name, region_name=None: sns,
+    )
+    monkeypatch.setattr(
+        s1_frankfurt_gap_filler,
+        "send_slack_notification",
+        lambda url, title, message: slack_messages.append(message),
+    )
+
+    result = CliRunner().invoke(
+        s1_frankfurt_gap_filler.cli,
+        [
+            "0",
+            "1",
+            str(report_path),
+            "--sns-topic-arn",
+            "arn:aws:sns:af-south-1:123:index",
+            "--source-bucket",
+            SOURCE_BUCKET,
+            "--destination-bucket",
+            DESTINATION_BUCKET,
+            "--source-region",
+            "source-region",
+            "--destination-region",
+            "destination-region",
+            "--slack_url",
+            "http://example.com/slack",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert isinstance(result.exception, RuntimeError)
+    assert str(result.exception) == "Some Frankfurt gap filler tasks failed"
+    assert METADATA_KEY not in destination.bodies
+    assert METADATA_KEY not in destination.uploads
+    assert sns.published == []
+    assert "Copy failures: `1`" in slack_messages[0]
+    assert "Indexing failures: `0`" in slack_messages[0]
+
+
+def test_filler_publishes_existing_complete_retry(tmp_path, monkeypatch):
+    source = FakeS3Client(dataset_bodies())
+    destination = FakeS3Client(dataset_bodies())
+    sns = FakeSNSClient()
+    report = {
+        "report_type": REPORT_TYPE,
+        "schema_version": REPORT_SCHEMA_VERSION,
+        "complete": True,
+        "source_bucket": SOURCE_BUCKET,
+        "destination_bucket": DESTINATION_BUCKET,
+        "fillable_statuses": ["missing_everything_in_dest"],
+        "datasets": [
+            {
+                "metadata_key": METADATA_KEY,
+                "status": "missing_everything_in_dest",
+            }
+        ],
+    }
+    report_path = tmp_path / "report.json"
+    report_path.write_text(json.dumps(report))
+
+    monkeypatch.setattr(
+        s1_frankfurt_gap_filler,
+        "s3_client",
+        lambda region_name: source if region_name == "source-region" else destination,
+    )
+    monkeypatch.setattr(
+        s1_frankfurt_gap_filler.boto3,
+        "client",
+        lambda service_name, region_name=None: sns,
     )
 
     result = CliRunner().invoke(
@@ -553,12 +811,17 @@ def test_filler_reports_indexing_failure_after_successful_copy(tmp_path, monkeyp
         ],
     )
 
-    assert result.exit_code != 0
-    assert destination.bodies[METADATA_KEY] == source.bodies[METADATA_KEY]
-    assert destination.uploads[-1] == METADATA_KEY
+    assert result.exit_code == 0
+    assert destination.uploads == []
+    assert len(sns.published) == 1
+    assert json.loads(sns.published[0]["Message"]) == s3_event_message(
+        DESTINATION_BUCKET, METADATA_KEY
+    )
 
 
-def test_filler_can_publish_existing_complete_metadata(tmp_path, monkeypatch):
+def test_filler_can_publish_existing_complete_metadata_from_report(
+    tmp_path, monkeypatch
+):
     source = FakeS3Client(dataset_bodies())
     destination = FakeS3Client(dataset_bodies())
     sns = FakeSNSClient()
@@ -572,7 +835,7 @@ def test_filler_can_publish_existing_complete_metadata(tmp_path, monkeypatch):
         "datasets": [
             {
                 "metadata_key": METADATA_KEY,
-                "status": "missing_everything_in_dest",
+                "status": "complete_in_dest",
             }
         ],
     }
@@ -621,6 +884,7 @@ def test_filler_can_publish_existing_complete_metadata(tmp_path, monkeypatch):
 def test_filler_dryrun_publishes_nothing(tmp_path, monkeypatch):
     source = FakeS3Client(dataset_bodies())
     destination = FakeS3Client({})
+    slack_messages = []
     report = {
         "report_type": REPORT_TYPE,
         "schema_version": REPORT_SCHEMA_VERSION,
@@ -650,6 +914,11 @@ def test_filler_dryrun_publishes_nothing(tmp_path, monkeypatch):
             AssertionError("SNS client should not be created during dryrun")
         ),
     )
+    monkeypatch.setattr(
+        s1_frankfurt_gap_filler,
+        "send_slack_notification",
+        lambda url, title, message: slack_messages.append(message),
+    )
 
     result = CliRunner().invoke(
         s1_frankfurt_gap_filler.cli,
@@ -668,7 +937,13 @@ def test_filler_dryrun_publishes_nothing(tmp_path, monkeypatch):
             "--destination-region",
             "destination-region",
             "--dryrun",
+            "--slack_url",
+            "http://example.com/slack",
         ],
     )
 
     assert result.exit_code == 0
+    assert destination.uploads == []
+    assert destination.bodies == {}
+    assert "Indexing messages published: `0`" in slack_messages[0]
+    assert "Indexing messages planned: `1`" in slack_messages[0]

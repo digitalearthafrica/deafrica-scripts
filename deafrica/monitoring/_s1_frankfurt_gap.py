@@ -161,17 +161,6 @@ def put_json_object(client, bucket: str, key: str, data: dict) -> None:
     )
 
 
-def put_text_object(
-    client, bucket: str, key: str, text: str, content_type: str
-) -> None:
-    client.put_object(
-        Bucket=bucket,
-        Key=key,
-        Body=text.encode("utf-8"),
-        ContentType=content_type,
-    )
-
-
 def s3_event_message(bucket: str, key: str) -> dict:
     return {
         "Records": [
@@ -401,10 +390,6 @@ def report_key(start_date: str, end_date: str) -> str:
     )
 
 
-def csv_key_from_report_key(key: str) -> str:
-    return key.removesuffix(".json") + ".csv"
-
-
 def build_report(
     start_date: str,
     end_date: str,
@@ -475,38 +460,6 @@ def build_report(
             if item["status"] == "source_incomplete"
         ],
     }
-
-
-def csv_from_datasets(datasets: list[dict]) -> str:
-    header = [
-        "date",
-        "tile",
-        "datatake",
-        "metadata_key",
-        "status",
-        "dest_metadata_exists",
-        "source_complete",
-        "source_object_count",
-        "dest_existing_count",
-        "dest_missing_count",
-        "missing_required_source",
-        "missing_dest_assets",
-        "mismatched_dest_assets",
-        "existing_dest_assets",
-        "source_prefix",
-        "check_error",
-    ]
-    rows = [",".join(header)]
-    for item in datasets:
-        values = []
-        for column in header:
-            value = item.get(column, "")
-            if isinstance(value, list):
-                value = ";".join(value)
-            text = str(value).replace('"', '""')
-            values.append(f'"{text}"')
-        rows.append(",".join(values))
-    return "\n".join(rows) + "\n"
 
 
 def describe_exception(exc: Exception) -> str:
