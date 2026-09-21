@@ -1,6 +1,8 @@
+import json
 import logging
 import sys
 
+import boto3
 import click
 
 from deafrica import __version__
@@ -9,6 +11,7 @@ from deafrica.logs import setup_logging
 from deafrica.monitoring._s1_frankfurt_gap import (
     DESTINATION_BUCKET,
     DESTINATION_REGION,
+    REPORT_SCHEMA_VERSION,
     REPORT_TYPE,
     SAFE_FILL_STATUSES,
     SOURCE_BUCKET,
@@ -17,6 +20,7 @@ from deafrica.monitoring._s1_frankfurt_gap import (
     fill_dataset,
     read_report,
     s3_client,
+    s3_event_message,
 )
 from deafrica.utils import send_slack_notification, split_list_equally
 
@@ -27,6 +31,12 @@ log = logging.getLogger(__name__)
 @click.argument("worker-idx", type=int, nargs=1, required=True)
 @click.argument("max-workers", type=int, nargs=1, required=True)
 @click.argument("report-path", type=str, nargs=1, required=True)
+@click.option(
+    "--sns-topic-arn",
+    type=str,
+    default=None,
+    help="Publish an S3 event message for copied metadata to trigger indexing.",
+)
 @click.option("--source-bucket", default=SOURCE_BUCKET, show_default=True)
 @click.option("--destination-bucket", default=DESTINATION_BUCKET, show_default=True)
 @click.option("--source-region", default=SOURCE_REGION, show_default=True)
@@ -37,6 +47,12 @@ log = logging.getLogger(__name__)
     default=False,
     help="Allow filling from a report whose complete flag is false.",
 )
+@click.option(
+    "--publish-existing-metadata",
+    is_flag=True,
+    default=False,
+    help="Publish indexing messages for report candidates already complete in PDS.",
+)
 @click.option("--dryrun", is_flag=True, default=False)
 @click.option("--version", is_flag=True, default=False)
 @limit
@@ -45,11 +61,13 @@ def cli(
     worker_idx: int,
     max_workers: int,
     report_path: str,
+    sns_topic_arn: str | None,
     source_bucket: str,
     destination_bucket: str,
     source_region: str,
     destination_region: str,
     allow_incomplete_report: bool,
+    publish_existing_metadata: bool,
     dryrun: bool,
     version: bool,
     limit: int | None,
@@ -70,12 +88,19 @@ def cli(
         limit = int(limit)
         if limit < 1:
             raise ValueError(f"Limit {limit} lower than 1.")
+    if publish_existing_metadata and not sns_topic_arn:
+        raise ValueError("--publish-existing-metadata requires --sns-topic-arn")
 
     report = read_report(report_path, region_name=destination_region)
     if report.get("report_type") != REPORT_TYPE:
         raise RuntimeError(
             f"Refusing to fill from report type {report.get('report_type')}. "
             f"Expected {REPORT_TYPE}."
+        )
+    if report.get("schema_version") != REPORT_SCHEMA_VERSION:
+        raise RuntimeError(
+            f"Refusing to fill from report schema {report.get('schema_version')}. "
+            f"Expected {REPORT_SCHEMA_VERSION}."
         )
 
     if report.get("complete") is not True and not allow_incomplete_report:
@@ -96,10 +121,12 @@ def cli(
             f"{report_destination} does not match {destination_bucket}"
         )
 
+    report_fillable_statuses = set(report.get("fillable_statuses") or [])
+    fillable_statuses = SAFE_FILL_STATUSES & report_fillable_statuses
     candidates = [
         item["metadata_key"]
         for item in report.get("datasets", [])
-        if item.get("status") in SAFE_FILL_STATUSES
+        if item.get("status") in fillable_statuses
     ]
     if limit:
         candidates = candidates[:limit]
@@ -116,15 +143,25 @@ def cli(
     tasks = chunks[worker_idx]
     log.info("Report: %s", report_path)
     log.info("Dry run: %s", dryrun)
-    log.info("Fillable statuses: %s", sorted(SAFE_FILL_STATUSES))
+    log.info("Fillable statuses: %s", sorted(fillable_statuses))
     log.info("Total fill candidates: %s", len(candidates))
     log.info("Worker %s processing %s datasets", worker_idx, len(tasks))
 
     source_s3 = s3_client(source_region)
     destination_s3 = s3_client(destination_region)
+    sns_client = (
+        boto3.client("sns", region_name=destination_region)
+        if sns_topic_arn and not dryrun
+        else None
+    )
     results: dict[str, int] = {}
-    failures: list[str] = []
+    copy_failures: list[str] = []
+    indexing_failures: list[str] = []
     copied_objects = 0
+    datasets_copied = 0
+    datasets_skipped = 0
+    indexing_messages = 0
+    indexing_messages_planned = 0
 
     for metadata_key in tasks:
         try:
@@ -138,13 +175,41 @@ def cli(
             )
         except Exception as exc:
             details = describe_exception(exc)
-            failures.append(f"{metadata_key}: {details}")
+            copy_failures.append(f"{metadata_key}: {details}")
             log.exception("Failed to fill %s", metadata_key)
             continue
 
         results[status] = results.get(status, 0) + 1
         copied_objects += count
+        if status in {"copied_metadata_last", "dryrun_would_copy_metadata_last"}:
+            datasets_copied += 1
+        elif status.startswith("skipped_"):
+            datasets_skipped += 1
         log.info("%s objects=%s %s", status, count, metadata_key)
+
+        should_publish = sns_topic_arn and (
+            status == "copied_metadata_last"
+            or (
+                publish_existing_metadata
+                and status == "skipped_status_complete_in_dest"
+            )
+        )
+        if should_publish:
+            if dryrun:
+                indexing_messages_planned += 1
+                continue
+            try:
+                publish_indexing_message(
+                    sns_client=sns_client,
+                    sns_topic_arn=sns_topic_arn,
+                    destination_bucket=destination_bucket,
+                    metadata_key=metadata_key,
+                )
+                indexing_messages += 1
+            except Exception as exc:
+                details = describe_exception(exc)
+                indexing_failures.append(f"{metadata_key}: {details}")
+                log.exception("Failed to publish indexing message for %s", metadata_key)
 
     message = (
         f"*SENTINEL 1 FRANKFURT GAP FILLER - PDS*\n"
@@ -152,17 +217,34 @@ def cli(
         f"Worker: `{worker_idx}/{max_workers}`\n"
         f"Dry run: `{dryrun}`\n"
         f"Datasets attempted: `{len(tasks)}`\n"
+        f"Datasets copied/planned: `{datasets_copied}`\n"
+        f"Datasets skipped: `{datasets_skipped}`\n"
         f"Objects copied/planned: `{copied_objects}`\n"
+        f"Indexing messages published: `{indexing_messages}`\n"
+        f"Indexing messages planned: `{indexing_messages_planned}`\n"
         f"Results: `{results}`\n"
-        f"Failures: `{len(failures)}`\n"
+        f"Copy failures: `{len(copy_failures)}`\n"
+        f"Indexing failures: `{len(indexing_failures)}`\n"
     )
-    if failures:
-        message += f"Example failures: `{failures[:5]}`\n"
+    if copy_failures:
+        message += f"Example copy failures: `{copy_failures[:5]}`\n"
+    if indexing_failures:
+        message += f"Example indexing failures: `{indexing_failures[:5]}`\n"
 
     if slack_url:
         send_slack_notification(slack_url, "S1 Frankfurt Gap Filler", message)
     else:
         log.info(message)
 
-    if failures:
+    if copy_failures or indexing_failures:
         raise RuntimeError("Some Frankfurt gap filler tasks failed")
+
+
+def publish_indexing_message(
+    sns_client,
+    sns_topic_arn: str,
+    destination_bucket: str,
+    metadata_key: str,
+) -> None:
+    message = s3_event_message(destination_bucket, metadata_key)
+    sns_client.publish(TopicArn=sns_topic_arn, Message=json.dumps(message))

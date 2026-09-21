@@ -20,6 +20,7 @@ REPORT_SCHEMA_VERSION = 1
 
 REPORT_STATUSES = {
     "complete_in_dest",
+    "dest_metadata_present_assets_missing",
     "missing_everything_in_dest",
     "metadata_missing_assets_present",
     "metadata_missing_some_assets_missing",
@@ -61,6 +62,7 @@ class DatasetPlan:
     dest_missing_count: int
     missing_required_source: list[str]
     missing_dest_assets: list[str]
+    mismatched_dest_assets: list[str]
     existing_dest_assets: list[str]
     source_prefix: str
     check_error: str | None = None
@@ -107,6 +109,14 @@ def list_object_keys(client, bucket: str, prefix: str) -> list[str]:
     return keys
 
 
+def list_object_sizes(client, bucket: str, prefix: str) -> dict[str, int]:
+    paginator = client.get_paginator("list_objects_v2")
+    sizes: dict[str, int] = {}
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        sizes.update({item["Key"]: item["Size"] for item in page.get("Contents", [])})
+    return sizes
+
+
 def head_object(client, bucket: str, key: str) -> dict | None:
     try:
         return client.head_object(Bucket=bucket, Key=key)
@@ -119,6 +129,18 @@ def head_object(client, bucket: str, key: str) -> dict | None:
 
 def object_exists(client, bucket: str, key: str) -> bool:
     return head_object(client, bucket, key) is not None
+
+
+def object_sizes_match(source_head: dict | None, destination_head: dict | None) -> bool:
+    if not source_head or not destination_head:
+        return False
+    return source_head["ContentLength"] == destination_head["ContentLength"]
+
+
+def object_size_matches(source_head: dict | None, destination_size: int | None) -> bool:
+    if not source_head or destination_size is None:
+        return False
+    return source_head["ContentLength"] == destination_size
 
 
 def read_json_object(client, bucket: str, key: str) -> dict:
@@ -148,6 +170,19 @@ def put_text_object(
         Body=text.encode("utf-8"),
         ContentType=content_type,
     )
+
+
+def s3_event_message(bucket: str, key: str) -> dict:
+    return {
+        "Records": [
+            {
+                "s3": {
+                    "bucket": {"name": bucket},
+                    "object": {"key": key},
+                }
+            }
+        ]
+    }
 
 
 def parse_dataset_key(metadata_key: str) -> tuple[str, str, str]:
@@ -182,8 +217,26 @@ def expected_asset_keys_from_stac(stac: dict, metadata_key: str) -> set[str]:
     return keys
 
 
-def discover_metadata_keys(source_s3, source_bucket: str, start: date, end: date):
-    tile_prefixes = list(list_common_prefixes(source_s3, source_bucket, BASE_PREFIX))
+def expected_keys_from_stac(stac: dict, metadata_key: str) -> set[str]:
+    metadata_base = metadata_key.removesuffix("_metadata.json")
+    expected_keys = {metadata_key}
+    expected_keys.update(expected_asset_keys_from_stac(stac, metadata_key))
+    expected_keys.update(f"{metadata_base}{suffix}" for suffix in REQUIRED_SUFFIXES)
+    return expected_keys
+
+
+def discover_metadata_keys(
+    source_s3,
+    source_bucket: str,
+    start: date,
+    end: date,
+    tile: str | None = None,
+):
+    tile_prefixes = (
+        [f"{BASE_PREFIX}{tile.strip('/')}/"]
+        if tile
+        else list(list_common_prefixes(source_s3, source_bucket, BASE_PREFIX))
+    )
     for tile_prefix in tile_prefixes:
         for day in each_day(start, end):
             date_prefix = f"{tile_prefix}{day:%Y/%m/%d}/"
@@ -206,60 +259,17 @@ def build_plan_for_metadata(
     source_prefix = metadata_key.rsplit("/", 1)[0] + "/"
     source_keys = set(list_object_keys(source_s3, source_bucket, source_prefix))
 
-    required_keys = set(source_keys)
-    if metadata_key in source_keys:
-        stac = read_json_object(source_s3, source_bucket, metadata_key)
-        required_keys.update(expected_asset_keys_from_stac(stac, metadata_key))
-
-    missing_required_source = [
-        suffix
-        for suffix in REQUIRED_SUFFIXES
-        if not any(k.endswith(suffix) for k in source_keys)
-    ]
-    missing_required_source.extend(sorted(required_keys - source_keys))
-
-    source_complete = not missing_required_source
-    dest_metadata_exists = object_exists(
-        destination_s3, destination_bucket, metadata_key
-    )
-
-    existing_dest_assets: list[str] = []
-    missing_dest_assets: list[str] = []
-    for key in sorted(k for k in source_keys if k != metadata_key):
-        if object_exists(destination_s3, destination_bucket, key):
-            existing_dest_assets.append(key)
-        else:
-            missing_dest_assets.append(key)
-
-    if dest_metadata_exists:
-        status = "complete_in_dest"
-    elif not source_complete:
-        status = "source_incomplete"
-    elif not existing_dest_assets and missing_dest_assets:
-        status = "missing_everything_in_dest"
-    elif existing_dest_assets and not missing_dest_assets:
-        status = "metadata_missing_assets_present"
-    elif existing_dest_assets and missing_dest_assets:
-        status = "metadata_missing_some_assets_missing"
-    else:
-        status = "source_incomplete"
-        missing_required_source.append("No non-metadata source assets found")
-
-    return DatasetPlan(
-        date=day,
-        tile=tile,
-        datatake=datatake,
+    stac = read_json_object(source_s3, source_bucket, metadata_key)
+    expected_keys = expected_keys_from_stac(stac, metadata_key)
+    return build_plan_for_expected_keys(
+        source_s3=source_s3,
+        destination_s3=destination_s3,
+        source_bucket=source_bucket,
+        destination_bucket=destination_bucket,
         metadata_key=metadata_key,
-        status=status,
-        dest_metadata_exists=dest_metadata_exists,
-        source_complete=source_complete,
-        source_object_count=len(source_keys),
-        dest_existing_count=len(existing_dest_assets) + int(dest_metadata_exists),
-        dest_missing_count=len(missing_dest_assets) + int(not dest_metadata_exists),
-        missing_required_source=missing_required_source,
-        missing_dest_assets=missing_dest_assets,
-        existing_dest_assets=existing_dest_assets,
+        expected_keys=expected_keys,
         source_prefix=source_prefix,
+        source_object_count=len(source_keys & expected_keys),
     )
 
 
@@ -272,48 +282,86 @@ def build_plan_for_metadata_without_listing(
 ) -> DatasetPlan:
     tile, day, datatake = parse_dataset_key(metadata_key)
     source_prefix = metadata_key.rsplit("/", 1)[0] + "/"
-    metadata_base = metadata_key.removesuffix("_metadata.json")
 
     stac = read_json_object(source_s3, source_bucket, metadata_key)
-    required_keys = {metadata_key}
-    required_keys.update(expected_asset_keys_from_stac(stac, metadata_key))
-    required_keys.update(f"{metadata_base}{suffix}" for suffix in REQUIRED_SUFFIXES)
-
-    source_keys: set[str] = set()
-    missing_required_source: list[str] = []
-    for key in sorted(required_keys):
-        if object_exists(source_s3, source_bucket, key):
-            source_keys.add(key)
-        else:
-            missing_required_source.append(key)
-
-    source_complete = not missing_required_source
-    dest_metadata_exists = object_exists(
-        destination_s3, destination_bucket, metadata_key
+    expected_keys = expected_keys_from_stac(stac, metadata_key)
+    return build_plan_for_expected_keys(
+        source_s3=source_s3,
+        destination_s3=destination_s3,
+        source_bucket=source_bucket,
+        destination_bucket=destination_bucket,
+        metadata_key=metadata_key,
+        expected_keys=expected_keys,
+        source_prefix=source_prefix,
     )
 
+
+def build_plan_for_expected_keys(
+    source_s3,
+    destination_s3,
+    source_bucket: str,
+    destination_bucket: str,
+    metadata_key: str,
+    expected_keys: set[str],
+    source_prefix: str,
+    source_object_count: int | None = None,
+) -> DatasetPlan:
+    tile, day, datatake = parse_dataset_key(metadata_key)
+    source_heads = {
+        key: head_object(source_s3, source_bucket, key) for key in sorted(expected_keys)
+    }
+    source_keys = {key for key, source_head in source_heads.items() if source_head}
+    missing_required_source = sorted(expected_keys - source_keys)
+    source_complete = not missing_required_source
+
+    destination_sizes = list_object_sizes(
+        destination_s3, destination_bucket, source_prefix
+    )
+    destination_metadata_size = destination_sizes.get(metadata_key)
+    dest_metadata_exists = destination_metadata_size is not None
+    dest_metadata_matches = object_size_matches(
+        source_heads.get(metadata_key),
+        destination_metadata_size,
+    )
+
+    asset_keys = sorted(key for key in source_keys if key != metadata_key)
     existing_dest_assets: list[str] = []
     missing_dest_assets: list[str] = []
-    for key in sorted(k for k in source_keys if k != metadata_key):
-        if object_exists(destination_s3, destination_bucket, key):
+    mismatched_dest_assets: list[str] = []
+    for key in asset_keys:
+        destination_size = destination_sizes.get(key)
+        if destination_size is None:
+            missing_dest_assets.append(key)
+        elif object_size_matches(source_heads[key], destination_size):
             existing_dest_assets.append(key)
         else:
-            missing_dest_assets.append(key)
+            mismatched_dest_assets.append(key)
+    if dest_metadata_exists and not dest_metadata_matches:
+        mismatched_dest_assets.append(metadata_key)
 
-    if dest_metadata_exists:
-        status = "complete_in_dest"
-    elif not source_complete:
+    assets_needing_copy = missing_dest_assets + mismatched_dest_assets
+    if not source_complete:
         status = "source_incomplete"
-    elif not existing_dest_assets and missing_dest_assets:
+    elif dest_metadata_exists and dest_metadata_matches and not assets_needing_copy:
+        status = "complete_in_dest"
+    elif dest_metadata_exists and assets_needing_copy:
+        status = "dest_metadata_present_assets_missing"
+    elif not existing_dest_assets and len(assets_needing_copy) == len(asset_keys):
         status = "missing_everything_in_dest"
-    elif existing_dest_assets and not missing_dest_assets:
+    elif existing_dest_assets and not assets_needing_copy:
         status = "metadata_missing_assets_present"
-    elif existing_dest_assets and missing_dest_assets:
+    elif existing_dest_assets and assets_needing_copy:
         status = "metadata_missing_some_assets_missing"
     else:
         status = "source_incomplete"
         missing_required_source.append("No non-metadata source assets found")
 
+    source_object_count = (
+        len(source_keys) if source_object_count is None else source_object_count
+    )
+    existing_dest_keys = set(existing_dest_assets) | set(mismatched_dest_assets)
+    if dest_metadata_exists:
+        existing_dest_keys.add(metadata_key)
     return DatasetPlan(
         date=day,
         tile=tile,
@@ -322,11 +370,12 @@ def build_plan_for_metadata_without_listing(
         status=status,
         dest_metadata_exists=dest_metadata_exists,
         source_complete=source_complete,
-        source_object_count=len(source_keys),
-        dest_existing_count=len(existing_dest_assets) + int(dest_metadata_exists),
-        dest_missing_count=len(missing_dest_assets) + int(not dest_metadata_exists),
+        source_object_count=source_object_count,
+        dest_existing_count=len(existing_dest_keys),
+        dest_missing_count=len(assets_needing_copy) + int(not dest_metadata_exists),
         missing_required_source=missing_required_source,
         missing_dest_assets=missing_dest_assets,
+        mismatched_dest_assets=mismatched_dest_assets,
         existing_dest_assets=existing_dest_assets,
         source_prefix=source_prefix,
     )
@@ -364,17 +413,21 @@ def build_report(
     datasets: list[dict],
     complete: bool = True,
     error: str | None = None,
+    scope: dict | None = None,
 ) -> dict:
+    check_error_count = sum(1 for item in datasets if item["status"] == "check_error")
     return {
         "report_type": REPORT_TYPE,
         "schema_version": REPORT_SCHEMA_VERSION,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "start_date": start_date,
         "end_date": end_date,
+        "scope": scope or {},
         "source_bucket": source_bucket,
         "destination_bucket": destination_bucket,
         "complete": complete,
         "error": error,
+        "check_error_count": check_error_count,
         "summary": status_summary(datasets),
         "total_datasets_checked": len(datasets),
         "statuses": sorted(REPORT_STATUSES),
@@ -399,9 +452,19 @@ def build_report(
             {
                 "metadata_key": item["metadata_key"],
                 "missing_dest_assets": item["missing_dest_assets"],
+                "mismatched_dest_assets": item["mismatched_dest_assets"],
             }
             for item in datasets
             if item["status"] == "metadata_missing_some_assets_missing"
+        ],
+        "dest_metadata_present_assets_missing": [
+            {
+                "metadata_key": item["metadata_key"],
+                "missing_dest_assets": item["missing_dest_assets"],
+                "mismatched_dest_assets": item["mismatched_dest_assets"],
+            }
+            for item in datasets
+            if item["status"] == "dest_metadata_present_assets_missing"
         ],
         "source_incomplete": [
             {
@@ -428,6 +491,7 @@ def csv_from_datasets(datasets: list[dict]) -> str:
         "dest_missing_count",
         "missing_required_source",
         "missing_dest_assets",
+        "mismatched_dest_assets",
         "existing_dest_assets",
         "source_prefix",
         "check_error",
@@ -471,6 +535,10 @@ def copy_one_object(
     destination_bucket: str,
     key: str,
 ) -> None:
+    source_head = head_object(source_s3, source_bucket, key)
+    if not source_head:
+        raise RuntimeError(f"Source object disappeared before copy: {key}")
+
     obj = source_s3.get_object(Bucket=source_bucket, Key=key)
     body = obj["Body"]
     extra_args = {}
@@ -487,16 +555,16 @@ def copy_one_object(
     finally:
         body.close()
 
-    source_head = head_object(source_s3, source_bucket, key)
     destination_head = head_object(destination_s3, destination_bucket, key)
-    if source_head and destination_head:
+    if not destination_head:
+        raise RuntimeError(f"Copy verification failed for {key}: destination missing")
+    if not object_sizes_match(source_head, destination_head):
         source_size = source_head["ContentLength"]
         destination_size = destination_head["ContentLength"]
-        if source_size != destination_size:
-            raise RuntimeError(
-                f"Copy verification failed for {key}: "
-                f"source={source_size}, destination={destination_size}"
-            )
+        raise RuntimeError(
+            f"Copy verification failed for {key}: "
+            f"source={source_size}, destination={destination_size}"
+        )
 
 
 def fill_dataset(
@@ -516,13 +584,15 @@ def fill_dataset(
     )
 
     if plan.dest_metadata_exists:
-        return "skipped_dest_metadata_exists", 0
+        return f"skipped_status_{plan.status}", 0
     if plan.status not in SAFE_FILL_STATUSES:
         return f"skipped_status_{plan.status}", 0
 
     copied = 0
-    for key in plan.missing_dest_assets:
-        if object_exists(destination_s3, destination_bucket, key):
+    for key in sorted(set(plan.missing_dest_assets + plan.mismatched_dest_assets)):
+        source_head = head_object(source_s3, source_bucket, key)
+        destination_head = head_object(destination_s3, destination_bucket, key)
+        if object_sizes_match(source_head, destination_head):
             continue
         if not dryrun:
             copy_one_object(

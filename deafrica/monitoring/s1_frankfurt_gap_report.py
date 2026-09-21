@@ -42,6 +42,7 @@ log = logging.getLogger(__name__)
 @click.option("--source-region", default=SOURCE_REGION, show_default=True)
 @click.option("--destination-region", default=DESTINATION_REGION, show_default=True)
 @click.option("--max-datasets", type=int, default=None)
+@click.option("--tile", type=str, default=None, help="Limit discovery to one tile.")
 @click.option(
     "--metadata-key",
     type=str,
@@ -72,6 +73,7 @@ def cli(
     source_region: str,
     destination_region: str,
     max_datasets: int | None,
+    tile: str | None,
     metadata_key: str | None,
     output_key: str | None,
     local_output_json: Path | None,
@@ -96,16 +98,20 @@ def cli(
     datasets: list[dict] = []
     complete = True
     error = None
+    check_error_count = 0
 
     try:
         single_metadata_key = metadata_key is not None
         metadata_keys = (
             [metadata_key]
             if single_metadata_key
-            else discover_metadata_keys(source_s3, source_bucket, start, end)
+            else discover_metadata_keys(source_s3, source_bucket, start, end, tile)
         )
         for index, current_metadata_key in enumerate(metadata_keys, start=1):
             if max_datasets and index > max_datasets:
+                complete = False
+                error = f"max_datasets limit reached: {max_datasets}"
+                log.warning("Frankfurt gap report truncated: %s", error)
                 break
 
             try:
@@ -129,6 +135,7 @@ def cli(
                 details = describe_exception(exc)
                 if "ExpiredToken" in details:
                     raise
+                check_error_count += 1
                 log.exception("Check failed for %s", current_metadata_key)
                 datasets.append(
                     {
@@ -144,6 +151,7 @@ def cli(
                         "dest_missing_count": 0,
                         "missing_required_source": [],
                         "missing_dest_assets": [],
+                        "mismatched_dest_assets": [],
                         "existing_dest_assets": [],
                         "source_prefix": current_metadata_key.rsplit("/", 1)[0] + "/",
                         "check_error": details,
@@ -164,6 +172,11 @@ def cli(
         error = describe_exception(exc)
         log.exception("Frankfurt gap report ended before completion")
 
+    if check_error_count:
+        complete = False
+        check_error_message = f"dataset check errors: {check_error_count}"
+        error = f"{error}; {check_error_message}" if error else check_error_message
+
     report = build_report(
         start_date=start_date,
         end_date=end_date,
@@ -172,6 +185,11 @@ def cli(
         datasets=datasets,
         complete=complete,
         error=error,
+        scope={
+            "tile": tile,
+            "metadata_key": metadata_key,
+            "single_metadata_key": metadata_key is not None,
+        },
     )
 
     if local_output_json:
