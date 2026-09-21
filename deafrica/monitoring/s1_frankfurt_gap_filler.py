@@ -25,12 +25,33 @@ from deafrica.utils import send_slack_notification, split_list_equally
 
 log = logging.getLogger(__name__)
 
+REPORT_PREFIX = "status-report/"
+
+
+def find_latest_frankfurt_report_path(bucket_name: str, region_name: str) -> str:
+    client = s3_client(region_name)
+    report_keys: list[str] = []
+    paginator = client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket_name, Prefix=REPORT_PREFIX):
+        for item in page.get("Contents", []):
+            key = item["Key"]
+            if REPORT_TYPE in key and key.endswith(".json"):
+                report_keys.append(key)
+
+    report_keys.sort()
+    if not report_keys:
+        raise RuntimeError(
+            f"No Frankfurt gap reports found in s3://{bucket_name}/{REPORT_PREFIX}"
+        )
+
+    return f"s3://{bucket_name}/{report_keys[-1]}"
+
 
 @click.command("s1-frankfurt-gap-filler", no_args_is_help=True)
 @click.version_option(version=__version__)
 @click.argument("worker-idx", type=int, nargs=1, required=True)
 @click.argument("max-workers", type=int, nargs=1, required=True)
-@click.argument("report-path", type=str, nargs=1, required=True)
+@click.argument("report-path", type=str, nargs=1, required=False)
 @click.option(
     "--sns-topic-arn",
     type=str,
@@ -59,7 +80,7 @@ log = logging.getLogger(__name__)
 def cli(
     worker_idx: int,
     max_workers: int,
-    report_path: str,
+    report_path: str | None,
     sns_topic_arn: str | None,
     source_bucket: str,
     destination_bucket: str,
@@ -86,6 +107,13 @@ def cli(
             raise ValueError(f"Limit {limit} lower than 1.")
     if publish_existing_metadata and not sns_topic_arn:
         raise ValueError("--publish-existing-metadata requires --sns-topic-arn")
+
+    if report_path is None:
+        report_path = find_latest_frankfurt_report_path(
+            bucket_name=destination_bucket,
+            region_name=destination_region,
+        )
+        log.info("Latest Frankfurt gap report: %s", report_path)
 
     report = read_report(report_path, region_name=destination_region)
     if report.get("report_type") != REPORT_TYPE:

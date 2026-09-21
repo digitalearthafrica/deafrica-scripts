@@ -16,6 +16,7 @@ from deafrica.monitoring._s1_frankfurt_gap import (
     s3_event_message,
 )
 from deafrica.monitoring import (
+    _s1_frankfurt_gap,
     s1_frankfurt_gap_filler,
     s1_frankfurt_gap_report,
 )
@@ -494,6 +495,58 @@ def test_filler_refuses_incomplete_report(tmp_path):
 
     assert result.exit_code != 0
     assert "Refusing to fill from an incomplete report" in str(result.exception)
+
+
+def test_filler_uses_latest_report_when_path_omitted(monkeypatch):
+    older_report_key = (
+        "status-report/2026-09-14_s1_frankfurt_gap_report_"
+        "2026-09-14_to_2026-09-14.json"
+    )
+    latest_report_key = (
+        "status-report/2026-09-15_s1_frankfurt_gap_report_"
+        "2026-09-15_to_2026-09-15.json"
+    )
+    latest_report = {
+        "report_type": REPORT_TYPE,
+        "schema_version": REPORT_SCHEMA_VERSION,
+        "complete": True,
+        "source_bucket": SOURCE_BUCKET,
+        "destination_bucket": DESTINATION_BUCKET,
+        "fillable_statuses": ["missing_everything_in_dest"],
+        "datasets": [],
+    }
+    reports = FakeS3Client(
+        {
+            older_report_key: json.dumps({"report_type": "old_report"}).encode("utf-8"),
+            latest_report_key: json.dumps(latest_report).encode("utf-8"),
+            "status-report/2026-09-15_gap_report.json": b"{}",
+        }
+    )
+    monkeypatch.setattr(
+        s1_frankfurt_gap_filler,
+        "s3_client",
+        lambda region_name: reports,
+    )
+    monkeypatch.setattr(
+        _s1_frankfurt_gap,
+        "s3_client",
+        lambda region_name: reports,
+    )
+
+    result = CliRunner().invoke(
+        s1_frankfurt_gap_filler.cli,
+        [
+            "0",
+            "1",
+            "--source-bucket",
+            SOURCE_BUCKET,
+            "--destination-bucket",
+            DESTINATION_BUCKET,
+            "--dryrun",
+        ],
+    )
+
+    assert result.exit_code == 0
 
 
 def test_filler_rejects_worker_index_outside_worker_range(tmp_path):
