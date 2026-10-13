@@ -71,6 +71,13 @@ DEFAULT_OUTPUT_BUCKET = "cdse_batch_test_bucket"
 log = setup_logging()
 
 
+def next_day_iso(date: str) -> str:
+    "Return the next calendar day for a YYYY-MM-DD date string."
+    return (datetime.strptime(date, "%Y-%m-%d") + timedelta(days=1)).strftime(
+        "%Y-%m-%d"
+    )
+
+
 def get_africa_grid() -> gpd.GeoDataFrame:
     "Loads the global tiling grid and clips it to the Africa extent."
     log.info("Loading tiling grid and Africa extent ...")
@@ -604,7 +611,7 @@ def submit_backfill_jobs(
             sat_config=SATELLITES["s1"],
             geometry=mapping(clipped_geom),
             time_from=f"{date}T00:00:00Z",
-            time_to=f"{year}-{month}-{int(day) + 1:02d}T00:00:00Z",
+            time_to=f"{next_day_iso(date)}T00:00:00Z",
         )
 
         payload["output"]["delivery"]["s3"][
