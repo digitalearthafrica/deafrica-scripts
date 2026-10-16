@@ -461,19 +461,27 @@ def sync_prefix(config: SyncConfig, product: ProductSyncSpec = None) -> dict:
                 }
             )
 
-    maybe_delete_source_prefix(source_s3, config, summary)
+    maybe_delete_source_prefix(source_s3, destination_s3, config, summary, product)
 
     log.info("Sync summary: %s", summary)
     return summary
 
 
-def maybe_delete_source_prefix(source_s3, config: SyncConfig, summary: dict) -> None:
+def maybe_delete_source_prefix(
+    source_s3,
+    destination_s3,
+    config: SyncConfig,
+    summary: dict,
+    product: ProductSyncSpec,
+) -> None:
     """Delete a CloudFerro source prefix only after a fully clean sync."""
     if not config.delete_source_after_sync:
         summary["source_delete_skip_reason"] = "delete_source_after_sync_disabled"
         return
 
-    skip_reason = source_delete_skip_reason(config, summary)
+    skip_reason = source_delete_skip_reason(
+        config, summary, destination_s3=destination_s3, product=product
+    )
     if skip_reason:
         summary["source_delete_skip_reason"] = skip_reason
         if skip_reason == "dry_run":
@@ -498,7 +506,12 @@ def maybe_delete_source_prefix(source_s3, config: SyncConfig, summary: dict) -> 
     summary.update(delete_summary)
 
 
-def source_delete_skip_reason(config: SyncConfig, summary: dict) -> str | None:
+def source_delete_skip_reason(
+    config: SyncConfig,
+    summary: dict,
+    destination_s3=None,
+    product: ProductSyncSpec = None,
+) -> str | None:
     if summary.get("skip_reason"):
         return summary["skip_reason"]
     if not summary.get("ready_to_sync", False):
@@ -514,10 +527,85 @@ def source_delete_skip_reason(config: SyncConfig, summary: dict) -> str | None:
     synced_objects = summary.get("copied", 0) + summary.get("skipped_matching", 0)
     if synced_objects != summary.get("copyable", 0):
         return "sync_not_complete"
+    if product is not None and product.name == "s1_rtc":
+        if not s1_destination_metadata_published(
+            destination_s3,
+            config.destination_bucket,
+            summary.get("stac_item") or config.stac_item,
+        ):
+            return "destination_metadata_missing"
     if config.dry_run:
         return "dry_run"
 
     return None
+
+
+def s1_destination_metadata_key(stac_item: str | None) -> str | None:
+    """PDS key the gap check HEADs, derived from the CloudFerro STAC object."""
+    if not stac_item:
+        return None
+    key = stac_item
+    if key.startswith("s3://"):
+        key = urllib.parse.urlparse(key).path.lstrip("/")
+    try:
+        return s1_transform_key(key)
+    except ValueError:
+        return None
+
+
+def s1_destination_metadata_published(
+    destination_s3, destination_bucket: str, stac_item: str | None
+) -> bool:
+    """True when the published metadata JSON would satisfy the submit gap check."""
+    key = s1_destination_metadata_key(stac_item)
+    if destination_s3 is None or not key:
+        return False
+    try:
+        destination_s3.head_object(Bucket=destination_bucket, Key=key)
+    except ClientError as err:
+        code = err.response.get("Error", {}).get("Code")
+        if code in {"404", "NoSuchKey", "NotFound"}:
+            return False
+        raise
+    return True
+
+
+def oldest_last_modified(source_objects: list[dict]) -> str | None:
+    stamps = []
+    for source_object in source_objects:
+        last_modified = source_object.get("LastModified")
+        if last_modified is None:
+            continue
+        if last_modified.tzinfo is None:
+            last_modified = last_modified.replace(tzinfo=timezone.utc)
+        stamps.append(last_modified)
+    if not stamps:
+        return None
+    return min(stamps).isoformat()
+
+
+def pending_sync_age_summary(
+    skipped_prefixes: list[dict], now: datetime | None = None
+) -> dict:
+    """Count incomplete prefixes whose oldest object is older than 12 hours."""
+    now = now or datetime.now(timezone.utc)
+    counts = {"missing_required_files": 0, "missing_stac_item": 0, "total": 0}
+    max_age = timedelta(hours=12)
+    for prefix in skipped_prefixes:
+        reason = prefix.get("reason")
+        if reason not in ("missing_required_files", "missing_stac_item"):
+            continue
+        oldest = prefix.get("oldest_last_modified")
+        if not oldest:
+            continue
+        if isinstance(oldest, str):
+            oldest = datetime.fromisoformat(oldest)
+        if oldest.tzinfo is None:
+            oldest = oldest.replace(tzinfo=timezone.utc)
+        if now - oldest > max_age:
+            counts[reason] += 1
+            counts["total"] += 1
+    return counts
 
 
 def count_source_prefix_objects(source_s3, bucket: str, prefix: str) -> int:
@@ -645,6 +733,9 @@ def sync_all_prefixes(
         "prefixes_skipped_during_sync": 0,
         "prefix_exceptions": [],
         "prefix_summaries": [],
+        "pending_sync_older_than_12h": pending_sync_age_summary(
+            discovery["skipped_prefixes"]
+        ),
     }
     for field in SYNC_COUNTER_FIELDS:
         summary[field] = 0
@@ -762,6 +853,7 @@ def discover_completed_prefixes(
                     "reason": "missing_required_files",
                     "missing_required_files": required_files["missing_required_files"],
                     "found": len(source_objects),
+                    "oldest_last_modified": oldest_last_modified(source_objects),
                 }
             )
             continue
@@ -774,6 +866,7 @@ def discover_completed_prefixes(
                     "reason": "missing_stac_item",
                     "missing_required_files": [],
                     "found": len(source_objects),
+                    "oldest_last_modified": oldest_last_modified(source_objects),
                 }
             )
             continue

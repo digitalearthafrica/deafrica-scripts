@@ -10,9 +10,12 @@ from deafrica.data.cdse_pipelines.sentinel_sync_cloudferro import (
     S3_OLCI_L2_WFR_CDSE_PRODUCT,
     SyncConfig,
     classify_source_objects,
+    S1_RTC_PRODUCT,
     discover_completed_prefixes,
     destination_filename,
+    pending_sync_age_summary,
     skip_reason,
+    source_delete_skip_reason,
     sync_all_prefixes,
     transform_key,
     validate_required_files,
@@ -210,6 +213,71 @@ def test_classify_source_objects_splits_copyable_and_skipped_files():
     ]
 
 
+def _clean_s1_summary(stac_item):
+    return {
+        "skip_reason": None,
+        "ready_to_sync": True,
+        "failed": 0,
+        "skipped_mismatched": 0,
+        "skipped_unexpected": 0,
+        "copyable": 1,
+        "copied": 1,
+        "skipped_matching": 0,
+        "stac_item": stac_item,
+    }
+
+
+def test_s1_delete_is_skipped_until_pds_metadata_exists():
+    stac_item = (
+        "s1_rtc/2026/06/23/0834AD/ed81b8dd-7673-4152-9b1b-0dcde7bccead/"
+        "N00E005/s1_rtc_0834AD_N00E005_2026_06_23_metadata.json"
+    )
+    destination_key = transform_key(stac_item)
+    config = sync_config("s1_rtc/2026/06/23/0834AD/job/N00E005/")
+
+    missing = source_delete_skip_reason(
+        config,
+        _clean_s1_summary(stac_item),
+        destination_s3=FakeCopyS3Client(),
+        product=S1_RTC_PRODUCT,
+    )
+    present = source_delete_skip_reason(
+        config,
+        _clean_s1_summary(stac_item),
+        destination_s3=FakeCopyS3Client(bodies={destination_key: b"{}"}),
+        product=S1_RTC_PRODUCT,
+    )
+
+    assert missing == "destination_metadata_missing"
+    assert present is None
+
+
+def test_pending_sync_age_summary_counts_prefixes_older_than_12_hours():
+    summary = pending_sync_age_summary(
+        [
+            {
+                "reason": "missing_required_files",
+                "oldest_last_modified": "2026-06-01T00:00:00+00:00",
+            },
+            {
+                "reason": "missing_stac_item",
+                "oldest_last_modified": "2026-06-01T00:00:00+00:00",
+            },
+            {
+                "reason": "missing_required_files",
+                "oldest_last_modified": "2026-10-16T00:00:00+00:00",
+            },
+        ],
+        now=datetime(2026, 10, 16, tzinfo=timezone.utc),
+    )
+
+    assert summary == {
+        "missing_required_files": 1,
+        "missing_stac_item": 1,
+        "total": 2,
+    }
+
+
 def test_destination_filename_is_idempotent():
     filename = "s1_rtc_0834AD_N00E005_2026_06_23_VV.tif"
 
@@ -255,6 +323,7 @@ def test_discover_completed_prefixes_skips_incomplete_outputs():
             "reason": "missing_required_files",
             "missing_required_files": ["metadata.xml"],
             "found": 2,
+            "oldest_last_modified": "2026-06-23T00:00:00+00:00",
         }
     ]
     assert discovery["skipped_invalid_object_count"] == 0
@@ -281,6 +350,7 @@ def test_discover_completed_prefixes_requires_generated_stac_item():
             "reason": "missing_stac_item",
             "missing_required_files": [],
             "found": 4,
+            "oldest_last_modified": "2026-06-23T00:00:00+00:00",
         }
     ]
 
