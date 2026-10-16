@@ -40,7 +40,7 @@ from card4l_metadata.model import tile_data as tile_data_mod
 from card4l_metadata.s1.manifest import S1ManifestParser
 from card4l_metadata import xml_producer
 
-from deafrica.data.cdse_pipelines.s1 import fetch_scenes_from_sh, get_africa_grid
+from deafrica.data.cdse_pipelines.s1 import get_africa_grid, scenes_for_xml
 from deafrica.data.cdse_pipelines.auth import get_session
 from deafrica.logs import setup_logging
 
@@ -260,8 +260,10 @@ def generate_xml(
     """Generate the CARD4L metadata XML for a given tile/job and upload it to S3."""
     date_str = f"{year}-{month:02d}-{day:02d}"
 
-    # Step 1: Fetch the list of scenes from the SH catalog for this tile/date/datatake
-    scenes = fetch_scenes_from_sh(session, tile, date_str, datatake, africa_grid)
+    # Step 1: Reuse the catalogue cache written by s1-cdse-pipeline when it exists.
+    scenes = scenes_for_xml(
+        cf_s3, cf_bucket, session, tile, date_str, datatake, africa_grid
+    )
     if not scenes:
         log.warning(f"  no scenes found for {tile} {date_str} {datatake} - skipping")
         return False
