@@ -673,7 +673,9 @@ def s1_month_to_date_pu(
         created = _job_created(job)
         if created is None or created < month_start:
             continue
-        if "s1_rtc" not in (job.get("description") or ""):
+        # CDSE returns description on request, next to processRequest/input/output.
+        description = (job.get("request") or {}).get("description") or ""
+        if "s1_rtc" not in description:
             continue
         job_id = job.get("id")
         if job_id:

@@ -172,33 +172,63 @@ def test_budget_defers_everything_when_month_to_date_is_too_high():
     assert [item["dataset"] for item in deferred] == ["a", "b"]
 
 
+def _batch_job(job_id, description, created, cost, status):
+    """Batch V2 list shape: description lives on request, not the task."""
+    return {
+        "id": job_id,
+        "request": {
+            "processRequest": {},
+            "input": {},
+            "output": {},
+            "description": description,
+        },
+        "created": created,
+        "costPU": cost,
+        "status": status,
+    }
+
+
 def test_month_to_date_pu_counts_s1_only_and_estimates_uncosted_jobs():
     jobs = [
+        _batch_job(
+            "done",
+            "s1_rtc 2026-06-02 0834AD N00E005",
+            "2026-06-02T00:00:00Z",
+            265,
+            "DONE",
+        ),
+        _batch_job(
+            "s3",
+            "Batch sentinel-3-olci-l2 job (s3_lfr)",
+            "2026-06-02T00:00:00Z",
+            9000,
+            "DONE",
+        ),
+        _batch_job(
+            "running",
+            "s1_rtc 2026-06-03 0834AD N00E006",
+            "2026-06-03T00:00:00Z",
+            0,
+            "PROCESSING",
+        ),
+        _batch_job(
+            "legacy",
+            "Batch sentinel-1-grd job (s1_rtc)",
+            "2026-06-04T00:00:00Z",
+            265,
+            "DONE",
+        ),
+        _batch_job(
+            "last-month",
+            "s1_rtc 2026-05-31 0834AD N00E005",
+            "2026-05-31T00:00:00Z",
+            265,
+            "DONE",
+        ),
         {
-            "id": "done",
-            "description": "s1_rtc 2026-06-02 0834AD N00E005",
-            "created": "2026-06-02T00:00:00Z",
-            "costPU": 265,
-            "status": "DONE",
-        },
-        {
-            "id": "s3",
-            "description": "Batch sentinel-3-olci-l2 job (s3_lfr)",
-            "created": "2026-06-02T00:00:00Z",
-            "costPU": 9000,
-            "status": "DONE",
-        },
-        {
-            "id": "running",
-            "description": "s1_rtc 2026-06-03 0834AD N00E006",
-            "created": "2026-06-03T00:00:00Z",
-            "costPU": 0,
-            "status": "PROCESSING",
-        },
-        {
-            "id": "last-month",
-            "description": "s1_rtc 2026-05-31 0834AD N00E005",
-            "created": "2026-05-31T00:00:00Z",
+            "id": "flat-description-ignored",
+            "description": "s1_rtc 2026-06-04 0834AD N00E007",
+            "created": "2026-06-04T00:00:00Z",
             "costPU": 265,
             "status": "DONE",
         },
@@ -212,7 +242,7 @@ def test_month_to_date_pu_counts_s1_only_and_estimates_uncosted_jobs():
         jobs, records, datetime(2026, 6, 1, tzinfo=timezone.utc), 265
     )
 
-    assert total == 265 + 265 + 265
+    assert total == 265 + 265 + 265 + 265
 
 
 def test_resolve_tile_scenes_does_not_call_catalog_when_the_day_was_searched():
