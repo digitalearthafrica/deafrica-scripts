@@ -140,6 +140,13 @@ def test_submission_order_prefers_restarts_then_yesterday_then_older_gaps():
     assert ordered == ["restart", "yesterday", "day-before", "older", "retry"]
 
 
+def test_default_budgets_cover_the_planned_s1_month():
+    """20,000 tiles at the 265 PU estimate, and a 1,000-tile day still starts."""
+    assert s1.DEFAULT_MONTHLY_PU_BUDGET == 20_000 * s1.DEFAULT_PU_PER_TILE
+    assert s1.DEFAULT_DAILY_PU_BUDGET >= 1_000 * s1.DEFAULT_PU_PER_TILE
+    assert s1.DEFAULT_DAILY_PU_BUDGET < s1.DEFAULT_MONTHLY_PU_BUDGET
+
+
 def test_budget_defers_the_tile_that_would_cross_the_daily_cap():
     items = [{"dataset": name} for name in ("a", "b", "c")]
 

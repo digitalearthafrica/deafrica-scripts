@@ -25,8 +25,8 @@ Options:
     --dry-run                  classify only; do not start Batch jobs
     --limit                    submit at most N actionable datasets
     --pu-per-tile              estimated PU for one tile (default 265)
-    --daily-pu-budget          default 100000; this run will not cross it
-    --monthly-pu-budget        default 2000000 of S1 PU since the 1st
+    --daily-pu-budget          default 320000; this run will not cross it
+    --monthly-pu-budget        default 5300000 of S1 PU since the 1st
     --no-pu-budget             disable both caps (intentional backfill)
     --output-bucket            CloudFerro bucket Batch writes to
     --s3-bucket-name           PDS bucket checked for published metadata
@@ -81,8 +81,8 @@ RESOLUTION = SATELLITES["s1"]["input"]["resolution"]
 DEFAULT_OUTPUT_BUCKET = "cdse_batch_test_bucket"
 CONTROL_PREFIX = "s1_rtc_control"
 DEFAULT_PU_PER_TILE = 265
-DEFAULT_DAILY_PU_BUDGET = 100_000
-DEFAULT_MONTHLY_PU_BUDGET = 2_000_000
+DEFAULT_DAILY_PU_BUDGET = 320_000
+DEFAULT_MONTHLY_PU_BUDGET = 5_300_000
 MAX_SUBMIT_ATTEMPTS = 3
 ANALYSIS_DONE_STALE = timedelta(hours=6)
 MAX_SCAN_DAYS_WITHOUT_BACKFILL = 14
