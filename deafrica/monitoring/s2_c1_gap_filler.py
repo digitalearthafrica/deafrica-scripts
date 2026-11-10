@@ -10,13 +10,14 @@ from odc.aws import s3_client, s3_fetch
 from odc.aws.queue import get_queue, publish_messages
 
 from deafrica import __version__
-from deafrica.click_options import limit, slack_url
+from deafrica.click_options import google_chat_url, limit, slack_url
 from deafrica.logs import setup_logging
 from deafrica.monitoring.gap_report import (
     find_latest_report,
     read_report_missing_scenes,
 )
 from deafrica.utils import (
+    send_google_chat_notification,
     send_slack_notification,
     split_list_equally,
 )
@@ -147,6 +148,7 @@ def send_messages(
     limit: int = None,
     slack_url: str = None,
     dryrun: bool = False,
+    google_chat_url: str = None,
 ) -> None:
     """
     Publish a list of missing scenes to an specific queue
@@ -241,6 +243,8 @@ def send_messages(
     )
     if (slack_url is not None) and (not dryrun):
         send_slack_notification(slack_url, "S2 Gap Filler", message)
+    if google_chat_url is not None and (not dryrun):
+        send_google_chat_notification(google_chat_url, "S2 Gap Filler", message)
 
     log.info(message)
 
@@ -260,6 +264,7 @@ def send_messages(
 @click.argument("product_name", type=str, nargs=1, default="s2_l2a_c1")
 @limit
 @slack_url
+@google_chat_url
 @click.option("--version", is_flag=True, default=False)
 @click.option("--dryrun", is_flag=True, default=False)
 def cli(
@@ -271,6 +276,7 @@ def cli(
     slack_url: str = None,
     version: bool = False,
     dryrun: bool = False,
+    google_chat_url: str = None,
 ):
     """
     Publish missing scenes. Messages are backfilled for missing products. Missing products will
@@ -313,4 +319,5 @@ def cli(
         limit=limit,
         slack_url=slack_url,
         dryrun=dryrun,
+        google_chat_url=google_chat_url,
     )

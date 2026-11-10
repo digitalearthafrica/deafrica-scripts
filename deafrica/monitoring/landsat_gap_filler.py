@@ -13,15 +13,13 @@ import click
 from odc.aws.queue import get_queue, publish_messages
 
 from deafrica import __version__
-from deafrica.click_options import limit, slack_url
+from deafrica.click_options import google_chat_url, limit, slack_url
 from deafrica.logs import setup_logging
 from deafrica.monitoring.gap_report import (
     find_latest_report,
     read_report_missing_scenes,
 )
-from deafrica.utils import (
-    send_slack_notification,
-)
+from deafrica.utils import send_google_chat_notification, send_slack_notification
 
 S3_BUCKET_PATH = "s3://deafrica-landsat/status-report/"
 
@@ -100,6 +98,7 @@ def fill_the_gap(
     sync_queue_name: str,
     scenes_limit: Optional[int] = None,
     notification_url: str = None,
+    google_chat_url: str = None,
 ) -> None:
     """
     Function to retrieve the latest gap report and create messages to the filter queue process.
@@ -165,6 +164,8 @@ def fill_the_gap(
     log.info(message)
     if notification_url is not None and result["sent"] > 0:
         send_slack_notification(notification_url, "Landsat Gap Filler", message)
+    if google_chat_url is not None and result["sent"] > 0:
+        send_google_chat_notification(google_chat_url, "Landsat Gap Filler", message)
 
     if (int(result["failed"]) + len(returned["failed"])) > 0:
         sys.exit(1)
@@ -187,6 +188,7 @@ def fill_the_gap(
 )
 @limit
 @slack_url
+@google_chat_url
 @click.option("--version", is_flag=True, default=False)
 @click.command("landsat-gap-filler")
 def cli(
@@ -195,6 +197,7 @@ def cli(
     limit: int = None,
     slack_url: str = None,
     version: bool = False,
+    google_chat_url: str = None,
 ):
     """
     Publish missing scenes
@@ -217,4 +220,5 @@ def cli(
         sync_queue_name=sync_queue_name,
         scenes_limit=limit,
         notification_url=slack_url,
+        google_chat_url=google_chat_url,
     )

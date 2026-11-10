@@ -9,7 +9,7 @@ from odc.aws import s3_url_parse
 from yarl import URL
 
 from deafrica import __version__
-from deafrica.click_options import limit, slack_url
+from deafrica.click_options import google_chat_url, limit, slack_url
 from deafrica.logs import setup_logging
 from deafrica.monitoring.gap_report import (
     find_latest_report,
@@ -30,6 +30,7 @@ log = logging.getLogger(__name__)
 @click.argument("sns-topic-arn", type=str, nargs=1, required=True)
 @limit
 @slack_url
+@google_chat_url
 @click.option("--version", is_flag=True, default=False)
 @click.option("--dryrun", is_flag=True, default=False)
 def cli(
@@ -40,6 +41,7 @@ def cli(
     slack_url: str,
     version: bool,
     dryrun: bool,
+    google_chat_url: str = None,
 ):
     log = setup_logging()
 

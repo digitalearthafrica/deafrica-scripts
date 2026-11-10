@@ -8,13 +8,14 @@ from odc.aws import s3_url_parse
 from tqdm import tqdm
 
 from deafrica import __version__
-from deafrica.click_options import limit, slack_url
+from deafrica.click_options import google_chat_url, limit, slack_url
 from deafrica.logs import setup_logging
 from deafrica.monitoring.gap_report import (
     find_latest_report,
     read_report_missing_odc_scenes,
 )
 from deafrica.utils import (
+    send_google_chat_notification,
     send_slack_notification,
     split_list_equally,
 )
@@ -27,6 +28,7 @@ def index_missing_odc_scenes(
     max_workers: int = 1,
     limit: int = None,
     slack_url: str = None,
+    google_chat_url: str = None,
 ) -> None:
     """
     Index a list of missing ODC scenes
@@ -126,6 +128,10 @@ def index_missing_odc_scenes(
 
     if slack_url is not None:
         send_slack_notification(slack_url, "S2 Collection 1 Gap Filler", message)
+    if google_chat_url is not None:
+        send_google_chat_notification(
+            google_chat_url, "S2 Collection 1 Gap Filler", message
+        )
 
     log.info(message)
 
@@ -139,6 +145,7 @@ def index_missing_odc_scenes(
 @click.argument("product_name", type=str, nargs=1)
 @limit
 @slack_url
+@google_chat_url
 @click.option("--version", is_flag=True, default=False)
 def cli(
     idx: int,
@@ -147,6 +154,7 @@ def cli(
     limit: int = None,
     slack_url: str = None,
     version: bool = False,
+    google_chat_url: str = None,
 ):
     """
     Index missing ODC scenes.
@@ -191,4 +199,5 @@ def cli(
         s3_report_folder_path=s3_report_folder_path,
         limit=limit,
         slack_url=slack_url,
+        google_chat_url=google_chat_url,
     )

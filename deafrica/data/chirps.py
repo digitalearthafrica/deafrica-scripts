@@ -15,9 +15,9 @@ from rio_cogeo import cog_translate
 from rio_cogeo.profiles import cog_profiles
 from rio_stac import create_stac_item
 
-from deafrica.click_options import slack_url
+from deafrica.click_options import google_chat_url, slack_url
 from deafrica.logs import setup_logging
-from deafrica.utils import send_slack_notification
+from deafrica.utils import send_google_chat_notification, send_slack_notification
 
 MONTHLY_URL_TEMPLATE = (
     "https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_monthly/tifs/{in_file}"
@@ -73,6 +73,7 @@ def download_and_cog_chirps(
     overwrite: bool = False,
     slack_url: str = None,
     test_local_file: str = None,  # For offline testing
+    google_chat_url: str = None,
 ):
     # Cleaning and sanity checks
     s3_dst = s3_dst.rstrip("/")
@@ -211,6 +212,10 @@ def download_and_cog_chirps(
 
         if slack_url is not None:
             send_slack_notification(slack_url, "Chirps Rainfall Monthly", message)
+        if google_chat_url is not None:
+            send_google_chat_notification(
+                google_chat_url, "Chirps Rainfall Monthly", message
+            )
         log.exception(message)
 
         exit(1)
@@ -223,7 +228,10 @@ def download_and_cog_chirps(
 @click.option("--s3_dst", default="s3://deafrica-data-dev-af/rainfall_chirps_monthy/")
 @click.option("--overwrite", is_flag=True, default=False)
 @slack_url
-def cli_daily(year, month, day, s3_dst, overwrite, slack_url):
+@google_chat_url
+def cli_daily(
+    year, month, day, s3_dst, overwrite, slack_url, google_chat_url: str = None
+):
     """
     Download CHIRPS Africa daily tifs, COG, copy to
     S3 bucket.
@@ -250,6 +258,7 @@ def cli_daily(year, month, day, s3_dst, overwrite, slack_url):
         s3_dst=s3_dst,
         overwrite=overwrite,
         slack_url=slack_url,
+        google_chat_url=google_chat_url,
     )
 
 
@@ -259,7 +268,8 @@ def cli_daily(year, month, day, s3_dst, overwrite, slack_url):
 @click.option("--s3_dst", default="s3://deafrica-data-dev-af/rainfall_chirps_monthy/")
 @click.option("--overwrite", is_flag=True, default=False)
 @slack_url
-def cli_monthly(year, month, s3_dst, overwrite, slack_url):
+@google_chat_url
+def cli_monthly(year, month, s3_dst, overwrite, slack_url, google_chat_url: str = None):
     """
     Download CHIRPS Africa monthly tifs, COG, copy to
     S3 bucket.
@@ -288,4 +298,5 @@ def cli_monthly(year, month, s3_dst, overwrite, slack_url):
         s3_dst=s3_dst,
         overwrite=overwrite,
         slack_url=slack_url,
+        google_chat_url=google_chat_url,
     )

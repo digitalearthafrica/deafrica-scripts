@@ -1,5 +1,11 @@
 import click
 
+google_chat_url = click.option(
+    "--google-chat-url",
+    help="Google Chat incoming webhook URL to use to send a notification",
+    default=None,
+)
+
 slack_url = click.option(
     "--slack_url",
     help="Slack url to use to send a notification",

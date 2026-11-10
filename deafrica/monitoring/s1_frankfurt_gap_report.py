@@ -6,7 +6,7 @@ from pathlib import Path
 import click
 
 from deafrica import __version__
-from deafrica.click_options import slack_url
+from deafrica.click_options import google_chat_url, slack_url
 from deafrica.logs import setup_logging
 from deafrica.monitoring._s1_frankfurt_gap import (
     DESTINATION_BUCKET,
@@ -25,7 +25,7 @@ from deafrica.monitoring._s1_frankfurt_gap import (
     s3_client,
     s3_url,
 )
-from deafrica.utils import send_slack_notification
+from deafrica.utils import send_google_chat_notification, send_slack_notification
 
 log = logging.getLogger(__name__)
 
@@ -55,6 +55,7 @@ log = logging.getLogger(__name__)
     help="Write the JSON report to a local file instead of S3.",
 )
 @slack_url
+@google_chat_url
 def cli(
     bucket_name: str,
     start_date: str,
@@ -69,6 +70,7 @@ def cli(
     output_key: str | None,
     local_output_json: Path | None,
     slack_url: str | None,
+    google_chat_url: str = None,
 ) -> None:
     log = setup_logging()
 
@@ -213,6 +215,10 @@ def cli(
         send_slack_notification(slack_url, "S1 Frankfurt Gap Report", message)
     else:
         log.info(message)
+    if google_chat_url:
+        send_google_chat_notification(
+            google_chat_url, "S1 Frankfurt Gap Report", message
+        )
 
     if not complete:
         sys.exit(1)

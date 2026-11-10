@@ -43,6 +43,12 @@ def send_slack_notification(url: str, title: str, message: str):
     response.raise_for_status()
 
 
+def send_google_chat_notification(url: str, title: str, message: str):
+    """Send a title and message using a Google Chat incoming webhook."""
+    response = requests.post(url, json={"text": f"{title}\n\n{message}"}, timeout=30)
+    response.raise_for_status()
+
+
 def split_list_equally(list_to_split: list, num_inter_lists: int):
     """
     Split list_to_split in equally balanced lists among num_inter_lists
@@ -91,8 +97,8 @@ def time_process(start: float):
     :return:
     """
     t_sec = round(time.time() - start)
-    (t_min, t_sec) = divmod(t_sec, 60)
-    (t_hour, t_min) = divmod(t_min, 60)
+    t_min, t_sec = divmod(t_sec, 60)
+    t_hour, t_min = divmod(t_min, 60)
 
     return f"{t_hour} hour: {t_min} min: {t_sec} sec"
 

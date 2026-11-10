@@ -5,7 +5,7 @@ import boto3
 import click
 
 from deafrica import __version__
-from deafrica.click_options import limit, slack_url
+from deafrica.click_options import google_chat_url, limit, slack_url
 from deafrica.logs import setup_logging
 from deafrica.monitoring._s1_frankfurt_gap import (
     DESTINATION_BUCKET,
@@ -21,7 +21,11 @@ from deafrica.monitoring._s1_frankfurt_gap import (
     s3_client,
     s3_event_message,
 )
-from deafrica.utils import send_slack_notification, split_list_equally
+from deafrica.utils import (
+    send_google_chat_notification,
+    send_slack_notification,
+    split_list_equally,
+)
 
 log = logging.getLogger(__name__)
 
@@ -77,6 +81,7 @@ def find_latest_frankfurt_report_path(bucket_name: str, region_name: str) -> str
 @click.option("--dryrun", is_flag=True, default=False)
 @limit
 @slack_url
+@google_chat_url
 def cli(
     worker_idx: int,
     max_workers: int,
@@ -91,6 +96,7 @@ def cli(
     dryrun: bool,
     limit: int | None,
     slack_url: str | None,
+    google_chat_url: str = None,
 ) -> None:
     log = setup_logging()
 
@@ -258,6 +264,10 @@ def cli(
         send_slack_notification(slack_url, "S1 Frankfurt Gap Filler", message)
     else:
         log.info(message)
+    if google_chat_url:
+        send_google_chat_notification(
+            google_chat_url, "S1 Frankfurt Gap Filler", message
+        )
 
     if copy_failures or indexing_failures:
         raise RuntimeError("Some Frankfurt gap filler tasks failed")
