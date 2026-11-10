@@ -23,12 +23,13 @@ from odc.aws import s3_client, s3_dump
 from yarl import URL
 
 from deafrica import __version__
-from deafrica.click_options import slack_url, update_stac
+from deafrica.click_options import google_chat_url, slack_url, update_stac
 from deafrica.inventory import list_inventory
 from deafrica.logs import setup_logging
 from deafrica.utils import (
     convert_str_to_date,
     download_file_to_tmp,
+    send_google_chat_notification,
     send_slack_notification,
     time_process,
 )
@@ -166,6 +167,7 @@ def generate_buckets_diff(
     file_name: str,
     update_stac: bool = False,
     notification_url: str = None,
+    google_chat_url: str = None,
 ):
     """
     Compare USGS bulk files and Africa inventory bucket detecting differences
@@ -328,6 +330,10 @@ def generate_buckets_diff(
             send_slack_notification(
                 notification_url, f"{satellites} Gap Report", message
             )
+        if google_chat_url is not None:
+            send_google_chat_notification(
+                google_chat_url, f"{satellites} Gap Report", message
+            )
         raise Exception(f"More than 200 scenes were found \n {message}")
 
 
@@ -347,6 +353,7 @@ def generate_buckets_diff(
 )
 @update_stac
 @slack_url
+@google_chat_url
 @click.option("--version", is_flag=True, default=False)
 @click.command("landsat-gap-report")
 def cli(
@@ -355,6 +362,7 @@ def cli(
     update_stac: bool = False,
     slack_url: str = None,
     version: bool = False,
+    google_chat_url: str = None,
 ):
     """
     Publish missing scenes
@@ -369,4 +377,5 @@ def cli(
             file_name=FILES.get(satellite, None),
             update_stac=update_stac,
             notification_url=slack_url,
+            google_chat_url=google_chat_url,
         )

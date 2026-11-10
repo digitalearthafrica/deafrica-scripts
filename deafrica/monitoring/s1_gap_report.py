@@ -15,9 +15,13 @@ from odc.aws.inventory import list_inventory
 from sentinelhub import DataCollection, Geometry, SentinelHubCatalog, SHConfig
 from yarl import URL
 
-from deafrica.click_options import slack_url
+from deafrica.click_options import google_chat_url, slack_url
 from deafrica.logs import setup_logging
-from deafrica.utils import AFRICA_EXTENT_URL, send_slack_notification
+from deafrica.utils import (
+    AFRICA_EXTENT_URL,
+    send_google_chat_notification,
+    send_slack_notification,
+)
 
 SH_CLIENT_ID = os.getenv("SH_CLIENT_ID", "")
 SH_CLIENT_SECRET = os.getenv("SH_CLIENT_SECRET", "")
@@ -268,7 +272,10 @@ def get_missing_and_orphan_odc_scenes() -> tuple[set[str], set[str]]:
 
 
 def find_missing_s1_data(
-    bucket_name: str, slack_url: str, skip_sentinelhub_check: bool
+    bucket_name: str,
+    slack_url: str,
+    skip_sentinelhub_check: bool,
+    google_chat_url: str = None,
 ):
     log = setup_logging()
     log.info("Task started ")
@@ -340,6 +347,10 @@ def find_missing_s1_data(
             log.info("Slack notification sent")
         else:
             log.info(slack_message)
+        if google_chat_url:
+            send_google_chat_notification(
+                google_chat_url, "S1 Gap Report", slack_message
+            )
     except Exception as exc:
         log.exception(exc)
 
@@ -360,11 +371,13 @@ def find_missing_s1_data(
     "Gap report only returns missing ODC scenes and orphaned ODC scenes.",
 )
 @slack_url
+@google_chat_url
 @click.command("s1-gap-report")
 def cli(
     bucket_name: str,
     skip_sentinelhub_check: bool,
     slack_url: str = None,
+    google_chat_url: str = None,
 ):
     """
     Sentinel-1 gap report for s1_rtc scenes in the bucket BUCKET_NAME.
@@ -374,4 +387,5 @@ def cli(
         bucket_name=bucket_name,
         slack_url=slack_url,
         skip_sentinelhub_check=skip_sentinelhub_check,
+        google_chat_url=google_chat_url,
     )

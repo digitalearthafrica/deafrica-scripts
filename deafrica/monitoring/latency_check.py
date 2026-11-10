@@ -13,17 +13,16 @@ from botocore import UNSIGNED
 from botocore.config import Config
 
 from deafrica import __version__
-from deafrica.click_options import slack_url
+from deafrica.click_options import google_chat_url, slack_url
 from deafrica.logs import setup_logging
-from deafrica.utils import (
-    send_slack_notification,
-)
+from deafrica.utils import send_google_chat_notification, send_slack_notification
 
 
 def latency_check_slack(
     sensor: str,
     exceeded: str,
     notification_url: str = None,
+    google_chat_url: str = None,
 ) -> None:
     """
     Function to send a slack message reporting high latency on a given sensor
@@ -44,6 +43,8 @@ def latency_check_slack(
     log.info(message)
     if notification_url is not None:
         send_slack_notification(notification_url, "Data Latency Checker", message)
+    if google_chat_url is not None:
+        send_google_chat_notification(google_chat_url, "Data Latency Checker", message)
 
 
 def s3_latency_check(bucket_name: str, prefix: str) -> Optional[int]:
@@ -80,6 +81,7 @@ def latency_checker(
     notification_slack_url: str = None,
     bucket_name: str = "deafrica-landsat",
     prefix: str = "collection02/level-2/standard/oli-tirs/2023/",
+    google_chat_url: str = None,
 ) -> int:
     """
     Function to detect and send a slack message to the given URL reporting higher than specified latency on the given sensor
@@ -126,6 +128,7 @@ def latency_checker(
                 sensor=satellite,
                 exceeded="Latency exceeded in Data Cube and S3 bucket",
                 notification_url=notification_slack_url,
+                google_chat_url=google_chat_url,
             )
         elif len(ds) <= 0:
             # Latency exceeded in Data Cube
@@ -133,6 +136,7 @@ def latency_checker(
                 sensor=satellite,
                 exceeded="Latency exceeded in Data Cube",
                 notification_url=notification_slack_url,
+                google_chat_url=google_chat_url,
             )
         elif s3_latency is not None and s3_latency > latency:
             # Latency exceeded in S3 bucket
@@ -140,6 +144,7 @@ def latency_checker(
                 sensor=satellite,
                 exceeded="Latency exceeded in S3 bucket",
                 notification_url=notification_slack_url,
+                google_chat_url=google_chat_url,
             )
         else:
             print("Latency on ", satellite, " valid.")
@@ -179,6 +184,7 @@ def latency_checker(
     default="ls9_sr",
 )
 @slack_url
+@google_chat_url
 @click.option("--version", is_flag=True, default=False)
 def cli(
     prefix,
@@ -187,6 +193,7 @@ def cli(
     satellite,
     slack_url,
     version,
+    google_chat_url: str = None,
 ):
     """
     Post a high latency warning message on Slack given a latency on a product or satellite
@@ -206,4 +213,5 @@ def cli(
         notification_slack_url=slack_url,
         bucket_name=bucket_name,
         prefix=prefix,
+        google_chat_url=google_chat_url,
     )

@@ -11,11 +11,9 @@ from odc.aws.inventory import list_inventory
 from yarl import URL
 
 from deafrica import __version__
-from deafrica.click_options import slack_url, update_stac
+from deafrica.click_options import google_chat_url, slack_url, update_stac
 from deafrica.logs import setup_logging
-from deafrica.utils import (
-    send_slack_notification,
-)
+from deafrica.utils import send_google_chat_notification, send_slack_notification
 
 SENTINEL_2_INVENTORY_PATH = URL(
     "s3://deafrica-sentinel-2-inventory/deafrica-sentinel-2/deafrica-sentinel-2-inventory/"
@@ -81,6 +79,7 @@ def generate_buckets_diff(
     bucket_name: str,
     update_stac: bool = False,
     notification_url: str = None,
+    google_chat_url: str = None,
 ) -> None:
     """
     Compare Sentinel-2 buckets in US and Africa and detect differences
@@ -208,11 +207,21 @@ def generate_buckets_diff(
             send_slack_notification(
                 notification_url, "S2 Gap Report - Exception", message
             )
+        if google_chat_url is not None:
+            send_google_chat_notification(
+                google_chat_url, "S2 Gap Report - Exception", message
+            )
         raise Exception(f"More than 200 scenes were found \n {message}")
     else:
         if notification_url is not None:
             send_slack_notification(
                 notification_url,
+                "S2 Gap Report - Success",
+                message + "\n Missing scenes below threshold",
+            )
+        if google_chat_url is not None:
+            send_google_chat_notification(
+                google_chat_url,
                 "S2 Gap Report - Success",
                 message + "\n Missing scenes below threshold",
             )
@@ -227,6 +236,7 @@ def generate_buckets_diff(
 )
 @update_stac
 @slack_url
+@google_chat_url
 @click.option("--version", is_flag=True, default=False)
 @click.command("s2-gap-report")
 def cli(
@@ -234,6 +244,7 @@ def cli(
     update_stac: bool = False,
     slack_url: str = None,
     version: bool = False,
+    google_chat_url: str = None,
 ):
     """
     Publish missing scenes
@@ -243,5 +254,8 @@ def cli(
         click.echo(__version__)
 
     generate_buckets_diff(
-        bucket_name=bucket_name, update_stac=update_stac, notification_url=slack_url
+        bucket_name=bucket_name,
+        update_stac=update_stac,
+        notification_url=slack_url,
+        google_chat_url=google_chat_url,
     )

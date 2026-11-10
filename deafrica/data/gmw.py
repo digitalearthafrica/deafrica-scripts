@@ -25,9 +25,14 @@ from odc.geo.xr import assign_crs, write_cog
 from rio_stac import create_stac_item
 from yarl import URL
 
-from deafrica.click_options import slack_url
+from deafrica.click_options import google_chat_url, slack_url
 from deafrica.logs import setup_logging
-from deafrica.utils import AFRICA_BBOX, AFRICA_EXTENT_BBOX_URL, send_slack_notification
+from deafrica.utils import (
+    AFRICA_BBOX,
+    AFRICA_EXTENT_BBOX_URL,
+    send_google_chat_notification,
+    send_slack_notification,
+)
 
 VALID_YEARS = [
     "1996",
@@ -101,7 +106,9 @@ def get_gmw_africa_tiles() -> Set[str]:
     return gmw_africa_tiles
 
 
-def gmw_download_stac_cog(year: str, s3_dst: str, slack_url: str = None) -> None:
+def gmw_download_stac_cog(
+    year: str, s3_dst: str, slack_url: str = None, google_chat_url: str = None
+) -> None:
     """
     Mangrove download, COG and STAC process
 
@@ -205,6 +212,8 @@ def gmw_download_stac_cog(year: str, s3_dst: str, slack_url: str = None) -> None
         message = f"Failed to handle GMW {FILE_NAME.format(year=year)} with error {e}"
         if slack_url is not None:
             send_slack_notification(slack_url, "GMW", message)
+        if google_chat_url is not None:
+            send_google_chat_notification(google_chat_url, "GMW", message)
         log.exception(message)
 
         exit(1)
@@ -214,7 +223,8 @@ def gmw_download_stac_cog(year: str, s3_dst: str, slack_url: str = None) -> None
 @click.option("--year", required=True)
 @click.option("--s3_dst", default="s3://deafrica-data-dev-af/gmw/")
 @slack_url
-def cli(year, s3_dst, slack_url):
+@google_chat_url
+def cli(year, s3_dst, slack_url, google_chat_url: str = None):
     """
     Available years are
     • 1996
@@ -230,4 +240,6 @@ def cli(year, s3_dst, slack_url):
     • 2020
     """
 
-    gmw_download_stac_cog(year=year, s3_dst=s3_dst, slack_url=slack_url)
+    gmw_download_stac_cog(
+        year=year, s3_dst=s3_dst, slack_url=slack_url, google_chat_url=google_chat_url
+    )

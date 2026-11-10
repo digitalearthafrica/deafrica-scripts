@@ -99,3 +99,18 @@ A Merge will result in the creation of a new test image on Docker and 45 min lat
 
 Copyright **Deafrica** - [GitHub](https://github.com/digitalearthafrica)
 Developed by **Rodrigo de Azevedo Carvalho** - [Linkedin](www.linkedin.com/in/rodrigo-de-azevedo-carvalho) - [GitHub](https://github.com/carioca-au)
+
+### Notifications
+
+Commands that accept `--slack_url` also accept `--google-chat-url` for a Google
+Chat incoming webhook. Supply either option or both to send notifications to the
+corresponding destinations:
+
+```bash
+check-dead-queue --slack_url "$SLACK_WEBHOOK_URL" --google-chat-url "$GOOGLE_CHAT_WEBHOOK_URL"
+```
+
+Google Chat receives a text message containing the notification title and body.
+Notification thresholds and dry-run behavior follow the existing Slack behavior.
+After building and deploying a container with this change, workflow manifests in
+the configuration repository can pass both webhook options directly, without a relay.
