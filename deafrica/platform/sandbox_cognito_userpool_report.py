@@ -1,5 +1,7 @@
+import json
 import os
-from datetime import datetime
+import re
+from datetime import datetime, timedelta, timezone
 from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
@@ -11,13 +13,11 @@ import click
 import pandas as pd
 import phonenumbers
 from babel import Locale
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
 from phonenumbers import NumberParseException
 
+from deafrica.utils import upload_dated_report_to_google_drive
+
 DEFAULT_SENDER_EMAIL = "info@digitalearthafrica.org"
-GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
 XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 ENGLISH_LOCALE = Locale.parse("en")
 REPORT_COLUMNS = [
@@ -44,8 +44,9 @@ REPORT_COLUMNS = [
     "custom:last_login",
 ]
 
-# Get the current date in YYYY-MM-DD format
-current_date = datetime.now().strftime("%Y-%m-%d")
+
+def report_date():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
 def phone_number_country(phone_number):
@@ -176,6 +177,184 @@ def write_excel_report(report_path, df):
     df.to_excel(report_path, index=False)
 
 
+def weekly_period(report_day):
+    """Return the previous complete Monday-to-Monday week in UTC."""
+    day = datetime.fromisoformat(report_day).replace(tzinfo=timezone.utc)
+    end = day - timedelta(days=day.weekday())
+    return end - timedelta(days=7), end
+
+
+def utc_datetime(value):
+    if not value:
+        return None
+    if not isinstance(value, datetime):
+        try:
+            value = datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def login_from_log_event(event):
+    """Read the existing post-authentication Lambda's login records."""
+    message = event.get("message", "").strip()
+    if message.startswith("{"):
+        try:
+            message = json.loads(message).get("message", "")
+        except (ValueError, AttributeError):
+            return None
+
+    updated = re.search(r"Updated last_login for (.+) to (\S+)", message)
+    if updated:
+        username, value = updated.groups()
+        timestamp = utc_datetime(value)
+        if timestamp is None:
+            raise ValueError("A recorded login has an invalid timestamp")
+        return username, timestamp
+
+    # The trigger returns the successful authentication even if the profile update fails.
+    failed = re.search(r"Failed to update last_login for (.+?): ", message)
+    if failed:
+        return failed.group(1), datetime.fromtimestamp(
+            event["timestamp"] / 1000, tz=timezone.utc
+        )
+    return None
+
+
+def fetch_weekly_login_activity(cognito_client, logs_client, user_pool_id, start, end):
+    pool = cognito_client.describe_user_pool(UserPoolId=user_pool_id)["UserPool"]
+    function_arn = pool.get("LambdaConfig", {}).get("PostAuthentication", "")
+    if ":function:" not in function_arn:
+        raise ValueError(
+            "The user pool has no post-authentication Lambda for login history"
+        )
+    function_name = function_arn.split(":function:", 1)[1].split(":", 1)[0]
+    log_group = f"/aws/lambda/{function_name}"
+
+    groups = logs_client.get_paginator("describe_log_groups").paginate(
+        logGroupNamePrefix=log_group
+    )
+    group = next(
+        (
+            item
+            for page in groups
+            for item in page.get("logGroups", [])
+            if item["logGroupName"] == log_group
+        ),
+        None,
+    )
+    if group is None:
+        raise ValueError(
+            "The login log group does not exist; cannot report weekly activity"
+        )
+    if group["creationTime"] > int(start.timestamp() * 1000):
+        raise ValueError("The login log group does not cover the full reporting week")
+    retention = group.get("retentionInDays")
+    if retention and start < datetime.now(timezone.utc) - timedelta(days=retention):
+        raise ValueError("Login log retention does not cover the full reporting week")
+
+    activity = {}
+    seen_ids = set()
+    pages = logs_client.get_paginator("filter_log_events").paginate(
+        logGroupName=log_group,
+        startTime=int(start.timestamp() * 1000),
+        # A sign-in just before midnight can be logged after its profile update finishes.
+        endTime=int((end + timedelta(minutes=10)).timestamp() * 1000) - 1,
+        filterPattern='"last_login"',
+    )
+    for page in pages:
+        for event in page.get("events", []):
+            event_id = event.get("eventId")
+            if event_id and event_id in seen_ids:
+                continue
+            if event_id:
+                seen_ids.add(event_id)
+            login = login_from_log_event(event)
+            if login is None:
+                continue
+            username, timestamp = login
+            if not start <= timestamp < end:
+                continue
+            record = activity.setdefault(
+                username, {"count": 0, "first": timestamp, "last": timestamp}
+            )
+            record["count"] += 1
+            record["first"] = min(record["first"], timestamp)
+            record["last"] = max(record["last"], timestamp)
+    print(f"Found {len(activity)} users with recorded sign-ins in the reporting week")
+    return activity
+
+
+def write_weekly_excel_report(report_path, df, activity, start, end, report_day):
+    users_by_name = {row["Username"]: row.to_dict() for _, row in df.iterrows()}
+    active_rows = []
+    for username, login in sorted(activity.items()):
+        record = users_by_name.get(username, dict.fromkeys(df.columns, "")).copy()
+        record.update(
+            Username=username,
+            AccountPresentAtReport=username in users_by_name,
+            LoginsInWeek=login["count"],
+            FirstLoginInWeek=login["first"].isoformat(),
+            LastLoginInWeek=login["last"].isoformat(),
+        )
+        active_rows.append(record)
+    active = pd.DataFrame(
+        active_rows,
+        columns=[
+            *df.columns,
+            "AccountPresentAtReport",
+            "LoginsInWeek",
+            "FirstLoginInWeek",
+            "LastLoginInWeek",
+        ],
+    )
+    created = df["UserCreateDate"].map(utc_datetime)
+    new_users = df.loc[
+        created.map(lambda value: value is not None and start <= value < end)
+    ]
+    summary = pd.DataFrame(
+        [
+            ("Reporting week start (UTC, inclusive)", start.isoformat()),
+            ("Reporting week end (UTC, exclusive)", end.isoformat()),
+            ("Report generated on (UTC)", report_day),
+            ("Users with recorded sign-ins", len(active)),
+            (
+                "Recorded sign-ins during week",
+                sum(row["count"] for row in activity.values()),
+            ),
+            ("New users registered during week", len(new_users)),
+            ("Total registered users at report generation", len(df)),
+            ("Accounts missing a valid creation date", int(created.isna().sum())),
+            (
+                "Activity definition",
+                "Recorded Cognito sign-ins; ongoing sessions are not measured",
+            ),
+            (
+                "Activity scope",
+                "Shared Cognito pool: includes Sandbox, Argo and Grafana sign-ins",
+            ),
+            (
+                "Registration coverage",
+                "Accounts still present when the report was generated",
+            ),
+        ],
+        columns=["Metric", "Value"],
+    )
+    with pd.ExcelWriter(report_path, engine="openpyxl") as writer:
+        summary.to_excel(writer, sheet_name="Summary", index=False)
+        active.to_excel(writer, sheet_name="Active users", index=False)
+        new_users.to_excel(writer, sheet_name="New users", index=False)
+        df.to_excel(writer, sheet_name="All users", index=False)
+        writer.sheets["Summary"].column_dimensions["A"].width = 48
+        writer.sheets["Summary"].column_dimensions["B"].width = 90
+        for sheet in writer.sheets.values():
+            sheet.freeze_panes = "A2"
+        for name in ["Active users", "New users", "All users"]:
+            writer.sheets[name].auto_filter.ref = writer.sheets[name].dimensions
+
+
 def send_email_with_attachment(recipient_email, report_path, sender_email, ses_client):
     # Prepare email message
     msg = MIMEMultipart()
@@ -211,48 +390,22 @@ def send_email_with_attachment(recipient_email, report_path, sender_email, ses_c
 
 
 def upload_report_to_google_drive(
-    report_path, report_name, google_drive_folder_id, google_credentials_file
+    report_path,
+    report_name,
+    google_drive_folder_id,
+    google_credentials_file,
+    report_day=None,
+    latest_name=None,
 ):
-    if not google_drive_folder_id:
-        raise ValueError("GOOGLE_DRIVE_FOLDER_ID is required for Google Drive upload")
-
-    if not google_credentials_file:
-        raise ValueError(
-            "GOOGLE_APPLICATION_CREDENTIALS is required for Google Drive upload"
-        )
-
-    credentials_path = Path(google_credentials_file)
-    if not credentials_path.exists():
-        raise FileNotFoundError(
-            f"Google credentials file does not exist: {credentials_path}"
-        )
-
-    credentials = service_account.Credentials.from_service_account_file(
-        credentials_path,
-        scopes=[GOOGLE_DRIVE_SCOPE],
+    return upload_dated_report_to_google_drive(
+        report_path,
+        report_name,
+        google_drive_folder_id,
+        google_credentials_file,
+        report_day or report_date(),
+        XLSX_MIME_TYPE,
+        latest_name=latest_name,
     )
-    service = build("drive", "v3", credentials=credentials, cache_discovery=False)
-
-    file_metadata = {
-        "name": report_name,
-        "parents": [google_drive_folder_id],
-    }
-    media = MediaFileUpload(report_path, mimetype=XLSX_MIME_TYPE, resumable=False)
-
-    uploaded_file = (
-        service.files()
-        .create(
-            body=file_metadata,
-            media_body=media,
-            fields="id, webViewLink",
-            supportsAllDrives=True,
-        )
-        .execute()
-    )
-
-    print(f"Uploaded report to Google Drive file id {uploaded_file.get('id')}")
-    print(f"Google Drive report link: {uploaded_file.get('webViewLink')}")
-    return uploaded_file
 
 
 def main(
@@ -260,14 +413,25 @@ def main(
     google_drive_folder_id=None,
     google_credentials_file=None,
     environment="",
+    publish_latest=False,
+    frequency="weekly",
 ):
+    if frequency not in {"weekly", "monthly"}:
+        raise ValueError("REPORT_FREQUENCY must be one of: weekly, monthly")
     aws_region_cognito = required_env("aws_region_cognito")
     aws_region_ses = required_env("aws_region_ses")
     user_pool_id = required_env("user_pool_id")
     sender_email = os.getenv("SENDER_EMAIL", DEFAULT_SENDER_EMAIL)
     environment = report_environment(environment)
     environment_suffix = f"_{environment}" if environment else ""
-    report_name = f"Users{environment_suffix}_{current_date}.xlsx"
+    report_day = report_date()
+    report_prefix = f"Users{environment_suffix}"
+    if frequency == "monthly":
+        report_prefix += "_monthly"
+        report_name = f"{report_prefix}_{report_day[:7]}.xlsx"
+    else:
+        report_name = f"{report_prefix}_{report_day}.xlsx"
+    latest_name = f"{report_prefix}_latest.xlsx" if publish_latest else None
     report_path = report_name
 
     cognito_client = boto3.client("cognito-idp", region_name=aws_region_cognito)
@@ -275,7 +439,15 @@ def main(
     df = users_to_dataframe(users)
     df = add_user_groups(df, cognito_client, user_pool_id)
     print(f"Writing Excel report: {report_path}...")
-    write_excel_report(report_path, df)
+    if frequency == "weekly":
+        start, end = weekly_period(report_day)
+        logs_client = boto3.client("logs", region_name=aws_region_cognito)
+        activity = fetch_weekly_login_activity(
+            cognito_client, logs_client, user_pool_id, start, end
+        )
+        write_weekly_excel_report(report_path, df, activity, start, end, report_day)
+    else:
+        write_excel_report(report_path, df)
 
     if email_address:
         print(f"Sending email with attached Excel report...")
@@ -295,6 +467,8 @@ def main(
             report_name,
             google_drive_folder_id,
             google_credentials_file,
+            report_day=report_day,
+            latest_name=latest_name,
         )
     else:
         print("Skipping Google Drive upload")
@@ -305,8 +479,35 @@ def main(
 @click.option("--google-drive-folder-id", envvar="GOOGLE_DRIVE_FOLDER_ID")
 @click.option("--google-credentials-file", envvar="GOOGLE_APPLICATION_CREDENTIALS")
 @click.option("--environment", envvar="REPORT_ENVIRONMENT", default="")
-def cli(email, google_drive_folder_id, google_credentials_file, environment):
-    main(email, google_drive_folder_id, google_credentials_file, environment)
+@click.option(
+    "--frequency",
+    envvar="REPORT_FREQUENCY",
+    type=click.Choice(["weekly", "monthly"]),
+    default="weekly",
+    help="Use dated weekly filenames or clearly labelled monthly snapshots.",
+)
+@click.option(
+    "--publish-latest/--no-publish-latest",
+    envvar="REPORT_PUBLISH_LATEST",
+    default=False,
+    help="Update the latest user file for this frequency as well as its archive.",
+)
+def cli(
+    email,
+    google_drive_folder_id,
+    google_credentials_file,
+    environment,
+    publish_latest,
+    frequency,
+):
+    main(
+        email,
+        google_drive_folder_id,
+        google_credentials_file,
+        environment,
+        publish_latest=publish_latest,
+        frequency=frequency,
+    )
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import math
 import time
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -14,6 +14,9 @@ import requests
 AFRICA_BBOX = [-26.36, 38.35, 64.50, -47.97]
 AFRICA_EXTENT_BBOX_URL = "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/master/africa-extent-bbox.json"
 AFRICA_EXTENT_URL = "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/refs/heads/master/africa-extent.json"
+
+GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
+FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
 
 
 def send_slack_notification(url: str, title: str, message: str):
@@ -164,3 +167,123 @@ def test_http_return(returned):
             f"-status_code: {status_code} \n"
             f"-reason: {reason} \n"
         )
+
+
+def drive_query_value(value):
+    return str(value).replace("\\", "\\\\").replace("'", "\\'")
+
+
+def find_drive_item(service, parent_id, name, mime_type):
+    """Find an existing item in its destination, including shared drives."""
+    query = (
+        f"'{drive_query_value(parent_id)}' in parents and trashed = false "
+        f"and name = '{drive_query_value(name)}' "
+        f"and mimeType = '{drive_query_value(mime_type)}'"
+    )
+    page_token = None
+    matches = []
+    while True:
+        result = (
+            service.files()
+            .list(
+                q=query,
+                fields="nextPageToken, files(id, name, webViewLink)",
+                pageToken=page_token,
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+            )
+            .execute()
+        )
+        matches.extend(result.get("files", []))
+        page_token = result.get("nextPageToken")
+        if not page_token:
+            break
+
+    # Reuse the same item even if duplicates already exist. Do not delete history.
+    return min(matches, key=lambda item: item["id"]) if matches else None
+
+
+def ensure_year_folder(service, parent_id, year):
+    name = str(year)
+    existing = find_drive_item(service, parent_id, name, FOLDER_MIME_TYPE)
+    if existing:
+        return existing["id"]
+
+    folder = (
+        service.files()
+        .create(
+            body={"name": name, "mimeType": FOLDER_MIME_TYPE, "parents": [parent_id]},
+            fields="id",
+            supportsAllDrives=True,
+        )
+        .execute()
+    )
+    return folder["id"]
+
+
+def upsert_drive_report(service, report_path, report_name, parent_id, mime_type):
+    """Replace an existing report in place so its shared link remains valid."""
+    from googleapiclient.http import MediaFileUpload
+
+    existing = find_drive_item(service, parent_id, report_name, mime_type)
+    media = MediaFileUpload(str(report_path), mimetype=mime_type, resumable=False)
+    if existing:
+        request = service.files().update(
+            fileId=existing["id"],
+            media_body=media,
+            fields="id, webViewLink",
+            supportsAllDrives=True,
+        )
+    else:
+        request = service.files().create(
+            body={"name": report_name, "parents": [parent_id]},
+            media_body=media,
+            fields="id, webViewLink",
+            supportsAllDrives=True,
+        )
+    uploaded_file = request.execute()
+    print(f"Uploaded {report_name} to Google Drive file id {uploaded_file.get('id')}")
+    print(f"Google Drive report link: {uploaded_file.get('webViewLink')}")
+    return uploaded_file
+
+
+def upload_dated_report_to_google_drive(
+    report_path,
+    report_name,
+    google_drive_folder_id,
+    google_credentials_file,
+    report_date,
+    mime_type,
+    latest_name=None,
+):
+    """Save a year archive, then optionally publish its latest copy."""
+    from google.oauth2 import service_account
+    from googleapiclient.discovery import build
+
+    if not google_drive_folder_id:
+        raise ValueError("GOOGLE_DRIVE_FOLDER_ID is required for Google Drive upload")
+    if not google_credentials_file:
+        raise ValueError(
+            "GOOGLE_APPLICATION_CREDENTIALS is required for Google Drive upload"
+        )
+    credentials_path = Path(google_credentials_file)
+    if not credentials_path.exists():
+        raise FileNotFoundError(
+            f"Google credentials file does not exist: {credentials_path}"
+        )
+
+    year = date.fromisoformat(report_date).year
+    credentials = service_account.Credentials.from_service_account_file(
+        credentials_path, scopes=[GOOGLE_DRIVE_SCOPE]
+    )
+    service = build("drive", "v3", credentials=credentials, cache_discovery=False)
+    year_folder_id = ensure_year_folder(service, google_drive_folder_id, year)
+    archived_file = upsert_drive_report(
+        service, report_path, report_name, year_folder_id, mime_type
+    )
+    # Publish latest only after the dated archive has been saved successfully.
+    if latest_name:
+        upsert_drive_report(
+            service, report_path, latest_name, google_drive_folder_id, mime_type
+        )
+    return archived_file
