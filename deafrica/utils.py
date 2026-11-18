@@ -203,8 +203,8 @@ def find_drive_item(service, parent_id, name, mime_type):
     return min(matches, key=lambda item: item["id"]) if matches else None
 
 
-def ensure_year_folder(service, parent_id, year):
-    name = str(year)
+def ensure_drive_folder(service, parent_id, name):
+    name = str(name)
     existing = find_drive_item(service, parent_id, name, FOLDER_MIME_TYPE)
     if existing:
         return existing["id"]
@@ -221,18 +221,42 @@ def ensure_year_folder(service, parent_id, year):
     return folder["id"]
 
 
-def upsert_drive_report(service, report_path, report_name, parent_id, mime_type):
+def upsert_drive_report(
+    service,
+    report_path,
+    report_name,
+    parent_id,
+    mime_type,
+    move_from_parent_id=None,
+    previous_name=None,
+):
     """Replace an existing report in place so its shared link remains valid."""
     from googleapiclient.http import MediaFileUpload
 
     existing = find_drive_item(service, parent_id, report_name, mime_type)
+    if not existing and previous_name:
+        existing = find_drive_item(service, parent_id, previous_name, mime_type)
+    move_parameters = {}
+    if not existing and move_from_parent_id and move_from_parent_id != parent_id:
+        existing = find_drive_item(service, move_from_parent_id, report_name, mime_type)
+        if not existing and previous_name:
+            existing = find_drive_item(
+                service, move_from_parent_id, previous_name, mime_type
+            )
+        if existing:
+            move_parameters = {
+                "addParents": parent_id,
+                "removeParents": move_from_parent_id,
+            }
     media = MediaFileUpload(str(report_path), mimetype=mime_type, resumable=False)
     if existing:
         request = service.files().update(
             fileId=existing["id"],
+            body={"name": report_name},
             media_body=media,
             fields="id, webViewLink",
             supportsAllDrives=True,
+            **move_parameters,
         )
     else:
         request = service.files().create(
@@ -255,8 +279,11 @@ def upload_dated_report_to_google_drive(
     report_date,
     mime_type,
     latest_name=None,
+    archive_subfolder=None,
+    latest_subfolder=None,
+    previous_latest_name=None,
 ):
-    """Save a year archive, then optionally publish its latest copy."""
+    """Save an archive under its year/subfolder, then optionally publish latest."""
     from google.oauth2 import service_account
     from googleapiclient.discovery import build
 
@@ -277,13 +304,28 @@ def upload_dated_report_to_google_drive(
         credentials_path, scopes=[GOOGLE_DRIVE_SCOPE]
     )
     service = build("drive", "v3", credentials=credentials, cache_discovery=False)
-    year_folder_id = ensure_year_folder(service, google_drive_folder_id, year)
+    archive_folder_id = ensure_drive_folder(service, google_drive_folder_id, year)
+    if archive_subfolder:
+        archive_folder_id = ensure_drive_folder(
+            service, archive_folder_id, archive_subfolder
+        )
     archived_file = upsert_drive_report(
-        service, report_path, report_name, year_folder_id, mime_type
+        service, report_path, report_name, archive_folder_id, mime_type
     )
     # Publish latest only after the dated archive has been saved successfully.
     if latest_name:
+        latest_folder_id = google_drive_folder_id
+        if latest_subfolder:
+            latest_folder_id = ensure_drive_folder(
+                service, google_drive_folder_id, latest_subfolder
+            )
         upsert_drive_report(
-            service, report_path, latest_name, google_drive_folder_id, mime_type
+            service,
+            report_path,
+            latest_name,
+            latest_folder_id,
+            mime_type,
+            move_from_parent_id=google_drive_folder_id if latest_subfolder else None,
+            previous_name=previous_latest_name,
         )
     return archived_file

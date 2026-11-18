@@ -216,6 +216,7 @@ def upload_report_to_google_drive(
     google_credentials_file,
     report_day=None,
     latest_name=None,
+    frequency="weekly",
 ):
     return upload_dated_report_to_google_drive(
         report_path,
@@ -225,6 +226,15 @@ def upload_report_to_google_drive(
         report_day or report_date(),
         XLSX_MIME_TYPE,
         latest_name=latest_name,
+        archive_subfolder=frequency,
+        latest_subfolder="latest",
+        previous_latest_name=(
+            latest_name.replace("_weekly_latest.xlsx", "_latest.xlsx")
+            if frequency == "weekly"
+            and latest_name
+            and latest_name.endswith("_weekly_latest.xlsx")
+            else None
+        ),
     )
 
 
@@ -251,7 +261,9 @@ def main(
         report_name = f"{report_prefix}_{report_day[:7]}.xlsx"
     else:
         report_name = f"{report_prefix}_{report_day}.xlsx"
-    latest_name = f"{report_prefix}_latest.xlsx" if publish_latest else None
+    latest_name = (
+        f"Users{environment_suffix}_{frequency}_latest.xlsx" if publish_latest else None
+    )
     report_path = report_name
 
     cognito_client = boto3.client("cognito-idp", region_name=aws_region_cognito)
@@ -281,6 +293,7 @@ def main(
             google_credentials_file,
             report_day=report_day,
             latest_name=latest_name,
+            frequency=frequency,
         )
     else:
         print("Skipping Google Drive upload")

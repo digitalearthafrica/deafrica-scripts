@@ -122,7 +122,7 @@ def test_main_publishes_matching_dated_and_latest_reports(
         expected_latest = f"Users{suffix}_monthly_latest.xlsx"
     else:
         report_name = f"Users{suffix}_2026-12-31.xlsx"
-        expected_latest = f"Users{suffix}_latest.xlsx"
+        expected_latest = f"Users{suffix}_weekly_latest.xlsx"
     assert pd.read_excel(tmp_path / report_name).loc[0, "Username"] == "alice"
     upload.assert_called_once_with(
         report_name,
@@ -131,6 +131,7 @@ def test_main_publishes_matching_dated_and_latest_reports(
         "credentials.json",
         report_day="2026-12-31",
         latest_name=expected_latest if publish_latest else None,
+        frequency=frequency,
     )
     report_date.assert_called_once()
 
@@ -241,6 +242,11 @@ class FakeDrive:
             item = self.items[fileId]
             if item["name"] == self.fail_upload_name:
                 raise RuntimeError("Upload failed")
+            if "removeParents" in kwargs:
+                item["parents"].remove(kwargs["removeParents"])
+            if "addParents" in kwargs:
+                item["parents"].append(kwargs["addParents"])
+            item.update(kwargs.get("body", {}))
             item["content"] = media_body.getbytes(0, media_body.size())
             return item.copy()
 
@@ -259,7 +265,13 @@ def drive_upload(monkeypatch, tmp_path):
         service_account.Credentials, "from_service_account_file", Mock()
     )
 
-    def upload(day="2026-11-09", parent="users", latest_name="Users_prod_latest.xlsx"):
+    def upload(
+        day="2026-11-09",
+        parent="users",
+        latest_name="Users_prod_weekly_latest.xlsx",
+        archive_subfolder="weekly",
+        latest_subfolder="latest",
+    ):
         return utils.upload_dated_report_to_google_drive(
             report_path,
             f"Users_prod_{day}.xlsx",
@@ -268,6 +280,8 @@ def drive_upload(monkeypatch, tmp_path):
             day,
             report.XLSX_MIME_TYPE,
             latest_name=latest_name,
+            archive_subfolder=archive_subfolder,
+            latest_subfolder=latest_subfolder,
         )
 
     return drive, report_path, upload
@@ -279,7 +293,7 @@ def test_rerun_reuses_folder_archive_and_latest_link(drive_upload):
     latest = next(
         item
         for item in drive.items.values()
-        if item["name"] == "Users_prod_latest.xlsx"
+        if item["name"] == "Users_prod_weekly_latest.xlsx"
     )
     latest_id = latest["id"]
     latest_link = latest["webViewLink"]
@@ -287,15 +301,55 @@ def test_rerun_reuses_folder_archive_and_latest_link(drive_upload):
 
     second_archive = upload()
 
-    assert len(drive.items) == 3
+    assert len(drive.items) == 5
     assert first_archive["id"] == second_archive["id"]
     assert latest["id"] == latest_id
     assert latest["webViewLink"] == latest_link
-    assert latest["parents"] == ["users"]
+    latest_folder = drive.items[latest["parents"][0]]
+    assert latest_folder["name"] == "latest"
+    assert latest_folder["parents"] == ["users"]
     assert latest["content"] == second_archive["content"] == b"updated report"
-    year_folder = drive.items[second_archive["parents"][0]]
+    weekly_folder = drive.items[second_archive["parents"][0]]
+    assert weekly_folder["name"] == "weekly"
+    year_folder = drive.items[weekly_folder["parents"][0]]
     assert year_folder["name"] == "2026"
     assert year_folder["parents"] == ["users"]
+
+
+@pytest.mark.parametrize("old_latest_subfolder", [None, "latest"])
+def test_latest_moves_and_renames_without_changing_link(
+    drive_upload, old_latest_subfolder
+):
+    drive, report_path, upload = drive_upload
+    old_name = "Users_prod_latest.xlsx"
+    upload(latest_name=old_name, latest_subfolder=old_latest_subfolder)
+    latest = next(item for item in drive.items.values() if item["name"] == old_name)
+    latest_id = latest["id"]
+    latest_link = latest["webViewLink"]
+    report_path.write_bytes(b"updated report")
+
+    for _ in range(2):
+        report.upload_report_to_google_drive(
+            str(report_path),
+            "Users_prod_2026-11-09.xlsx",
+            "users",
+            str(report_path.parent / "credentials.json"),
+            report_day="2026-11-09",
+            latest_name="Users_prod_weekly_latest.xlsx",
+            frequency="weekly",
+        )
+
+    assert len(drive.items) == 5
+    latest = drive.items[latest_id]
+    assert latest["name"] == "Users_prod_weekly_latest.xlsx"
+    assert latest["webViewLink"] == latest_link
+    assert latest["content"] == b"updated report"
+    latest_folder = drive.items[latest["parents"][0]]
+    assert latest_folder["name"] == "latest"
+    assert latest_folder["parents"] == ["users"]
+    assert (
+        utils.find_drive_item(drive, "users", old_name, report.XLSX_MIME_TYPE) is None
+    )
 
 
 def test_new_year_creates_new_archive_and_keeps_latest_link(drive_upload):
@@ -304,15 +358,17 @@ def test_new_year_creates_new_archive_and_keeps_latest_link(drive_upload):
     latest = next(
         item
         for item in drive.items.values()
-        if item["name"] == "Users_prod_latest.xlsx"
+        if item["name"] == "Users_prod_weekly_latest.xlsx"
     )
     report_path.write_bytes(b"new year report")
 
     new_archive = upload("2027-01-04")
 
-    assert len(drive.items) == 5
-    assert drive.items[old_archive["parents"][0]]["name"] == "2026"
-    assert drive.items[new_archive["parents"][0]]["name"] == "2027"
+    assert len(drive.items) == 8
+    for archive, year in [(old_archive, "2026"), (new_archive, "2027")]:
+        weekly_folder = drive.items[archive["parents"][0]]
+        assert weekly_folder["name"] == "weekly"
+        assert drive.items[weekly_folder["parents"][0]]["name"] == year
     assert drive.items[old_archive["id"]]["content"] == b"first report"
     assert latest["content"] == new_archive["content"] == b"new year report"
 
@@ -349,9 +405,9 @@ def user_report_runner(drive_upload, monkeypatch):
 
 
 def test_monthly_and_weekly_latest_are_independent(user_report_runner):
-    _, run, get_file = user_report_runner
+    drive, run, get_file = user_report_runner
     run("2026-11-23", "weekly")
-    weekly_latest = get_file("Users_prod_latest.xlsx")
+    weekly_latest = get_file("Users_prod_weekly_latest.xlsx")
     weekly_id = weekly_latest["id"]
     weekly_content = weekly_latest["content"]
 
@@ -363,6 +419,19 @@ def test_monthly_and_weekly_latest_are_independent(user_report_runner):
     assert monthly_latest["id"] != weekly_id
     assert monthly_content == monthly_archive["content"] != weekly_content
     assert weekly_latest["content"] == weekly_content
+    weekly_archive = get_file("Users_prod_2026-11-23.xlsx")
+    weekly_folder = drive.items[weekly_archive["parents"][0]]
+    monthly_folder = drive.items[monthly_archive["parents"][0]]
+    assert weekly_folder["name"] == "weekly"
+    assert monthly_folder["name"] == "monthly"
+    assert weekly_folder["parents"] == monthly_folder["parents"]
+    year_folder = drive.items[weekly_folder["parents"][0]]
+    assert year_folder["name"] == "2026"
+    assert year_folder["parents"] == ["users"]
+    assert weekly_latest["parents"] == monthly_latest["parents"]
+    latest_folder = drive.items[weekly_latest["parents"][0]]
+    assert latest_folder["name"] == "latest"
+    assert latest_folder["parents"] == ["users"]
 
     run("2026-11-30", "weekly")
 
@@ -385,7 +454,7 @@ def test_monthly_reruns_and_rollover_keep_history_and_latest_link(user_report_ru
 
     run("2026-11-26", "monthly")
 
-    assert len(drive.items) == 3
+    assert len(drive.items) == 5
     assert november["id"] == november_id
     assert november["content"] == latest["content"] != november_content
     november_content = november["content"]
@@ -394,20 +463,24 @@ def test_monthly_reruns_and_rollover_keep_history_and_latest_link(user_report_ru
 
     december = get_file("Users_prod_monthly_2026-12.xlsx")
     december_content = december["content"]
-    assert len(drive.items) == 4
+    assert len(drive.items) == 6
     assert november["content"] == november_content
     assert latest["content"] == december_content
 
     run("2027-01-25", "monthly")
 
     january = get_file("Users_prod_monthly_2027-01.xlsx")
-    assert len(drive.items) == 6
+    assert len(drive.items) == 9
     assert latest["id"] == latest_id
     assert latest["webViewLink"] == latest_link
-    assert latest["parents"] == ["users"]
+    latest_folder = drive.items[latest["parents"][0]]
+    assert latest_folder["name"] == "latest"
+    assert latest_folder["parents"] == ["users"]
     assert latest["content"] == january["content"]
-    assert drive.items[november["parents"][0]]["name"] == "2026"
-    assert drive.items[january["parents"][0]]["name"] == "2027"
+    for archive, year in [(november, "2026"), (january, "2027")]:
+        monthly_folder = drive.items[archive["parents"][0]]
+        assert monthly_folder["name"] == "monthly"
+        assert drive.items[monthly_folder["parents"][0]]["name"] == year
     assert november["content"] == november_content
     assert december["content"] == december_content
 
@@ -430,7 +503,7 @@ def test_failed_monthly_upload_keeps_previous_latest(user_report_runner, failed_
 
 
 @pytest.mark.parametrize(
-    "failed_name", ["Users_prod_2026-11-16.xlsx", "Users_prod_latest.xlsx"]
+    "failed_name", ["Users_prod_2026-11-16.xlsx", "Users_prod_weekly_latest.xlsx"]
 )
 def test_failed_upload_leaves_previous_latest_available(drive_upload, failed_name):
     drive, report_path, upload = drive_upload
@@ -438,7 +511,7 @@ def test_failed_upload_leaves_previous_latest_available(drive_upload, failed_nam
     latest = next(
         item
         for item in drive.items.values()
-        if item["name"] == "Users_prod_latest.xlsx"
+        if item["name"] == "Users_prod_weekly_latest.xlsx"
     )
     drive.fail_upload_name = failed_name
     report_path.write_bytes(b"failed report")
@@ -452,26 +525,35 @@ def test_failed_upload_leaves_previous_latest_available(drive_upload, failed_nam
 def test_cost_upload_has_year_archive_without_latest(drive_upload):
     drive, _, upload = drive_upload
 
-    archived = upload(parent="costs", latest_name=None)
+    archived = upload(parent="costs", latest_name=None, archive_subfolder=None)
 
     assert len(drive.items) == 2
-    assert drive.items[archived["parents"][0]]["parents"] == ["costs"]
+    year_folder = drive.items[archived["parents"][0]]
+    assert year_folder["name"] == "2026"
+    assert year_folder["parents"] == ["costs"]
 
 
 def test_find_item_paginates_and_stays_within_parent(drive_upload):
     drive, _, upload = drive_upload
     upload(parent="other-users")
     upload(parent="users")
+    latest_folder = utils.find_drive_item(
+        drive, "users", "latest", utils.FOLDER_MIME_TYPE
+    )
     latest = next(
         item
         for item in drive.items.values()
-        if item["name"] == "Users_prod_latest.xlsx" and item["parents"] == ["users"]
+        if item["name"] == "Users_prod_weekly_latest.xlsx"
+        and item["parents"] == [latest_folder["id"]]
     )
     duplicate = dict(latest, id="zzz-duplicate")
     drive.items = {duplicate["id"]: duplicate, **drive.items}
 
     found = utils.find_drive_item(
-        drive, "users", "Users_prod_latest.xlsx", report.XLSX_MIME_TYPE
+        drive,
+        latest_folder["id"],
+        "Users_prod_weekly_latest.xlsx",
+        report.XLSX_MIME_TYPE,
     )
 
     assert found["id"] == latest["id"]
@@ -480,12 +562,15 @@ def test_find_item_paginates_and_stays_within_parent(drive_upload):
 def test_query_escapes_folder_and_file_names(drive_upload):
     drive, _, upload = drive_upload
     upload(parent="users'\\folder", latest_name="Users'latest.xlsx")
-
-    found = utils.find_drive_item(
-        drive, "users'\\folder", "Users'latest.xlsx", report.XLSX_MIME_TYPE
+    latest_folder = utils.find_drive_item(
+        drive, "users'\\folder", "latest", utils.FOLDER_MIME_TYPE
     )
 
-    assert found["parents"] == ["users'\\folder"]
+    found = utils.find_drive_item(
+        drive, latest_folder["id"], "Users'latest.xlsx", report.XLSX_MIME_TYPE
+    )
+
+    assert found["parents"] == [latest_folder["id"]]
 
 
 @pytest.mark.parametrize(
