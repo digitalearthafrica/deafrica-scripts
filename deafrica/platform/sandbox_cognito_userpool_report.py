@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
@@ -11,13 +11,11 @@ import click
 import pandas as pd
 import phonenumbers
 from babel import Locale
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
 from phonenumbers import NumberParseException
 
+from deafrica.utils import upload_dated_report_to_google_drive
+
 DEFAULT_SENDER_EMAIL = "info@digitalearthafrica.org"
-GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
 XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 ENGLISH_LOCALE = Locale.parse("en")
 REPORT_COLUMNS = [
@@ -44,8 +42,9 @@ REPORT_COLUMNS = [
     "custom:last_login",
 ]
 
-# Get the current date in YYYY-MM-DD format
-current_date = datetime.now().strftime("%Y-%m-%d")
+
+def report_date():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
 def phone_number_country(phone_number):
@@ -211,48 +210,32 @@ def send_email_with_attachment(recipient_email, report_path, sender_email, ses_c
 
 
 def upload_report_to_google_drive(
-    report_path, report_name, google_drive_folder_id, google_credentials_file
+    report_path,
+    report_name,
+    google_drive_folder_id,
+    google_credentials_file,
+    report_day=None,
+    latest_name=None,
+    frequency="weekly",
 ):
-    if not google_drive_folder_id:
-        raise ValueError("GOOGLE_DRIVE_FOLDER_ID is required for Google Drive upload")
-
-    if not google_credentials_file:
-        raise ValueError(
-            "GOOGLE_APPLICATION_CREDENTIALS is required for Google Drive upload"
-        )
-
-    credentials_path = Path(google_credentials_file)
-    if not credentials_path.exists():
-        raise FileNotFoundError(
-            f"Google credentials file does not exist: {credentials_path}"
-        )
-
-    credentials = service_account.Credentials.from_service_account_file(
-        credentials_path,
-        scopes=[GOOGLE_DRIVE_SCOPE],
+    return upload_dated_report_to_google_drive(
+        report_path,
+        report_name,
+        google_drive_folder_id,
+        google_credentials_file,
+        report_day or report_date(),
+        XLSX_MIME_TYPE,
+        latest_name=latest_name,
+        archive_subfolder=frequency,
+        latest_subfolder="latest",
+        previous_latest_name=(
+            latest_name.replace("_weekly_latest.xlsx", "_latest.xlsx")
+            if frequency == "weekly"
+            and latest_name
+            and latest_name.endswith("_weekly_latest.xlsx")
+            else None
+        ),
     )
-    service = build("drive", "v3", credentials=credentials, cache_discovery=False)
-
-    file_metadata = {
-        "name": report_name,
-        "parents": [google_drive_folder_id],
-    }
-    media = MediaFileUpload(report_path, mimetype=XLSX_MIME_TYPE, resumable=False)
-
-    uploaded_file = (
-        service.files()
-        .create(
-            body=file_metadata,
-            media_body=media,
-            fields="id, webViewLink",
-            supportsAllDrives=True,
-        )
-        .execute()
-    )
-
-    print(f"Uploaded report to Google Drive file id {uploaded_file.get('id')}")
-    print(f"Google Drive report link: {uploaded_file.get('webViewLink')}")
-    return uploaded_file
 
 
 def main(
@@ -260,14 +243,27 @@ def main(
     google_drive_folder_id=None,
     google_credentials_file=None,
     environment="",
+    publish_latest=False,
+    frequency="weekly",
 ):
+    if frequency not in {"weekly", "monthly"}:
+        raise ValueError("REPORT_FREQUENCY must be one of: weekly, monthly")
     aws_region_cognito = required_env("aws_region_cognito")
     aws_region_ses = required_env("aws_region_ses")
     user_pool_id = required_env("user_pool_id")
     sender_email = os.getenv("SENDER_EMAIL", DEFAULT_SENDER_EMAIL)
     environment = report_environment(environment)
     environment_suffix = f"_{environment}" if environment else ""
-    report_name = f"Users{environment_suffix}_{current_date}.xlsx"
+    report_day = report_date()
+    report_prefix = f"Users{environment_suffix}"
+    if frequency == "monthly":
+        report_prefix += "_monthly"
+        report_name = f"{report_prefix}_{report_day[:7]}.xlsx"
+    else:
+        report_name = f"{report_prefix}_{report_day}.xlsx"
+    latest_name = (
+        f"Users{environment_suffix}_{frequency}_latest.xlsx" if publish_latest else None
+    )
     report_path = report_name
 
     cognito_client = boto3.client("cognito-idp", region_name=aws_region_cognito)
@@ -295,6 +291,9 @@ def main(
             report_name,
             google_drive_folder_id,
             google_credentials_file,
+            report_day=report_day,
+            latest_name=latest_name,
+            frequency=frequency,
         )
     else:
         print("Skipping Google Drive upload")
@@ -305,8 +304,35 @@ def main(
 @click.option("--google-drive-folder-id", envvar="GOOGLE_DRIVE_FOLDER_ID")
 @click.option("--google-credentials-file", envvar="GOOGLE_APPLICATION_CREDENTIALS")
 @click.option("--environment", envvar="REPORT_ENVIRONMENT", default="")
-def cli(email, google_drive_folder_id, google_credentials_file, environment):
-    main(email, google_drive_folder_id, google_credentials_file, environment)
+@click.option(
+    "--frequency",
+    envvar="REPORT_FREQUENCY",
+    type=click.Choice(["weekly", "monthly"]),
+    default="weekly",
+    help="Use dated weekly filenames or clearly labelled monthly snapshots.",
+)
+@click.option(
+    "--publish-latest/--no-publish-latest",
+    envvar="REPORT_PUBLISH_LATEST",
+    default=False,
+    help="Update the latest user file for this frequency as well as its archive.",
+)
+def cli(
+    email,
+    google_drive_folder_id,
+    google_credentials_file,
+    environment,
+    publish_latest,
+    frequency,
+):
+    main(
+        email,
+        google_drive_folder_id,
+        google_credentials_file,
+        environment,
+        publish_latest=publish_latest,
+        frequency=frequency,
+    )
 
 
 if __name__ == "__main__":

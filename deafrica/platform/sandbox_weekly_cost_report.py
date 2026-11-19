@@ -8,13 +8,11 @@ from pathlib import Path
 
 import boto3
 import click
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
+
+from deafrica.utils import upload_dated_report_to_google_drive
 
 DEFAULT_KUBECOST_URL = "http://kubecost-cost-analyzer.kubecost.svc.cluster.local:9090"
 DEFAULT_REPORT_PATH = "/tmp/sandbox_weekly_cost_report.csv"
-GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
 CSV_MIME_TYPE = "text/csv"
 # Kubecost returns RAM/PV sizes in bytes; report them in GiB for readability.
 BYTES_PER_GIB = 1024**3
@@ -300,48 +298,20 @@ def upload_report_to_s3(report_path, report_name, bucket, prefix, region):
 
 
 def upload_report_to_google_drive(
-    report_path, report_name, google_drive_folder_id, google_credentials_file
+    report_path,
+    report_name,
+    google_drive_folder_id,
+    google_credentials_file,
+    report_day=None,
 ):
-    if not google_drive_folder_id:
-        raise ValueError("GOOGLE_DRIVE_FOLDER_ID is required for Google Drive upload")
-
-    if not google_credentials_file:
-        raise ValueError(
-            "GOOGLE_APPLICATION_CREDENTIALS is required for Google Drive upload"
-        )
-
-    credentials_path = Path(google_credentials_file)
-    if not credentials_path.exists():
-        raise FileNotFoundError(
-            f"Google credentials file does not exist: {credentials_path}"
-        )
-
-    credentials = service_account.Credentials.from_service_account_file(
-        credentials_path,
-        scopes=[GOOGLE_DRIVE_SCOPE],
+    return upload_dated_report_to_google_drive(
+        report_path,
+        report_name,
+        google_drive_folder_id,
+        google_credentials_file,
+        report_day or report_date(),
+        CSV_MIME_TYPE,
     )
-    service = build("drive", "v3", credentials=credentials, cache_discovery=False)
-
-    file_metadata = {
-        "name": report_name,
-        "parents": [google_drive_folder_id],
-    }
-    media = MediaFileUpload(report_path, mimetype=CSV_MIME_TYPE, resumable=False)
-
-    uploaded_file = (
-        service.files()
-        .create(
-            body=file_metadata,
-            media_body=media,
-            fields="id, webViewLink",
-            supportsAllDrives=True,
-        )
-        .execute()
-    )
-
-    print(f"Uploaded report to Google Drive file id {uploaded_file.get('id')}")
-    print(f"Google Drive report link: {uploaded_file.get('webViewLink')}")
-    return uploaded_file
 
 
 def main(
@@ -360,7 +330,9 @@ def main(
 ):
     environment = report_environment(environment)
     environment_suffix = f"-{environment}" if environment else ""
-    report_name = f"sandbox-weekly-cost-report{environment_suffix}-{report_date()}.csv"
+    report_day = report_date()
+    report_name = f"sandbox-weekly-cost-report{environment_suffix}-{report_day}.csv"
+    archive_prefix = f"{s3_prefix.strip('/')}/{report_day[:4]}".strip("/")
     Path(report_path).parent.mkdir(parents=True, exist_ok=True)
     generate_report(kubecost_url, kubecost_window, report_path, namespace, pod_prefix)
 
@@ -368,7 +340,9 @@ def main(
     print(f"Report upload target: {target}")
 
     if target in {"s3", "both"}:
-        upload_report_to_s3(report_path, report_name, s3_bucket, s3_prefix, aws_region)
+        upload_report_to_s3(
+            report_path, report_name, s3_bucket, archive_prefix, aws_region
+        )
     else:
         print("Skipping S3 upload")
 
@@ -378,6 +352,7 @@ def main(
             report_name,
             google_drive_folder_id,
             google_credentials_file,
+            report_day=report_day,
         )
     else:
         print("Skipping Google Drive upload")
