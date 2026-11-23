@@ -20,9 +20,9 @@ from deafrica.logs import setup_logging
 from deafrica.utils import send_slack_notification
 
 MONTHLY_URL_TEMPLATE = (
-    "https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_monthly/tifs/{in_file}"
+    "https://data.chc.ucsb.edu/products/CHIRPS/v2.0/africa_monthly/tifs/{in_file}"
 )
-DAILY_URL_TEMPLATE = "https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_daily/tifs/p05/{year}/{in_file}"
+DAILY_URL_TEMPLATE = "https://data.chc.ucsb.edu/products/CHIRPS/v2.0/africa_daily/tifs/p05/{year}/{in_file}"
 
 # Set log level to info
 log = setup_logging()
@@ -229,7 +229,7 @@ def cli_daily(year, month, day, s3_dst, overwrite, slack_url):
     S3 bucket.
 
     GeoTIFFs are copied from here:
-        https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_daily/tifs/p05/
+        https://data.chc.ucsb.edu/products/CHIRPS/v2.0/africa_daily/tifs/p05/
 
     Example:
     download-chirps-daily
@@ -265,7 +265,7 @@ def cli_monthly(year, month, s3_dst, overwrite, slack_url):
     S3 bucket.
 
     GeoTIFFs are copied from here:
-        https://data.chc.ucsb.edu/products/CHIRPS-2.0/africa_monthly/tifs/
+        https://data.chc.ucsb.edu/products/CHIRPS/v2.0/africa_monthly/tifs/
 
     Run with:
         for m in {01..12};
