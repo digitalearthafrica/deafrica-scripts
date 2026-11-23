@@ -1,9 +1,11 @@
+import os
+
 import boto3
 import moto
 import pytest
 from botocore.exceptions import ClientError
 
-from deafrica.data.chirps import download_and_cog_chirps
+from deafrica.data.chirps import download_and_cog_chirps, download_chirps_source
 from deafrica.tests.conftest import TEST_DATA_DIR
 
 TEST_BUCKET_NAME = "test-bucket"
@@ -83,6 +85,57 @@ def bucket_create():
     except ClientError:
         pass
     return s3_client, f"s3://{TEST_BUCKET_NAME}"
+
+
+def _assert_single_get(httpserver):
+    assert len(httpserver.log) >= 1
+    for request, _response in httpserver.log:
+        assert request.method == "GET"
+        assert request.headers.get("Range") is None
+        assert request.headers.get("User-Agent") == "Mozilla/5.0"
+
+
+def test_download_chirps_source_one_get(httpserver):
+    httpserver.expect_oneshot_request("/chirps.tif.gz").respond_with_data(b"rainfall")
+
+    local_path = download_chirps_source(httpserver.url_for("/chirps.tif.gz"))
+    try:
+        with open(local_path, "rb") as handle:
+            assert handle.read() == b"rainfall"
+        assert local_path.endswith(".tif.gz")
+    finally:
+        os.remove(local_path)
+
+    assert len(httpserver.log) == 1
+    _assert_single_get(httpserver)
+
+
+def test_download_chirps_source_404(httpserver):
+    httpserver.expect_oneshot_request("/missing.tif.gz").respond_with_data(
+        b"", status=404
+    )
+
+    assert download_chirps_source(httpserver.url_for("/missing.tif.gz")) is None
+    assert len(httpserver.log) == 1
+    _assert_single_get(httpserver)
+
+
+def test_download_chirps_source_retries_429(httpserver, monkeypatch):
+    monkeypatch.setattr("deafrica.data.chirps.time.sleep", lambda _seconds: None)
+    httpserver.expect_oneshot_request("/chirps.tif.gz").respond_with_data(
+        b"", status=429
+    )
+    httpserver.expect_oneshot_request("/chirps.tif.gz").respond_with_data(b"rainfall")
+
+    local_path = download_chirps_source(httpserver.url_for("/chirps.tif.gz"))
+    try:
+        with open(local_path, "rb") as handle:
+            assert handle.read() == b"rainfall"
+    finally:
+        os.remove(local_path)
+
+    assert len(httpserver.log) == 2
+    _assert_single_get(httpserver)
 
 
 def check_s3_paths(s3_client, path):

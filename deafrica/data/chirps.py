@@ -1,6 +1,9 @@
 import calendar
 import json
+import os
 import sys
+import tempfile
+import time
 from datetime import datetime
 from typing import Optional, Tuple
 
@@ -23,6 +26,9 @@ MONTHLY_URL_TEMPLATE = (
     "https://data.chc.ucsb.edu/products/CHIRPS/v2.0/africa_monthly/tifs/{in_file}"
 )
 DAILY_URL_TEMPLATE = "https://data.chc.ucsb.edu/products/CHIRPS/v2.0/africa_daily/tifs/p05/{year}/{in_file}"
+CHIRPS_USER_AGENT = "Mozilla/5.0"
+# One GET per attempt. These pauses sit between retries of that same GET.
+DOWNLOAD_RETRY_PAUSES_SECONDS = (15, 30, 60)
 
 # Set log level to info
 log = setup_logging()
@@ -47,22 +53,78 @@ def check_values(
     return year, month, day
 
 
-def check_for_url_existence(href: str) -> bool:
-    """Check if a remote URL exists. Uses a polite User-Agent."""
-    try:
-        headers = {"User-Agent": "Mozilla/5.0"}
-        response = requests.head(
-            href, timeout=15, headers=headers, allow_redirects=True
-        )
-        log.info(f"URL check {href} -> {response.status_code}")
-        response.raise_for_status()
-        return True
-    except requests.exceptions.HTTPError as e:
-        log.error(f"{href} returned {response.status_code}")
-        return False
-    except Exception as e:
-        log.error(f"Failed to check URL {href}: {e}")
-        return False
+def source_dataset_path(path: str) -> str:
+    """GDAL path for a local CHIRPS file. Gzip is inflated locally."""
+    if path.endswith(".gz"):
+        return f"/vsigzip/{path}"
+    return path
+
+
+def download_chirps_source(href: str) -> Optional[str]:
+    """Download one CHIRPS file with a single GET per attempt.
+
+    Returns a local temp path, or None when the server replies 404.
+    Retries a 429 or 5xx response. Does not send Range requests.
+    """
+    headers = {"User-Agent": CHIRPS_USER_AGENT}
+    attempts = len(DOWNLOAD_RETRY_PAUSES_SECONDS) + 1
+    status_code = None
+
+    for attempt in range(attempts):
+        if attempt:
+            pause = DOWNLOAD_RETRY_PAUSES_SECONDS[attempt - 1]
+            log.warning(f"{href} returned {status_code}, retrying in {pause}s")
+            time.sleep(pause)
+
+        try:
+            response = requests.get(
+                href,
+                headers=headers,
+                timeout=120,
+                stream=True,
+                allow_redirects=True,
+            )
+        except requests.exceptions.RequestException as exc:
+            log.error(f"Failed to download {href}: {exc}")
+            if attempt == attempts - 1:
+                sys.exit(1)
+            status_code = "error"
+            continue
+
+        status_code = response.status_code
+        if status_code == 404:
+            response.close()
+            log.info(f"Download {href} -> 404")
+            return None
+        if status_code == 429 or status_code >= 500:
+            response.close()
+            log.info(f"Download {href} -> {status_code}")
+            if attempt == attempts - 1:
+                log.error(f"{href} returned {status_code} after retries")
+                sys.exit(1)
+            continue
+
+        local_path = None
+        try:
+            response.raise_for_status()
+            suffix = ".tif.gz" if href.endswith(".tif.gz") else ".tif"
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as handle:
+                local_path = handle.name
+                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    if chunk:
+                        handle.write(chunk)
+        except Exception:
+            if local_path is not None and os.path.exists(local_path):
+                os.remove(local_path)
+            raise
+        finally:
+            response.close()
+
+        log.info(f"Download {href} -> {status_code}")
+        return local_path
+
+    log.error(f"Failed to download {href}")
+    sys.exit(1)
 
 
 def download_and_cog_chirps(
@@ -77,23 +139,13 @@ def download_and_cog_chirps(
     # Cleaning and sanity checks
     s3_dst = s3_dst.rstrip("/")
 
-    # Set up file strings
-    if day is not None:
+    # Set up file strings. The remote file is chosen later with one GET.
+    is_daily = day is not None
+    if is_daily:
         # Set up a daily process
         in_file = f"chirps-v2.0.{year}.{month}.{day}.tif.gz"
+        plain_file = f"chirps-v2.0.{year}.{month}.{day}.tif"
         in_href = DAILY_URL_TEMPLATE.format(year=year, in_file=in_file)
-        in_data = f"/vsigzip//vsicurl/{in_href}"
-
-        if test_local_file is None:  # Only do real check in production
-            if not check_for_url_existence(in_href):
-                log.warning("Couldn't find the gzipped file, trying the .tif")
-                in_file = f"chirps-v2.0.{year}.{month}.{day}.tif"
-                in_href = DAILY_URL_TEMPLATE.format(year=year, in_file=in_file)
-                in_data = f"/vsicurl/{in_href}"
-
-                if not check_for_url_existence(in_href):
-                    log.error("Couldn't find the .tif file either, aborting")
-                    sys.exit(1)
 
         file_base = f"{s3_dst}/{year}/{month}/chirps-v2.0_{year}.{month}.{day}"
         out_data = f"{file_base}.tif"
@@ -105,19 +157,8 @@ def download_and_cog_chirps(
     else:
         # Set up a monthly process
         in_file = f"chirps-v2.0.{year}.{month}.tif.gz"
+        plain_file = f"chirps-v2.0.{year}.{month}.tif"
         in_href = MONTHLY_URL_TEMPLATE.format(in_file=in_file)
-        in_data = f"/vsigzip//vsicurl/{in_href}"
-
-        if test_local_file is None:  # Only do real check in production
-            if not check_for_url_existence(in_href):
-                log.warning("Couldn't find the gzipped file, trying the .tif")
-                in_file = f"chirps-v2.0.{year}.{month}.tif"
-                in_href = MONTHLY_URL_TEMPLATE.format(in_file=in_file)
-                in_data = f"/vsicurl/{in_href}"
-
-                if not check_for_url_existence(in_href):
-                    log.error("Couldn't find the .tif file either, aborting")
-                    sys.exit(1)
 
         file_base = f"{s3_dst}/chirps-v2.0_{year}.{month}"
         out_data = f"{file_base}.tif"
@@ -131,24 +172,35 @@ def download_and_cog_chirps(
         # Set to 15 for the STAC metadata
         day = 15
 
-    # === TEST OVERRIDE ===
-    if test_local_file is not None:
-        if test_local_file.endswith(".gz"):
-            in_data = f"/vsigzip/{test_local_file}"
-        else:
-            in_data = test_local_file
-        log.info(f"TEST MODE: Using local test file {test_local_file}")
-
+    downloaded_path = None
     try:
-        # Check if file already exists
+        if test_local_file is not None:
+            in_data = source_dataset_path(test_local_file)
+            log.info(f"TEST MODE: Using local test file {test_local_file}")
+        else:
+            if not overwrite and s3_head_object(out_stac) is not None:
+                log.info(f"Working on {in_file}")
+                log.warning(f"File {out_stac} already exists. Skipping.")
+                return
+
+            downloaded_path = download_chirps_source(in_href)
+            if downloaded_path is None:
+                log.warning("Couldn't find the gzipped file, trying the .tif")
+                in_file = plain_file
+                if is_daily:
+                    in_href = DAILY_URL_TEMPLATE.format(year=year, in_file=in_file)
+                else:
+                    in_href = MONTHLY_URL_TEMPLATE.format(in_file=in_file)
+                downloaded_path = download_chirps_source(in_href)
+                if downloaded_path is None:
+                    log.error("Couldn't find the .tif file either, aborting")
+                    sys.exit(1)
+            in_data = source_dataset_path(downloaded_path)
+
         log.info(f"Working on {in_file}")
-        if not overwrite and s3_head_object(out_stac) is not None:
-            log.warning(f"File {out_stac} already exists. Skipping.")
-            return
 
         # COG and STAC
         with MemoryFile() as mem_dst:
-            # Creating the COG, with a memory cache and no download. Shiny.
             cog_translate(
                 in_data,
                 mem_dst.name,
@@ -214,6 +266,9 @@ def download_and_cog_chirps(
         log.exception(message)
 
         exit(1)
+    finally:
+        if downloaded_path is not None and os.path.exists(downloaded_path):
+            os.remove(downloaded_path)
 
 
 @click.command("download-chirps-daily")
