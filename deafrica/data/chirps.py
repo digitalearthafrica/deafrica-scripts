@@ -37,7 +37,7 @@ log.info("Starting CHIRPS downloader")
 
 
 def check_values(
-    year: str, month: str, day: Optional[str]
+    year: str, month: str, day: Optional[str] = None
 ) -> Tuple[str, str, Optional[str]]:
     # Assert that the year should be 4 characters long
     assert len(year) == 4, "Year should be 4 characters long"
@@ -335,7 +335,7 @@ def cli_monthly(year, month, s3_dst, overwrite, slack_url):
     Available years are 1981-2021.
     """
 
-    year, month, _ = check_values(year, month)
+    year, month, _ = check_values(year, month, None)
 
     download_and_cog_chirps(
         year=year,
