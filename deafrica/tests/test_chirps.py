@@ -5,7 +5,11 @@ import moto
 import pytest
 from botocore.exceptions import ClientError
 
-from deafrica.data.chirps import download_and_cog_chirps, download_chirps_source
+from deafrica.data.chirps import (
+    check_values,
+    download_and_cog_chirps,
+    download_chirps_source,
+)
 from deafrica.tests.conftest import TEST_DATA_DIR
 
 TEST_BUCKET_NAME = "test-bucket"
@@ -85,6 +89,11 @@ def bucket_create():
     except ClientError:
         pass
     return s3_client, f"s3://{TEST_BUCKET_NAME}"
+
+
+def test_check_values_month_without_day():
+    assert check_values("2026", "10") == ("2026", "10", None)
+    assert check_values("2026", "9", "5") == ("2026", "09", "05")
 
 
 def _assert_single_get(httpserver):
